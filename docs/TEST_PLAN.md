@@ -139,10 +139,11 @@ Remote access is **not** part of Phase 2 exit and stays blocked by `docs/ACCEPTA
 | --- | --- | --- | --- |
 | T08-01 | Driver capability | Existing `better-sqlite3` can create `fts5(... tokenize='trigram')` and match Thai; a 2-code-point trigram query returns no match | PASS on recorded baseline |
 | T08-02 | Thai segmenter | ICU supports locale `th`; sample Thai sentence segments into words | PASS on recorded baseline |
-| T08-03 | Accuracy corpus | 200 synthetic note-like Thai records; 22 predeclared query cases against an independent NFC substring oracle | Trigram/hybrid 100% P/R; token FTS recall 74.76% |
+| T08-03 | Accuracy corpus | 200 synthetic note-like records; 21 predeclared query cases against an independent NFC substring oracle, including distinct NFC/NFD `Café` queries | Trigram/hybrid 100% P/R; token FTS recall 78.05% |
 | T08-04 | 10k benchmark | Warm-up + measured query latency, FTS page size, index-build time, insert/update cost for all three approaches | Measured; see `DECISIONS.md` |
-| T08-05 | Short queries | One-/two-code-point queries including Thai letter, repetition mark, tone-marked text; additionally compare exact matches over the 10k archive to bounded results | 200-note fallback cases pass; full-archive recall is below 95% for all bounded/indexed short-query approaches |
-| T08-06 | NFC/NFD, mixed language, digits, partial/mid-sentence, no-hit | Expected matches fixed by exact substring oracle before evaluating each FTS strategy | Includes NFC/NFD `น้ำ`, English+Thai, numeric, partial, middle, and no-hit cases |
+| T08-05 | Bounded short queries | One-/two-code-point queries including Thai letter, repetition mark, tone-marked text; additionally compare exact matches over the 10k archive to bounded results | 200-note fallback cases pass; bounded/indexed full-archive recall is below 95% |
+| T08-06 | NFC/NFD, mixed language, digits, partial/mid-sentence, no-hit | Expected matches fixed by exact substring oracle before evaluating each FTS strategy | Includes genuinely distinct NFC/NFD `Café`, English+Thai, numeric, partial, middle, and no-hit cases |
+| T08-07 | Full-scan short-query fallback (B2) | 10k temporary rows; NFC `instr()` matching; owner and non-trashed filtering; 7 one-/two-code-point queries; count plus page 1/2/last/beyond-end exact results | Synthetic direct-SQLite result 100% precision/recall; p50 58.29 ms, p95 103.42 ms. Not an HTTP/API acceptance test; decision awaits user |
 
 Run:
 

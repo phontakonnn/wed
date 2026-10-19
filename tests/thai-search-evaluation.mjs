@@ -102,6 +102,8 @@ function makeAccuracyCorpus() {
         ? ' จ่ายค่าบริการ 12000 บาทในปี 2569'
         : topic.name === 'work' && variant === 0
           ? ' project ส่งสรุปหลังคุยกับทีม'
+          : topic.name === 'work' && variant === 1
+            ? ' บันทึกคำว่า Café ไว้ในรายการ'
           : topic.name === 'project' && variant === 0
             ? ' จดว่าเป็นการจดบันทึกต่อเนื่องไม่มีช่องว่าง'
             : topic.name === 'study' && variant === 0
@@ -129,8 +131,8 @@ const queryCases = [
   { name: 'no matching text', query: 'ควอนตัมสีม่วง' },
   { name: 'Thai tone/mark: mai tho', query: 'น้ำ' },
   { name: 'Thai mai ek and tone mark', query: 'ค่าเช่า' },
-  { name: 'NFC composed query', query: 'น้ำ' },
-  { name: 'NFD decomposed query', query: 'น้ำ'.normalize('NFD') },
+  { name: 'NFC composed query', query: 'Café' },
+  { name: 'NFD decomposed query', query: 'Cafe\u0301' },
   { name: 'English mixed with Thai', query: 'meeting วันจันทร์' },
   { name: 'numeric value', query: '12000 บาท' },
   { name: 'another short Thai substring', query: 'กา' },
@@ -142,7 +144,6 @@ const queryCases = [
   { name: 'four-digit year', query: '2569' },
   { name: 'joined Thai phrase', query: 'ทบทวนแผน' },
   { name: 'short query with tone mark', query: 'ก่' },
-  { name: 'NFD mixed with NFC indexed text', query: 'น้ำ'.normalize('NFD') },
 ];
 
 const performanceQueries = [
@@ -171,6 +172,7 @@ function exactExpected(query) {
 
 const expectedByQuery = queryCases.map((testCase) => ({
   ...testCase,
+  originalQuery: testCase.query,
   query: testCase.query.normalize('NFC'),
   expectedIds: exactExpected(testCase.query),
   codePoints: [...testCase.query].length,
@@ -181,6 +183,10 @@ assert.ok(tokenize('ภาษาไทยไม่มีช่องว่าง
 assert.ok(tokenize('ภาษาไทยไม่มีช่องว่าง').includes('ไทย'));
 assert.ok(expectedByQuery.some((testCase) => testCase.expectedIds.length === 0));
 assert.ok(expectedByQuery.filter((testCase) => testCase.codePoints < 3).length >= 4);
+assert.notEqual(
+  expectedByQuery.find((testCase) => testCase.name === 'NFC composed query').originalQuery,
+  expectedByQuery.find((testCase) => testCase.name === 'NFD decomposed query').originalQuery,
+);
 assert.deepEqual(
   expectedByQuery.find((testCase) => testCase.name === 'NFC composed query').expectedIds,
   expectedByQuery.find((testCase) => testCase.name === 'NFD decomposed query').expectedIds,
@@ -322,7 +328,7 @@ function measureAccuracy(search) {
   let falseNegative = 0;
   const cases = [];
   for (const testCase of expectedByQuery) {
-    const foundIds = search(testCase.query, ACCURACY_COUNT);
+    const foundIds = search(testCase.originalQuery, ACCURACY_COUNT);
     const expected = new Set(testCase.expectedIds);
     const found = new Set(foundIds);
     if (expected.size === 0) assert.equal(found.size, 0, `Unexpected hit for ${testCase.name}`);
@@ -334,7 +340,7 @@ function measureAccuracy(search) {
     falseNegative += fn;
     cases.push({
       name: testCase.name,
-      query: testCase.query,
+      query: testCase.originalQuery,
       codePoints: testCase.codePoints,
       expected: expected.size,
       found: found.size,
@@ -461,6 +467,157 @@ const performanceCorpus = Array.from({ length: NOTE_COUNT }, (_, index) => {
       : `${base.content} รอบที่ ${round} บันทึกงานลำดับ ${index + 1} เพื่อทดสอบการค้นหา`,
   };
 });
+
+function measureFullScanFallback() {
+  const filename = join(tempDirectory, 'short-query-full-scan.sqlite');
+  const database = new Database(filename);
+  const ownerId = 'benchmark-owner';
+  const shortQueries = [
+    { name: 'single Thai character', query: 'ก' },
+    { name: 'single repetition mark', query: 'ๆ' },
+    { name: 'two-character Thai substring', query: 'กา' },
+    { name: 'two-character partial word', query: 'งบ' },
+    { name: 'single NFC accented character over NFD text', query: 'é' },
+    { name: 'NFD two-code-point query over NFD text', query: 'e\u0301' },
+    { name: 'no matching short query', query: 'zz' },
+  ];
+  const pageSize = 50;
+
+  try {
+    database.pragma('journal_mode = DELETE');
+    database.exec(`
+      CREATE TABLE notes (
+        id INTEGER PRIMARY KEY,
+        owner_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        deleted_at INTEGER
+      );
+      CREATE INDEX notes_owner_deleted_id_idx
+        ON notes(owner_id, deleted_at, id DESC);
+    `);
+    database.function('nfc', { deterministic: true }, (value) => String(value).normalize('NFC'));
+    const insert = database.prepare(`
+      INSERT INTO notes (id, owner_id, title, content, deleted_at)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    const indexedCorpus = performanceCorpus.map((note, index) => {
+      const ownership = index % 50;
+      const isDeleted = ownership === 48;
+      return {
+        ...note,
+        ownerId: ownership < 49 ? ownerId : 'other-owner',
+        deletedAt: isDeleted ? 1 : null,
+        content: index % 701 === 0 ? `${note.content} Café`.normalize('NFD') : note.content,
+      };
+    });
+    database.transaction(() => {
+      for (const note of indexedCorpus) {
+        insert.run(note.id, note.ownerId, note.title, note.content, note.deletedAt);
+      }
+    })();
+
+    const countMatches = database.prepare(`
+      SELECT COUNT(*) AS total
+      FROM notes
+      WHERE owner_id = ?
+        AND deleted_at IS NULL
+        AND instr(nfc(title) || ' ' || nfc(content), nfc(?)) > 0
+    `);
+    const pageMatches = database.prepare(`
+      SELECT id
+      FROM notes
+      WHERE owner_id = ?
+        AND deleted_at IS NULL
+        AND instr(nfc(title) || ' ' || nfc(content), nfc(?)) > 0
+      ORDER BY id DESC
+      LIMIT ? OFFSET ?
+    `);
+    const search = (rawQuery, page = 1) => {
+      const query = rawQuery.normalize('NFC');
+      const total = countMatches.get(ownerId, query).total;
+      const notes = pageMatches.all(ownerId, query, pageSize, (page - 1) * pageSize);
+      return { notes, page, pageSize, total };
+    };
+    const candidateCount = database.prepare(`
+      SELECT COUNT(*) AS total
+      FROM notes
+      WHERE owner_id = ? AND deleted_at IS NULL
+    `).get(ownerId).total;
+    assert.equal(indexedCorpus.length, NOTE_COUNT);
+    assert.equal(candidateCount, NOTE_COUNT * 0.96);
+
+    const expectedMatches = (rawQuery) => {
+      const query = rawQuery.normalize('NFC');
+      return indexedCorpus
+        .filter((note) => note.ownerId === ownerId && note.deletedAt === null)
+        .filter((note) => `${note.title} ${note.content}`.normalize('NFC').includes(query))
+        .sort((left, right) => right.id - left.id)
+        .map((note) => note.id);
+    };
+    const cases = shortQueries.map(({ name, query }) => {
+      assert.ok([...query.normalize('NFC')].length < 3, `${name} must be shorter than 3 code points`);
+      const expected = expectedMatches(query);
+      const firstPage = search(query, 1);
+      const secondPage = search(query, 2);
+      assert.equal(firstPage.total, expected.length, `${name}: total count`);
+      const lastPage = Math.max(1, Math.ceil(expected.length / pageSize));
+      for (const page of new Set([1, 2, lastPage])) {
+        const actual = search(query, page);
+        assert.deepEqual(
+          actual.notes.map((note) => note.id),
+          expected.slice((page - 1) * pageSize, page * pageSize),
+          `${name}: page ${page}`,
+        );
+      }
+      assert.deepEqual(secondPage.notes.map((note) => note.id), expected.slice(pageSize, pageSize * 2));
+      assert.equal(search(query, lastPage + 1).notes.length, 0);
+      return {
+        name,
+        query,
+        codePoints: [...query].length,
+        expectedMatches: expected.length,
+        actualMatches: firstPage.total,
+        firstPageReturned: firstPage.notes.length,
+        secondPageReturned: secondPage.notes.length,
+      };
+    });
+    const warmupRoundsPerQuery = WARMUP_ROUNDS;
+    const measuredRoundsPerQuery = MEASURE_ROUNDS;
+    for (const { query } of shortQueries) {
+      for (let round = 0; round < warmupRoundsPerQuery; round += 1) search(query);
+    }
+    const samples = [];
+    for (const { query } of shortQueries) {
+      for (let round = 0; round < measuredRoundsPerQuery; round += 1) {
+        const startedAt = performance.now();
+        search(query);
+        samples.push(performance.now() - startedAt);
+      }
+    }
+    samples.sort((left, right) => left - right);
+    return {
+      corpusNotes: NOTE_COUNT,
+      activeNotesForOwner: candidateCount,
+      deletedOwnerNotesExcluded: NOTE_COUNT * 0.02,
+      otherOwnerNotesExcluded: NOTE_COUNT * 0.02,
+      pageSize,
+      method: 'SQLite instr() over title/content with an NFC scalar function; two bounded SQL queries (count and requested page), owner_id and deleted_at filters applied in SQLite',
+      normalization: 'NFC applied to query, title, and content during each full scan',
+      latencyClock: 'node:perf_hooks performance.now(); includes count and page query execution/materialization',
+      warmupRoundsPerQuery,
+      measuredRoundsPerQuery,
+      samples: samples.length,
+      p50Ms: percentile(samples, 0.5),
+      p95Ms: percentile(samples, 0.95),
+      queries: cases,
+      precision: 1,
+      recall: 1,
+    };
+  } finally {
+    database.close();
+  }
+}
 
 try {
   for (const mode of modes) {
@@ -608,6 +765,7 @@ try {
       database.close();
     }
   }
+  report.fullScanFallback = measureFullScanFallback();
   console.log(JSON.stringify(report, null, 2));
 } finally {
   rmSync(tempDirectory, { recursive: true, force: true });

@@ -176,7 +176,7 @@
 
 - This is a local synthetic-data evaluation only. It adds no endpoint, UI, migration, dependency, or
   production data access. Re-run with `node tests\thai-search-evaluation.mjs`.
-- The standalone test generates 200 diverse Thai note-like records for a fixed 22-query literal
+- The standalone test generates 200 diverse Thai note-like records for a fixed 21-query literal
   substring oracle, plus 10,000 synthetic records for latency, index size, and short-query coverage.
   The three temporary SQLite database files are removed after the run.
 - Baseline observed during the run: Windows_NT 10.0.19044 x64; Node.js v24.22.0, ICU 78.3,
@@ -198,14 +198,16 @@ and update are measured over 250 indexed operations in a transaction and reporte
 
 | Approach | 200-note precision / recall | 10k p50 / p95 (ms) | FTS index (KiB) | Index build (ms) | Insert mean (ms/note) | Update mean (ms/note) |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| (a) FTS5 trigram + bounded short fallback | 100% / 100% | 0.703 / 2.599 | 17,632 | 233.2 | 0.494 | 0.192 |
-| (b) `Intl.Segmenter('th')` words in FTS5 `unicode61` | 100% / 74.76% | 12.777 / 15.452 | 11,024 | 543.4 | 0.289 | 0.271 |
-| (c) Hybrid trigram + word FTS + bounded short fallback | 100% / 100% | 13.757 / 18.193 | 28,656 | 2,407.5 | 1.054 | 0.559 |
+| (a) FTS5 trigram + bounded short fallback | 100% / 100% | 0.588 / 2.138 | 17,640 | 233.1 | 0.522 | 0.205 |
+| (b) `Intl.Segmenter('th')` words in FTS5 `unicode61` | 100% / 78.05% | 6.898 / 8.862 | 11,024 | 508.7 | 0.180 | 0.184 |
+| (c) Hybrid trigram + word FTS + bounded short fallback | 100% / 100% | 7.486 / 10.979 | 28,664 | 776.6 | 0.706 | 0.381 |
 
-Approach (b) misses partial terms such as `งบประมา` and `กา`, and returns only 40 of 67 expected
-matches for `น้ำ` (recall 59.70%); the same 40/67 result occurs for both NFC and NFD input after
-query normalization. It also finds only 20 of 40 results for `ก่อนเดินทาง`. Its overall recall is
-74.76%, below the 95% target. No missed cases were silently removed from the expected set.
+Approach (b) misses partial terms such as `งบประมา`, `กา`, and `meet`, returns only 40 of 67
+expected matches for `น้ำ` (recall 59.70%), and finds only 20 of 40 results for `ก่อนเดินทาง`.
+Its overall recall is 78.05%, below the 95% target. NFC/NFD coverage now uses distinct strings
+`Café` and `Café`; the test sends the raw NFD query to each search strategy and normalizes against
+the same literal-substring oracle. The earlier Thai `น้ำ` NFD spelling was not distinct after Unicode
+normalization and was replaced. No missed cases were silently removed from the expected set.
 
 All three approaches return 100% precision/recall on the 200-note accuracy set for the four tested
 short queries. This does **not** mean short-query fallback scales without omissions:
@@ -219,21 +221,51 @@ Approach (b) returned 200/0 respectively under its 200-result cap and tokenizer 
 tested short-query path meets 95% full-archive recall; the benchmark marks the combined 200-note plus
 short-archive 95% criterion as **not met** for all three approaches.
 
+### Additional B2 measurement: full-scan fallback for short queries
+
+- A separate temporary SQLite database held 10,000 synthetic note-like rows: 9,600 active notes
+  owned by the benchmark user, 200 soft-deleted notes for that owner, and 200 active notes owned by
+  another user. The owner and `deleted_at` predicates were applied in SQLite before matching.
+- The measured query uses `instr()` over title/content with an NFC scalar function applied to the
+  query and both text fields. It executes a count query and a paginated result query (page size 50),
+  so measured latency includes both SQL operations and result materialization. The text is normalized
+  at search time; this measurement does not assume a schema change or persisted normalized copy.
+- Seven predefined 1–2 Unicode-code-point queries (including NFC `é` matched against NFD text and
+  raw NFD `é` query input) were checked against an independent NFC substring
+  oracle. Counts and page results matched exactly; page 1, page 2, the last page, and a page beyond
+  the end were asserted. Precision and recall were both 100% for this synthetic benchmark.
+- Warm-up: 100 rounds/query; measured: 100 rounds/query; total 700 samples. `performance.now()`
+  produced p50 **58.29 ms** and p95 **103.42 ms**. Baseline: Windows_NT 10.0.19044 x64, Node.js
+  v24.22.0, SQLite 3.53.4 via better-sqlite3 13.0.3, Intel Core i5-13400F, 16 logical CPUs,
+  34,055,766,016 bytes RAM. One machine and one run; no HTTP/API overhead or concurrency was measured.
+
+| Query | Expected = actual matches | Pagination check |
+| --- | ---: | --- |
+| `ก` | 9,600 | page 1, page 2, last page, beyond end |
+| `ๆ` | 1,850 | page 1, page 2, last page, beyond end |
+| `กา` | 9,518 | page 1, page 2, last page, beyond end |
+| `งบ` | 2,200 | page 1, page 2, last page, beyond end |
+| `é` (NFC) | 65 | page 1, page 2, last page, beyond end |
+| `é` (NFD) | 65 | page 1, page 2, last page, beyond end |
+| `zz` | 0 | empty result and beyond end |
+
 ### Proposed decision (not implemented)
 
 - Use FTS5 trigram as the primary substring index for queries of at least 3 Unicode code points.
-- Reject shorter queries with a clear Thai explanation rather than return a bounded, incomplete
-  subset or imply that search was exhaustive. This is the selected short-query policy for a future
-  implementation, subject to approval; no search route/UI exists yet.
+- Prefer a full-scan `instr()` fallback for queries shorter than 3 Unicode code points rather than
+  rejecting them: the measured synthetic fallback preserved complete results and had p95 below the
+  300 ms target. This is a recommendation only; the user has not selected or approved it, and no
+  search route/UI exists yet. Keep the earlier rejection policy as an alternative if real workload
+  testing shows unacceptable latency.
 - Do not choose the hybrid: it did not improve accuracy over trigram on the 200-note oracle, while
-  its measured index is 62.5% larger and index build is 10.3x slower than trigram alone; 10k latency
+  its measured index is 62.5% larger; in this run its build time was 3.3x trigram's. 10k latency
   and write costs are also higher.
-- Do not choose word-only pre-tokenization for literal Notes search: its 74.76% overall recall and
+- Do not choose word-only pre-tokenization for literal Notes search: its 78.05% overall recall and
   observed partial-word/Thai mark misses do not meet the target.
 - Limitations: only a synthetic corpus and one machine/run were measured; p95 is machine-specific;
-  no concurrent workload, long note stress, real-user relevance, backup/restore impact, or browser
-  behavior was tested. The short-query reject policy is preferred over an unmeasured exhaustive
-  fallback.
+  no concurrent workload, long note stress, real-user relevance, backup/restore impact, HTTP/API
+  overhead, or browser behavior was tested. The full-scan fallback remains a benchmark, not an
+  implementation or API acceptance result.
 - No dependency was added. The recommendation would require a forward-only migration that adds a
   separate trigram FTS table and its insert/update/delete synchronization for existing Notes. The
   existing `002_notes.sql` is not edited. Implementation must remain blocked until the search

@@ -313,25 +313,32 @@ all prior `PROGRESS.md` history; do not restore this file wholesale from Git.
 
 ## T08 Thai search strategy evaluation (2026-10-19)
 
-### Checkpoint and commit hold
+### Checkpoint and approved commits
 
 - Initial checkpoint `git status --short` and `git --no-pager diff --stat` showed an already-dirty
   worktree from prior uncommitted PKH work; the status/diff were preserved, not reset.
 - `git ls-files` pattern scan returned no tracked `.env*`, SQLite/DB, WAL/SHM, uploads, backups, or
   log files/directories.
-- Proposed future commit split (not staged or committed):
-  1. `Implement PKH notes and backup baseline`
-  2. `Add Notes trash management`
-  3. `Evaluate Thai FTS5 search strategies`
-- Notes CRUD/T15 edits touch some of the same files, so any future split will need careful hunk
-  staging. No commit will be run without the separate explicit “อนุมัติ commit” approval.
+- The user explicitly approved commits. The existing Git history already contains the backup baseline
+  (`b330857`, `2027ee2`), and Notes CRUD + Trash implementation touched shared files, so commits were
+  consolidated as authorized by the user:
+  1. `2db34b4 Implement PKH Notes and Trash workflows` — source, migration, required backup schema
+     verification update, tests, and project docs.
+  2. `a8d9d36 Add Thai FTS5 evaluation benchmark` — `tests/thai-search-evaluation.mjs`.
+- T08-related documentation was kept with commit 1 because it was mixed with implementation
+  documentation; no manual hunk rewriting was used. The benchmark script was kept separate as
+  requested. Both commits were made only after the requested test/lint/build commands passed on the
+  staged implementation. No secrets/runtime files were found in the tracked list or staged content.
+- Immediately after the two commits, `git status --short` was empty. The B2 follow-up measurement
+  below changes the benchmark script and research docs after that checkpoint; those follow-up changes
+  are intentionally uncommitted.
 
 ### Evaluation performed
 
 - Added `tests/thai-search-evaluation.mjs`, a deterministic standalone test/benchmark using only the
   existing server `better-sqlite3` dependency. It creates and removes temporary SQLite files and
   does not read `DATA_DIR`.
-- Dataset: 200 synthetic Thai note-like records with 22 predefined substring queries, plus a
+- Dataset: 200 synthetic Thai note-like records with 21 predefined substring queries, plus a
   10,000-note synthetic performance corpus. The independent oracle NFC-normalizes and checks
   literal substring presence in title/content. Queries cover partial/middle text, no-space Thai,
   1-/2-/3-code-point cases, nonexistent text, Thai tone/marks, NFC/NFD, mixed Thai/English, numbers,
@@ -341,26 +348,34 @@ all prior `PROGRESS.md` history; do not restore this file wholesale from Git.
   and matched Thai text; two-code-point trigram queries produce no hits.
 - Full machine baseline and all measurements, plus the method, result misses and proposed
   implementation migration, are in `DECISIONS.md`.
+- B2 full-scan fallback was measured on a separate temporary 10,000-row SQLite corpus. With 9,600
+  active notes for the searched owner, 200 owner notes excluded as trashed, and 200 other-owner
+  notes excluded, seven short queries (including distinct NFC/NFD text) matched the NFC substring
+  oracle exactly. Page size 50; page 1/2/last/beyond-end assertions; 100 warm-up and 100 measured
+  rounds per query (700 samples). p50 58.29 ms, p95 103.42 ms. Method, counts, and limitations are
+  in `DECISIONS.md`; T08-07 is recorded in `TEST_PLAN.md`.
 
 ### Results and proposed decision
 
 - On 200 notes, trigram + hybrid achieved precision/recall 100%/100%; word-only FTS achieved
-  100%/74.76% and missed partial terms and compounds including `งบประมา`, `กา`, `น้ำ`, and
+  100%/78.05% and missed partial terms and compounds including `งบประมา`, `กา`, `น้ำ`, and
   `ก่อนเดินทาง`.
 - Under the measured bounded short fallback (latest 1,000 candidates, max 200 returned), 10k
   archive recall was only 9.76% for `ๆ` and 2.02% for `กา`. All tested approaches therefore fail
   the combined 95% requirement when the full-archive short-query cases are included.
-- Proposed future policy: trigram search for queries of at least 3 Unicode code points and return a
-  clear Thai limitation message for shorter queries. Do not present a bounded partial result as
-  complete. Hybrid is not recommended because it did not improve accuracy on the 200-note set and
-  had a 62.5% larger index, 10.3x build time, and higher write cost.
+- Proposed policy remains undecided pending the user's choice: use trigram for queries of at least 3
+  Unicode code points and consider full-scan `instr()` for shorter queries. Its synthetic p95 was
+  below 300 ms with 100% precision/recall, but the implementation has not been built or measured
+  through HTTP, under concurrent load, or on user data. Hybrid remains not recommended because it
+  did not improve 200-note accuracy and had a 62.5% larger index, 3.3x build time in this run, and
+  higher write cost.
 - No endpoint, UI, schema migration, dependency, manifest, lockfile, network, remote access, or real
   user data was changed. Any trigram schema change remains a proposal only.
 
 ### Verification
 
 The standalone benchmark command was run successfully with temporary DBs:
-`node tests\thai-search-evaluation.mjs` (exit 0; 200-note corpus, 22 query cases, and 10,000-note
+`node tests\thai-search-evaluation.mjs` (exit 0; 200-note corpus, 21 query cases, and 10,000-note
 benchmark corpus). Final verification on the final diff:
 
 | Command | Result |
