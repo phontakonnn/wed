@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
@@ -29,10 +29,12 @@ describe('SQLite setup', () => {
 
     expect(database.pragma('foreign_keys', { simple: true })).toBe(1);
     expect(database.prepare('SELECT version FROM schema_migrations ORDER BY version').all())
-      .toEqual([{ version: 1 }, { version: 2 }]);
+      .toEqual([{ version: 1 }, { version: 2 }, { version: 3 }]);
     expect(database.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'sessions'").get()).toEqual({ name: 'sessions' });
     expect(database.prepare("SELECT name FROM sqlite_master WHERE name = 'notes_fts'").get())
       .toEqual({ name: 'notes_fts' });
+    expect(database.prepare("SELECT name FROM sqlite_master WHERE name = 'notes_fts_trigram'").get())
+      .toEqual({ name: 'notes_fts_trigram' });
   });
 
   it('uses WAL mode for file-backed databases', () => {
@@ -78,6 +80,64 @@ describe('SQLite setup', () => {
     ]);
     expect(database.prepare('SELECT version FROM schema_migrations ORDER BY version').all())
       .toEqual([{ version: 1 }, { version: 2 }]);
+    database.close();
+  });
+
+  it('backfills active existing notes and keeps the trigram index in sync on migration', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'pkh-search-migration-test-'));
+    temporaryDirectories.push(directory);
+    const migrationDirectory = join(directory, 'migrations');
+    const priorMigrationDirectory = join(directory, 'prior-migrations');
+    mkdirSync(migrationDirectory);
+    mkdirSync(priorMigrationDirectory);
+    for (const file of ['001_initial.sql', '002_notes.sql', '003_notes_search.sql']) {
+      copyFileSync(new URL(`../migrations/${file}`, import.meta.url), join(migrationDirectory, file));
+      if (file !== '003_notes_search.sql') {
+        copyFileSync(new URL(`../migrations/${file}`, import.meta.url), join(priorMigrationDirectory, file));
+      }
+    }
+    const database = new Database(':memory:');
+    database.function('nfc', { deterministic: true }, (value: string | null) => value?.normalize('NFC') ?? null);
+    applyMigrations(database, priorMigrationDirectory);
+    database.prepare(`
+      INSERT INTO users (id, username, password_hash, created_at) VALUES (?, ?, ?, ?)
+    `).run('search-owner', 'search-owner', 'test-hash', Date.now());
+    database.prepare(`
+      INSERT INTO notes (id, owner_id, title, content, created_at, updated_at, deleted_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run('existing-active', 'search-owner', 'NFD title', 'Cafe\u0301 in existing note', 1, 1, null);
+    database.prepare(`
+      INSERT INTO notes (id, owner_id, title, content, created_at, updated_at, deleted_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run('existing-trash', 'search-owner', 'Deleted note', 'Café hidden', 1, 1, 1);
+
+    applyMigrations(database, migrationDirectory);
+
+    const trigramSearch = database.prepare(`
+      SELECT note_id FROM notes_fts_trigram WHERE notes_fts_trigram MATCH ?
+    `);
+    expect(database.prepare('SELECT version FROM schema_migrations ORDER BY version').all())
+      .toEqual([{ version: 1 }, { version: 2 }, { version: 3 }]);
+    expect(trigramSearch.all('"Café"')).toEqual([{ note_id: 'existing-active' }]);
+    expect(trigramSearch.all('"hidden"')).toEqual([]);
+
+    database.prepare(`
+      INSERT INTO notes (id, owner_id, title, content, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run('after-migration', 'search-owner', 'Fresh', 'Original phrase', 2, 2);
+    expect(trigramSearch.all('"Original phrase"')).toEqual([{ note_id: 'after-migration' }]);
+
+    database.prepare('UPDATE notes SET content = ? WHERE id = ?')
+      .run('Changed phrase', 'after-migration');
+    expect(trigramSearch.all('"Original phrase"')).toEqual([]);
+    expect(trigramSearch.all('"Changed phrase"')).toEqual([{ note_id: 'after-migration' }]);
+
+    database.prepare('UPDATE notes SET deleted_at = ? WHERE id = ?').run(3, 'after-migration');
+    expect(trigramSearch.all('"Changed phrase"')).toEqual([]);
+    database.prepare('UPDATE notes SET deleted_at = NULL WHERE id = ?').run('after-migration');
+    expect(trigramSearch.all('"Changed phrase"')).toEqual([{ note_id: 'after-migration' }]);
+    database.prepare('DELETE FROM notes WHERE id = ?').run('after-migration');
+    expect(trigramSearch.all('"Changed phrase"')).toEqual([]);
     database.close();
   });
 

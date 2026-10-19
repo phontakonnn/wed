@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
+import rateLimit from '@fastify/rate-limit';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -122,6 +123,7 @@ export function createApp(
     logger: options.logger ?? (process.env.NODE_ENV !== 'test'),
     ajv: { customOptions: { removeAdditional: false } },
   });
+  app.register(rateLimit, { global: false });
   app.decorateRequest('sessionUserId', null);
   if (options.webRoot) {
     app.register(fastifyStatic, {
@@ -306,6 +308,75 @@ export function createApp(
     `).all(ownerId, pageSize, offset) as Note[];
 
     return { notes, page, pageSize, total };
+  });
+
+  app.register(async function notesSearchRoutes(searchRoutes) {
+    searchRoutes.get<{ Querystring: { q: string; page: number; pageSize: number } }>('/api/notes/search', {
+      schema: {
+        querystring: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['q'],
+          properties: {
+            q: { type: 'string', minLength: 1, maxLength: 500 },
+            page: { type: 'integer', minimum: 1, maximum: 1000000, default: 1 },
+            pageSize: { type: 'integer', minimum: 1, maximum: 200, default: 50 },
+          },
+        },
+      },
+      config: {
+        rateLimit: {
+          hook: 'preHandler',
+          max: 60,
+          timeWindow: '1 minute',
+          errorResponseBuilder: (_request, context) => ({
+            statusCode: context.statusCode,
+            error: 'ค้นหาบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่',
+          }),
+        },
+      },
+    }, async (request, reply) => {
+      const ownerId = request.sessionUserId;
+      if (!ownerId) return reply.code(401).send({ error: 'กรุณาเข้าสู่ระบบ' });
+      const query = request.query.q.trim().normalize('NFC');
+      if (!query || /[\u0000-\u001f\u007f]/u.test(query)) {
+        return reply.code(400).send({ error: 'กรุณาระบุคำค้นที่มีอักขระที่ถูกต้อง' });
+      }
+
+      const { page, pageSize } = request.query;
+      const offset = (page - 1) * pageSize;
+      const codePointCount = [...query].length;
+      const bindings: Array<string | number> = codePointCount < 3
+        ? [ownerId, query]
+        : [`"${query.replaceAll('"', '""')}"`, ownerId, query, ownerId];
+      const from = codePointCount < 3
+        ? 'notes n'
+        : 'notes n JOIN notes_fts_trigram ON notes_fts_trigram.rowid = n.rowid';
+      const where = codePointCount < 3
+        ? 'n.owner_id = ? AND n.deleted_at IS NULL AND instr(nfc(n.title || \' \' || n.content), ?) > 0'
+        : `notes_fts_trigram MATCH ? AND n.owner_id = ? AND n.deleted_at IS NULL
+        AND instr(nfc(n.title || ' ' || n.content), ?) > 0
+        AND notes_fts_trigram.owner_id = ?`;
+
+      try {
+        const total = (database.prepare(`
+        SELECT COUNT(*) AS total
+        FROM ${from}
+        WHERE ${where}
+      `).get(...bindings) as { total: number }).total;
+        const notes = database.prepare(`
+        SELECT n.id, n.title, n.content, n.created_at AS createdAt, n.updated_at AS updatedAt
+        FROM ${from}
+        WHERE ${where}
+        ORDER BY n.updated_at DESC, n.id
+        LIMIT ? OFFSET ?
+      `).all(...bindings, pageSize, offset) as Note[];
+        return { notes, page, pageSize, total };
+      } catch (error) {
+        app.log.error({ err: error }, 'Notes search failed');
+        return reply.code(500).send({ error: 'ไม่สามารถค้นหาโน้ตได้ในขณะนี้' });
+      }
+    });
   });
 
   app.get<{ Querystring: { page: number; pageSize: number } }>('/api/notes/trash', {

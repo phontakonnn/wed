@@ -10,6 +10,7 @@ import {
   permanentlyDeleteNote,
   restoreNote,
   saveNote,
+  searchNotes,
   type Note,
   type User,
 } from './api';
@@ -36,6 +37,8 @@ function App() {
   const [authBusy, setAuthBusy] = useState(false);
   const [notes, setNotes] = useState<Note[]>([]);
   const [viewMode, setViewMode] = useState<NotesView>('notes');
+  const [searchInput, setSearchInput] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [activeNote, setActiveNote] = useState<Note | null>(null);
   const [activeTrashNote, setActiveTrashNote] = useState<Note | null>(null);
   const [permanentDeleteOpen, setPermanentDeleteOpen] = useState(false);
@@ -51,6 +54,9 @@ function App() {
   const [saveBusy, setSaveBusy] = useState(false);
   const [notesError, setNotesError] = useState('');
   const [notice, setNotice] = useState('');
+  const normalizedSearchInput = searchInput.trim().normalize('NFC');
+  const searchSettling = viewMode === 'notes' && normalizedSearchInput !== searchQuery;
+  const shortSearch = normalizedSearchInput.length > 0 && [...normalizedSearchInput].length < 3;
 
   useEffect(() => {
     let active = true;
@@ -74,10 +80,31 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (authState !== 'signed-in') return;
+    if (viewMode !== 'notes') return;
+    const nextQuery = searchInput.trim().normalize('NFC');
+    if (nextQuery === searchQuery) return;
+    const timeout = window.setTimeout(() => {
+      setNotesBusy(true);
+      notesRequestId.current += 1;
+      setSearchQuery(nextQuery);
+      setPage(1);
+      setNotes([]);
+      setTotal(0);
+      setNotesError('');
+      setNotice('');
+    }, 300);
+    return () => window.clearTimeout(timeout);
+  }, [searchInput, searchQuery, viewMode]);
+
+  useEffect(() => {
+    if (authState !== 'signed-in' || searchSettling) return;
     let active = true;
     const requestId = ++notesRequestId.current;
-    const request = viewMode === 'trash' ? listTrash(page) : listNotes(page);
+    const request = viewMode === 'trash'
+      ? listTrash(page)
+      : searchQuery
+        ? searchNotes(searchQuery, page)
+        : listNotes(page);
     request.then((result) => {
       if (!active || requestId !== notesRequestId.current) return;
       setNotes(result.notes);
@@ -107,7 +134,7 @@ function App() {
     return () => {
       active = false;
     };
-  }, [authState, page, refreshKey, viewMode]);
+  }, [authState, page, refreshKey, searchQuery, searchSettling, viewMode]);
 
   function activateNote(note: Note | null, creating = false) {
     activeNoteRef.current = note;
@@ -140,6 +167,8 @@ function App() {
   function startNewNote() {
     notesRequestId.current += 1;
     setViewMode('notes');
+    setSearchInput('');
+    setSearchQuery('');
     setPage(1);
     setNotesBusy(false);
     activateNote(null, true);
@@ -162,6 +191,8 @@ function App() {
     if (nextView === viewMode) return;
     notesRequestId.current += 1;
     setViewMode(nextView);
+    setSearchInput('');
+    setSearchQuery('');
     setPage(1);
     setNotes([]);
     setTotal(0);
@@ -170,6 +201,18 @@ function App() {
     setNotesError('');
     setNotice('');
     setPermanentDeleteOpen(false);
+  }
+
+  function clearSearch() {
+    notesRequestId.current += 1;
+    setSearchInput('');
+    setSearchQuery('');
+    setPage(1);
+    setNotes([]);
+    setTotal(0);
+    setNotesBusy(true);
+    setNotesError('');
+    setNotice('');
   }
 
   async function handleSave(event: FormEvent<HTMLFormElement>) {
@@ -294,6 +337,8 @@ function App() {
       setNotes([]);
       activateNote(null);
       setViewMode('notes');
+      setSearchInput('');
+      setSearchQuery('');
       setPermanentDeleteOpen(false);
       setAuthState('signed-out');
     } catch (error) {
@@ -365,7 +410,7 @@ function App() {
     );
   }
 
-  const pageSize = viewMode === 'trash' ? 50 : 20;
+  const pageSize = viewMode === 'trash' ? 50 : searchQuery ? 50 : 20;
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
   return (
@@ -414,26 +459,71 @@ function App() {
             </button>
           </div>
           {viewMode === 'notes' && (
-            <button className="button button-primary new-note-button" type="button" onClick={startNewNote}>
-              <span aria-hidden="true">＋</span> เขียนโน้ตใหม่
-            </button>
+            <>
+              <button className="button button-primary new-note-button" type="button" onClick={startNewNote}>
+                <span aria-hidden="true">＋</span> เขียนโน้ตใหม่
+              </button>
+              <div className="search-control">
+                <label htmlFor="note-search">ค้นหาโน้ต</label>
+                <div className="search-input-row">
+                  <input
+                    id="note-search"
+                    type="search"
+                    value={searchInput}
+                    onChange={(event) => {
+                      setSearchInput(event.target.value);
+                      setPage(1);
+                      setNotesError('');
+                    }}
+                    maxLength={500}
+                    placeholder="ค้นหาจากหัวข้อหรือเนื้อหา…"
+                  />
+                  {searchInput && (
+                    <button
+                      className="button button-quiet search-clear"
+                      type="button"
+                      onClick={clearSearch}
+                    >
+                      ล้าง
+                    </button>
+                  )}
+                </div>
+                {shortSearch && (
+                  <p className="search-hint" role="note">
+                    คำค้นสั้น 1–2 อักขระอาจได้ผลลัพธ์กว้าง ระบบจะค้นทุกโน้ตที่ยังไม่อยู่ในถังขยะ
+                  </p>
+                )}
+              </div>
+            </>
           )}
 
           {notesError && <p className="form-error sidebar-error" role="alert">{notesError}</p>}
-          {notesBusy && notes.length === 0 && (
+          {(notesBusy || searchSettling) && notes.length === 0 && (
             <p className="empty-state" aria-live="polite">
-              {viewMode === 'trash' ? 'กำลังโหลดถังขยะ…' : 'กำลังโหลดโน้ต…'}
+              {searchSettling ? 'กำลังค้นหา…' : viewMode === 'trash' ? 'กำลังโหลดถังขยะ…' : 'กำลังโหลดโน้ต…'}
             </p>
           )}
-          {!notesBusy && notes.length === 0 && !notesError && (
+          {!notesBusy && !searchSettling && notes.length === 0 && !notesError && (
             <div className="empty-state">
               <span className="empty-icon" aria-hidden="true">✎</span>
-              <strong>{viewMode === 'trash' ? 'ถังขยะว่าง' : 'ยังไม่มีโน้ต'}</strong>
-              <span>{viewMode === 'trash' ? 'โน้ตที่ย้ายไปถังขยะจะแสดงที่นี่' : 'เริ่มบันทึกไอเดียแรกของคุณ'}</span>
+              <strong>
+                {viewMode === 'trash'
+                  ? 'ถังขยะว่าง'
+                  : searchQuery
+                    ? 'ไม่พบโน้ตที่ตรงกับคำค้น'
+                    : 'ยังไม่มีโน้ต'}
+              </strong>
+              <span>
+                {viewMode === 'trash'
+                  ? 'โน้ตที่ย้ายไปถังขยะจะแสดงที่นี่'
+                  : searchQuery
+                    ? 'ลองใช้คำค้นอื่น หรือกดล้างเพื่อกลับไปดูโน้ตทั้งหมด'
+                    : 'เริ่มบันทึกไอเดียแรกของคุณ'}
+              </span>
             </div>
           )}
           <nav className="note-list">
-            {notes.map((note) => (
+            {!searchSettling && notes.map((note) => (
               <button
                 className={`note-list-item${(viewMode === 'trash' ? activeTrashNote?.id : activeNote?.id) === note.id ? ' is-active' : ''}`}
                 key={note.id}
@@ -450,12 +540,12 @@ function App() {
               </button>
             ))}
           </nav>
-          {pageCount > 1 && (
+          {pageCount > 1 && !searchSettling && (
             <div className="pagination">
               <button
                 className="button button-quiet"
                 type="button"
-                disabled={page <= 1 || notesBusy}
+                disabled={page <= 1 || notesBusy || searchSettling}
                 onClick={() => {
                   setNotesBusy(true);
                   setNotesError('');
@@ -468,7 +558,7 @@ function App() {
               <button
                 className="button button-quiet"
                 type="button"
-                disabled={page >= pageCount || notesBusy}
+                disabled={page >= pageCount || notesBusy || searchSettling}
                 onClick={() => {
                   setNotesBusy(true);
                   setNotesError('');

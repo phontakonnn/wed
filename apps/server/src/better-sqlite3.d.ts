@@ -25,6 +25,11 @@ declare module 'better-sqlite3' {
       run(...parameters: unknown[]): { changes: number; lastInsertRowid: number | bigint };
     };
     pragma(source: string, options?: { simple?: boolean }): unknown;
+    function<Arguments extends unknown[], Result>(
+      name: string,
+      options: { deterministic?: boolean; directOnly?: boolean; safeIntegers?: boolean } | undefined,
+      implementation: (...parameters: Arguments) => Result,
+    ): this;
     transaction<T extends (...args: never[]) => unknown>(operation: T): (...args: Parameters<T>) => ReturnType<T>;
     backup(destination: string, options?: { progress?: (progress: BackupProgress) => void }): Promise<BackupMetadata>;
     close(): void;

@@ -197,6 +197,50 @@
   font-weight: 400;
 }
 
+.search-control {
+  display: grid;
+  margin-bottom: 12px;
+  gap: 7px;
+}
+
+.search-control label {
+  color: #5f665d;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.search-input-row {
+  display: flex;
+  min-width: 0;
+  gap: 6px;
+}
+
+.search-input-row input {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid #dfe3dc;
+  border-radius: 8px;
+  color: var(--ink);
+  background: #fff;
+  font-size: 12px;
+}
+
+.search-clear {
+  flex: 0 0 auto;
+  min-height: 38px;
+  padding: 0 9px;
+  font-size: 11px;
+}
+
+.search-hint {
+  margin: 0;
+  color: #735a2d;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .note-list {
   display: grid;
   align-content: start;

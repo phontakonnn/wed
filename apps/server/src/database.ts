@@ -82,6 +82,7 @@ export function openDatabase(filename: string): Database.Database {
   try {
     database.pragma('foreign_keys = ON');
     database.pragma('busy_timeout = 5000');
+    database.function('nfc', { deterministic: true }, (value: string | null) => value?.normalize('NFC') ?? null);
     if (filename !== ':memory:') {
       database.pragma('journal_mode = WAL');
     }

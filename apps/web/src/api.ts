@@ -83,6 +83,17 @@ export async function listNotes(page: number, pageSize = 20): Promise<NotePage> 
   return result;
 }
 
+export async function searchNotes(queryText: string, page: number, pageSize = 50): Promise<NotePage> {
+  const query = new URLSearchParams({
+    q: queryText,
+    page: String(page),
+    pageSize: String(pageSize),
+  });
+  const result = await request<NotePage>(`/api/notes/search?${query}`);
+  if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
+  return result;
+}
+
 export async function listTrash(page: number, pageSize = 50): Promise<TrashPage> {
   const query = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
   const result = await request<TrashPage>(`/api/notes/trash?${query}`);
