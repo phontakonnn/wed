@@ -58,8 +58,8 @@ L1–L3 are automated and must stay green. L4 cannot be automated and is a gate,
 | BK-01 | WAL-safe snapshot | A row inserted but not checkpointed is present in the backup (proves the Online Backup API is used, not a file copy) |
 | BK-02 | Manifest integrity | SHA-256 and size match the file; `verify` reports no problems; `schemaVersions` = `[1]`; `integrityCheck` = `ok` |
 | BK-03 | Tamper detection | Appending one byte makes `verify` fail with a checksum problem |
-| BK-04 | Restore round-trip + safety copy | Data added after the backup disappears, data present at backup time returns, schema is usable, and the `*.pre-restore-*` copy exists and passes an integrity check |
-| BK-05 | Refuses a live database | Restore throws while the `-shm` file is present (server still running) |
+| BK-04 | Restore round-trip + rollback | Data added after the backup disappears, data present at backup time returns, schema is usable, the `*.pre-restore-*` copy verifies **and can itself be restored** to undo the restore |
+| BK-05 | Refuses a live database | Restore throws while a connection holds the `-shm` mapping (EBUSY on delete) |
 | BK-06 | Missing manifest | A backup without a manifest is reported unverified and cannot be restored |
 | BK-07 | Retention | With `keep = 2`, only the two newest backups and their manifests remain; unrelated files in the directory are untouched |
 

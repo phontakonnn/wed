@@ -45,7 +45,7 @@ Single-user, local-only system: no HA, no replication, no point-in-time recovery
 | Backup directory | `BACKUP_DIR` (default `DATA_DIR/backups`) | Must be an **absolute** path. |
 | Backup file | `BACKUP_DIR/knowledge-<UTC>-<rand>.sqlite3` | `<UTC>` = `YYYYMMDDTHHMMSSmmmZ`. |
 | Manifest | same name + `.manifest.json` | Checksum and provenance. |
-| Restore safety copy | `DATA_DIR/db/knowledge.sqlite3.pre-restore-<UTC>` | Automatic, never deleted by the tool. |
+| Restore safety copy | `DATA_DIR/db/knowledge.sqlite3.pre-restore-<UTC>` + `.manifest.json` | Automatic, never deleted by the tool. |
 | In-progress files | `*.partial` | Removed or renamed; ignored by `list`. |
 
 **Disk separation is not yet satisfied.** `BACKUP_DIR` must eventually point to a physically
@@ -153,11 +153,11 @@ Checks, in order:
 Exit code `0` on success, `1` with a printed list of problems otherwise. Verification is
 read-only: it never modifies the backup.
 
-Add `--no-manifest` to check a raw SQLite file that has no manifest — used for the automatic
-`*.pre-restore-*` safety copy:
+Add `--no-manifest` only for a raw SQLite file supplied from outside the tool (for example a copy
+made by hand). Backups and automatic safety copies both have manifests, so they do not need it:
 
 ```bash
-npm run backup:verify -- "C:/PKH-data/db/knowledge.sqlite3.pre-restore-20261019T134512123Z" --no-manifest
+npm run backup:verify -- "D:/manual-copy.sqlite3" --no-manifest
 ```
 
 **Run a verification after every create, and re-verify the newest backup weekly.** Bit rot and
@@ -171,9 +171,10 @@ Restore is **offline and destructive**. It replaces the live database.
 
 ### Preconditions (all mandatory)
 
-1. The server process is stopped. The tool refuses to run while `knowledge.sqlite3-shm` exists
-   (that file is present exactly while a connection is attached) and also probes with
-   `BEGIN EXCLUSIVE`. `--force` bypasses the `-shm` check for an operator who has positively
+1. The server process is stopped. If `knowledge.sqlite3-shm` exists, the tool tries to delete it:
+   Windows refuses to delete a file that a live connection has memory-mapped (EBUSY), so success
+   proves nothing is attached and a failure aborts the restore. `BEGIN EXCLUSIVE` is a second check
+   for an active writer. `--force` bypasses the `-shm` check for an operator who has positively
    confirmed the server is down after a crash.
 2. The chosen backup passes `verify`.
 3. The operator has typed `--yes`.
@@ -195,7 +196,8 @@ Tool behaviour:
 1. Verify the backup (abort on any problem).
 2. Take an automatic safety copy of the current database at
    `DATA_DIR/db/knowledge.sqlite3.pre-restore-<UTC>` using the Online Backup API, so the current
-   state — including uncheckpointed WAL content — is recoverable.
+   state — including uncheckpointed WAL content — is recoverable. The copy gets its own manifest, so
+   it can be verified and restored by the same CLI if the restore has to be undone.
 3. Delete stale `-wal` and `-shm` files belonging to the target.
 4. Copy the backup to `knowledge.sqlite3.restore-partial` in the same directory, flush it, then
    rename it over `knowledge.sqlite3` (atomic on the same volume).
@@ -203,8 +205,14 @@ Tool behaviour:
    that `users`/`sessions` are queryable.
 6. Print the safety-copy path.
 
-If step 5 fails, copy the safety copy back over the database and report the failure. Do not start
-the server on a database that failed post-restore verification.
+If step 5 fails, the tool copies the safety copy back over the database automatically and reports
+the failure. To undo a restore that passed its checks but is still unwanted:
+
+```bash
+npm run backup:restore -- "C:/PKH-data/db/knowledge.sqlite3.pre-restore-20261019T134512123Z" --yes
+```
+
+Do not start the server on a database that failed post-restore verification.
 
 ### After restoring
 
@@ -235,7 +243,7 @@ A backup is unproven until it has been restored at least once.
 | 2 | Restore into a scratch `DATA_DIR` (never the live one) | Post-check passes |
 | 3 | Compare row counts / login with the pre-backup state | Identical |
 | 4 | Repeat on the real `DATA_DIR` after stopping the server | Login works, health 200 |
-| 5 | Confirm the safety copy exists and is restorable | `verify --no-manifest` on the safety copy exits 0 |
+| 5 | Confirm the safety copy exists and is restorable | `verify` on the safety copy exits 0 (it has its own manifest) |
 
 Drill cadence: before enabling remote access, and after any schema migration.
 

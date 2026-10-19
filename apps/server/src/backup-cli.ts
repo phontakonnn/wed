@@ -156,7 +156,7 @@ async function commandRestore(args: string[]): Promise<void> {
   console.log(`  schema      : [${result.schemaVersions.join(', ')}]`);
   if (result.safetyCopyPath) {
     console.log(`  safety copy : ${result.safetyCopyPath}`);
-    console.log('                (verify it with: backup:verify -- <path> --no-manifest)');
+    console.log('                (roll back with: backup:restore -- <that path> --yes)');
   } else {
     console.log('  safety copy : none (no previous database existed)');
   }

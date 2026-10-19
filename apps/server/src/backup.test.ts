@@ -122,9 +122,13 @@ describe('restore', () => {
     expect(result.safetyCopyPath).not.toBeNull();
     expect(existsSync(result.safetyCopyPath as string)).toBe(true);
 
-    const safetyVerification = await verifyBackup(result.safetyCopyPath as string, { requireManifest: false });
+    const safetyVerification = await verifyBackup(result.safetyCopyPath as string);
     expect(safetyVerification.problems).toEqual([]);
     expect(safetyVerification.ok).toBe(true);
+
+    // The safety copy must be restorable by the same CLI, otherwise a bad restore cannot be undone.
+    const rollback = await restoreBackup({ backupPath: result.safetyCopyPath as string, dataDirectory });
+    expect(readUsernames(rollback.databasePath)).toEqual(['bob']);
   });
 
   it('refuses to restore while the database still has an open connection', async () => {

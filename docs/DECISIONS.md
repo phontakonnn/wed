@@ -82,16 +82,22 @@
   Pruning only touches files matching `knowledge-<stamp>-<hex>.sqlite3`, so unrelated files in the
   backup directory are never deleted. Verified by BK-07.
 - Restore keeps an automatic `*.pre-restore-<stamp>` safety copy taken with the same Online Backup
-  API, removes stale `-wal`/`-shm` before replacing the file, then re-verifies integrity, schema
-  versions, and required tables. On post-restore failure it copies the safety copy back.
-- **In-use detection:** a probe using only `BEGIN EXCLUSIVE` cannot detect an idle open connection —
-  measured on this machine: the probe succeeded while another `better-sqlite3` handle was open, and
-  failed only when that handle held a write transaction. The implemented check therefore treats the
-  presence of `knowledge.sqlite3-shm` as "still in use", because SQLite creates that file while any
-  connection is attached and deletes it on the last close (also measured). `BEGIN EXCLUSIVE` remains
-  as a second check. `--force` bypasses the `-shm` check for a confirmed-dead server.
+  API, **with its own manifest**, removes stale `-wal`/`-shm` before replacing the file, then
+  re-verifies integrity, schema versions, and required tables. On post-restore failure it copies the
+  safety copy back. The manifest on the safety copy exists so a completed-but-unwanted restore can be
+  undone with the same CLI; without it the rollback would need a manual file copy.
+- **In-use detection:** two earlier approaches were measured and rejected on this machine.
+  (a) `BEGIN EXCLUSIVE` alone succeeded while another idle connection was open, so it cannot detect a
+  running server. (b) Treating the presence of `knowledge.sqlite3-shm` as "in use" produced false
+  positives, because a read-only connection creates that file and does not remove it on close.
+  The implemented check **tries to delete the `-shm` file**: Windows returns `EBUSY` while a live
+  connection has it memory-mapped and allows the delete when nothing is attached. Success also
+  cleans up the stale sidecar. `BEGIN EXCLUSIVE` remains as a second check for an active writer.
+  `--force` bypasses the `-shm` check for a confirmed-dead server.
   Rejected alternative: renaming the database file as a probe — on Windows it fails while the file is
   open, but a crash mid-probe would leave the live database renamed.
+- Read-only inspections (`verify`, post-restore checks) remove any `-shm`/empty `-wal` sidecar they
+  created themselves, so verification does not leave artefacts next to backups.
 - Backups are **not encrypted**. They contain scrypt password hashes and session-token hashes, so
   they are as sensitive as the live database and rely on NTFS ACLs. Encryption is deferred, not done.
 - The backup directory must be a separate physical disk. That is not yet verified, so the backup gate

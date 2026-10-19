@@ -41,6 +41,21 @@ Created, from the actual code rather than from the design intent:
 - `better-sqlite3.d.ts` extended with `DatabaseOptions` and the `backup()` signature (types only)
 - **`auth.ts`, the `preHandler` hook, CSRF checks, and all existing routes were not modified.**
 
+### 4. Audit fixes found while reviewing the above
+Two defects were found by testing, not by reading, and fixed in the same session:
+
+- **Safety copies were not restorable.** `restoreBackup` wrote `*.pre-restore-*` without a manifest,
+  so `verify` rejected it and the CLI could not roll back a completed-but-unwanted restore. Safety
+  copies now get their own manifest, and BK-04 asserts the rollback path end to end.
+- **The "database is in use" check had false positives.** A read-only inspection creates
+  `knowledge.sqlite3-shm` and SQLite does not delete it on close, so the next restore refused to run.
+  Presence of the file is no longer the test: the tool now tries to delete it, which fails with
+  `EBUSY` only while a live connection has it mapped. Inspections also clean up sidecars they created.
+
+Also added `scripts/backup-daily.cmd`, `scripts/backup-config.example.cmd`, and
+`scripts/register-backup-task.ps1` for BK-09. They have **not been executed**; BK-08 must be resolved
+before scheduling a destination.
+
 ## Verification evidence (2026-10-19)
 - `npm test`: **4 files, 21 tests passed, 0 failed** (14 pre-existing + 7 new backup tests)
 - `npm run build:server`: TypeScript strict compile, exit 0

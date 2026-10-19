@@ -141,8 +141,47 @@ function removeIfPresent(path: string): void {
   rmSync(path, { force: true });
 }
 
-/** Read-only structural inspection. Never migrates or writes. */
+/**
+ * Build the manifest for a database file that has already been written.
+ * Throws if the file fails integrity checks, so an invalid artefact never gets a manifest.
+ */
+async function buildManifest(path: string, createdAt: Date, fileName = basename(path)): Promise<BackupManifest> {
+  const inspection = inspectDatabaseFile(path);
+  if (inspection.integrityCheck !== 'ok') {
+    throw new Error(`Backup failed integrity_check: ${inspection.integrityCheck}`);
+  }
+  if (inspection.foreignKeyViolations !== 0) {
+    throw new Error(`Backup has ${inspection.foreignKeyViolations} foreign key violation(s)`);
+  }
+
+  return {
+    formatVersion: BACKUP_FORMAT_VERSION,
+    createdAt: createdAt.toISOString(),
+    createdAtMs: createdAt.getTime(),
+    file: fileName,
+    sizeBytes: statSync(path).size,
+    sha256: await sha256File(path),
+    schemaVersions: inspection.schemaVersions,
+    sqliteVersion: inspection.sqliteVersion,
+    integrityCheck: inspection.integrityCheck,
+    foreignKeyViolations: inspection.foreignKeyViolations,
+  };
+}
+
+/**
+ * Read-only structural inspection. Never migrates or writes.
+ *
+ * SQLite creates `-shm`/`-wal` sidecars when a read-only connection opens a WAL database and does
+ * not always remove them on close. Those leftovers would later look like "the server is still
+ * running" to `assertDatabaseIsClosed()`, so any sidecar that did not exist before this inspection
+ * is removed afterwards. A sidecar that already existed (a live server) is never touched.
+ */
 function inspectDatabaseFile(path: string): Inspection {
+  const shmPath = `${path}-shm`;
+  const walPath = `${path}-wal`;
+  const hadShm = existsSync(shmPath);
+  const hadWal = existsSync(walPath);
+
   const database = new Database(path, { readonly: true, fileMustExist: true, timeout: 5000 });
   try {
     const integrityCheck = String(database.pragma('integrity_check', { simple: true }));
@@ -164,6 +203,8 @@ function inspectDatabaseFile(path: string): Inspection {
     };
   } finally {
     database.close();
+    if (!hadShm) removeIfPresent(shmPath);
+    if (!hadWal && existsSync(walPath) && statSync(walPath).size === 0) removeIfPresent(walPath);
   }
 }
 
@@ -183,15 +224,23 @@ function assertRetention(keep: number): void {
 /**
  * Refuse to touch a database that another connection still has open.
  *
- * A `-shm` file exists exactly while at least one connection is attached to a WAL database, so it
- * is the primary signal. `BEGIN EXCLUSIVE` is a second line of defence for a database that is
- * open in a non-WAL state or has an active writer.
+ * Presence of a `-shm` file is not enough: a read-only inspection leaves one behind even after the
+ * connection is closed. What distinguishes a live connection is that the file is memory-mapped, and
+ * Windows refuses to delete a mapped file (EBUSY). So: try to delete the sidecar. Success means no
+ * connection is attached and the stale file is gone; failure means the server is still running.
+ * `BEGIN EXCLUSIVE` is kept as a second check for an active writer.
  */
 function assertDatabaseIsClosed(databasePath: string): void {
-  if (existsSync(`${databasePath}-shm`)) {
-    throw new Error(
-      'The database appears to be in use (a -shm file is present). Stop the server before restoring.',
-    );
+  const shmPath = `${databasePath}-shm`;
+
+  if (existsSync(shmPath)) {
+    try {
+      rmSync(shmPath);
+    } catch {
+      throw new Error(
+        'The database appears to be in use (its -shm file is locked). Stop the server before restoring.',
+      );
+    }
   }
 
   let probe: SqliteHandle | null = null;
@@ -300,31 +349,9 @@ export async function createBackup(options: CreateBackupOptions): Promise<Backup
   try {
     await options.database.backup(partialPath);
 
-    const inspection = inspectDatabaseFile(partialPath);
-    if (inspection.integrityCheck !== 'ok') {
-      throw new Error(`Backup failed integrity_check: ${inspection.integrityCheck}`);
-    }
-    if (inspection.foreignKeyViolations !== 0) {
-      throw new Error(`Backup has ${inspection.foreignKeyViolations} foreign key violation(s)`);
-    }
-
-    const sizeBytes = statSync(partialPath).size;
-    const sha256 = await sha256File(partialPath);
+    const manifest = await buildManifest(partialPath, createdAt, fileName);
     flushToDisk(partialPath);
     replaceFile(partialPath, finalPath);
-
-    const manifest: BackupManifest = {
-      formatVersion: BACKUP_FORMAT_VERSION,
-      createdAt: createdAt.toISOString(),
-      createdAtMs: createdAt.getTime(),
-      file: fileName,
-      sizeBytes,
-      sha256,
-      schemaVersions: inspection.schemaVersions,
-      sqliteVersion: inspection.sqliteVersion,
-      integrityCheck: inspection.integrityCheck,
-      foreignKeyViolations: inspection.foreignKeyViolations,
-    };
     writeManifestAtomic(manifestPath, manifest);
 
     return {
@@ -433,6 +460,11 @@ export async function restoreBackup(options: RestoreOptions): Promise<RestoreRes
 
   if (existsSync(databasePath)) {
     safetyCopyPath = join(databaseDirectory, `${DEFAULT_DATABASE_FILENAME}.pre-restore-${stamp}`);
+    let attempt = 1;
+    while (existsSync(safetyCopyPath) || existsSync(`${safetyCopyPath}${MANIFEST_SUFFIX}`)) {
+      attempt += 1;
+      safetyCopyPath = join(databaseDirectory, `${DEFAULT_DATABASE_FILENAME}.pre-restore-${stamp}-${attempt}`);
+    }
     const current = new Database(databasePath, { timeout: 5000 });
     try {
       // Online Backup API, so uncheckpointed WAL content is included in the safety copy.
@@ -440,6 +472,10 @@ export async function restoreBackup(options: RestoreOptions): Promise<RestoreRes
     } finally {
       current.close();
     }
+    // Give the safety copy its own manifest so it can be verified and restored by this same CLI.
+    // Without this, rolling back a bad restore would require a manual file copy.
+    flushToDisk(safetyCopyPath);
+    writeManifestAtomic(`${safetyCopyPath}${MANIFEST_SUFFIX}`, await buildManifest(safetyCopyPath, options.now ?? new Date()));
   }
 
   copyFileSync(backupPath, partialPath);
