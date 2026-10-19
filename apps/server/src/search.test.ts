@@ -280,11 +280,15 @@ describe('Notes search API', () => {
         const ownerIndex = index % 50;
         const noteOwner = ownerIndex === 49 ? 'benchmark-other' : ownerId;
         const deletedAt = ownerIndex === 48 ? 1 : null;
+        const rareMarkers = [
+          index % 100 === 0 ? ' rare-one-percent ¤ ' : '',
+          index % 10 === 0 ? ' rare-ten-percent §§ ' : '',
+        ].join('');
         insert.run(
           `benchmark-${String(index).padStart(5, '0')}`,
           noteOwner,
           `บันทึก ${index} งบประมาณ`,
-          `วางแผนค่าใช้จ่ายโครงการและประชุมทีม กาแฟ ${index % 2 === 0 ? 'ภาษาไทย' : 'รายละเอียด'}`,
+          `วางแผนค่าใช้จ่ายโครงการและประชุมทีม กาแฟ ${index % 2 === 0 ? 'ภาษาไทย' : 'รายละเอียด'}${rareMarkers}`,
           index,
           index,
           deletedAt,
@@ -293,40 +297,90 @@ describe('Notes search API', () => {
     });
     createCorpus();
 
-    const makeApp = () => {
+    const makeApp = (withForcedFullScan = false) => {
       const app = createApp(database, { expectedOrigin: origin, logger: false });
+      if (withForcedFullScan) {
+        app.get<{ Querystring: { q: string; page: number; pageSize: number } }>(
+          '/__benchmark/search-full-scan',
+          {
+            schema: {
+              querystring: {
+                type: 'object',
+                additionalProperties: false,
+                required: ['q'],
+                properties: {
+                  q: { type: 'string', minLength: 1, maxLength: 500 },
+                  page: { type: 'integer', minimum: 1, maximum: 1000000, default: 1 },
+                  pageSize: { type: 'integer', minimum: 1, maximum: 200, default: 50 },
+                },
+              },
+            },
+            config: {
+              rateLimit: {
+                hook: 'preHandler',
+                max: 60,
+                timeWindow: '1 minute',
+              },
+            },
+          },
+          async (request) => {
+            const owner = request.sessionUserId;
+            if (!owner) throw new Error('Benchmark route unexpectedly lacks an authenticated session');
+            const query = request.query.q.trim().normalize('NFC');
+            const { page, pageSize } = request.query;
+            const bindings = [owner, query];
+            const total = (database.prepare(`
+              SELECT COUNT(*) AS total
+              FROM notes n
+              WHERE n.owner_id = ? AND n.deleted_at IS NULL
+                AND instr(nfc(n.title || ' ' || n.content), ?) > 0
+            `).get(...bindings) as { total: number }).total;
+            const notes = database.prepare(`
+              SELECT n.id, n.title, n.content,
+                n.created_at AS createdAt, n.updated_at AS updatedAt
+              FROM notes n
+              WHERE n.owner_id = ? AND n.deleted_at IS NULL
+                AND instr(nfc(n.title || ' ' || n.content), ?) > 0
+              ORDER BY n.updated_at DESC, n.id
+              LIMIT ? OFFSET ?
+            `).all(...bindings, pageSize, (page - 1) * pageSize);
+            return { notes, page, pageSize, total };
+          },
+        );
+      }
       apps.push(app);
       return app;
     };
-    const trigramApp = makeApp();
-    const fallbackApp = makeApp();
-    await Promise.all([
-      trigramApp.listen({ port: 0, host: '127.0.0.1' }),
-      fallbackApp.listen({ port: 0, host: '127.0.0.1' }),
-    ]);
-    const trigramAddress = trigramApp.server.address();
-    const fallbackAddress = fallbackApp.server.address();
-    if (!trigramAddress || typeof trigramAddress === 'string' || !fallbackAddress || typeof fallbackAddress === 'string') {
-      throw new Error('The temporary benchmark HTTP servers did not bind to loopback ports');
-    }
 
     async function measure(
-      baseUrl: string,
-      queries: string[],
+      label: string,
+      query: string,
+      expectedCount: number,
+      forceFullScan = false,
     ): Promise<{ p50Ms: number; p95Ms: number; samples: number; resultCount: number }> {
+      const app = makeApp(forceFullScan);
+      const address = await app.listen({ port: 0, host: '127.0.0.1' });
+      const baseUrl = address;
+      const url = forceFullScan
+        ? `/__benchmark/search-full-scan?${new URLSearchParams({ q: query })}`
+        : searchUrl(query);
       const timings: number[] = [];
       let resultCount = 0;
       for (let index = 0; index < 50; index += 1) {
-        const query = queries[index % queries.length];
         const startedAt = performance.now();
-        const response = await fetch(`${baseUrl}${searchUrl(query)}`, {
+        const response = await fetch(`${baseUrl}${url}`, {
           headers: { cookie: `pkh_session=${session.token}` },
         });
         const result = await response.json() as { total: number; pageSize: number };
         const elapsedMs = performance.now() - startedAt;
-        if (!response.ok) throw new Error(`HTTP search benchmark returned ${response.status}`);
+        if (!response.ok) {
+          throw new Error(`${label}: HTTP search benchmark returned ${response.status}`);
+        }
         if (result.pageSize !== 50) throw new Error('Search benchmark did not use the default page size');
         resultCount = result.total;
+        if (resultCount !== expectedCount) {
+          throw new Error(`${label}: expected ${expectedCount} matches, got ${resultCount}`);
+        }
         if (index >= 10) timings.push(elapsedMs);
       }
       return {
@@ -337,14 +391,26 @@ describe('Notes search API', () => {
       };
     }
 
-    const trigram = await measure(
-      `http://127.0.0.1:${trigramAddress.port}`,
-      ['งบประมาณ'],
-    );
-    const fullScan = await measure(
-      `http://127.0.0.1:${fallbackAddress.port}`,
-      ['ก', 'กา'],
-    );
+    const cases = [
+      { name: 'trigram-1pct', query: 'rare-one-percent', count: 100, forceFullScan: false },
+      { name: 'trigram-10pct', query: 'rare-ten-percent', count: 1_000, forceFullScan: false },
+      { name: 'trigram-no-hit', query: 'never-present-marker', count: 0, forceFullScan: false },
+      { name: 'forced-full-scan-same-1pct-query', query: 'rare-one-percent', count: 100, forceFullScan: true },
+      { name: 'forced-full-scan-same-10pct-query', query: 'rare-ten-percent', count: 1_000, forceFullScan: true },
+      { name: 'forced-full-scan-same-no-hit-query', query: 'never-present-marker', count: 0, forceFullScan: true },
+      { name: 'short-full-scan-1pct', query: '¤', count: 100, forceFullScan: false },
+      { name: 'short-full-scan-10pct', query: '§§', count: 1_000, forceFullScan: false },
+      { name: 'short-full-scan-no-hit', query: '※', count: 0, forceFullScan: false },
+    ];
+    const results: Record<string, Awaited<ReturnType<typeof measure>>> = {};
+    for (const benchmarkCase of cases) {
+      results[benchmarkCase.name] = await measure(
+        benchmarkCase.name,
+        benchmarkCase.query,
+        benchmarkCase.count,
+        benchmarkCase.forceFullScan,
+      );
+    }
     const benchmark = {
       baseline: {
         platform: process.platform,
@@ -363,14 +429,13 @@ describe('Notes search API', () => {
         warmupRequestsPerPath: 10,
         measuredRequestsPerPath: 40,
         transport: 'HTTP fetch to temporary 127.0.0.1 port',
+        selectivityDenominator: '9,600 active notes owned by the benchmark session',
+        selectiveMatches: { onePercentCase: 100, tenPercentCase: 1_000, noHitCase: 0 },
+        sameQueryForcedScan: 'Test-only HTTP route reproduces production NFC instr() count/page SQL',
       },
-      trigram,
-      fullScan,
+      results,
     };
     console.info(`SEARCH_HTTP_BENCHMARK ${JSON.stringify(benchmark)}`);
-    expect(trigram.samples).toBe(40);
-    expect(fullScan.samples).toBe(40);
-    expect(trigram.resultCount).toBe(9_600);
-    expect(fullScan.resultCount).toBeGreaterThan(0);
+    for (const result of Object.values(results)) expect(result.samples).toBe(40);
   }, 60_000);
 });

@@ -145,12 +145,15 @@ Remote access is **not** part of Phase 2 exit and stays blocked by `docs/ACCEPTA
 | T08-06 | NFC/NFD, mixed language, digits, partial/mid-sentence, no-hit | Expected matches fixed by exact substring oracle before evaluating each FTS strategy | Includes genuinely distinct NFC/NFD `Café`, English+Thai, numeric, partial, middle, and no-hit cases |
 | T08-07 | Full-scan short-query fallback (B2) | 10k temporary rows; NFC `instr()` matching; owner and non-trashed filtering; 7 one-/two-code-point queries; count plus page 1/2/last/beyond-end exact results | Direct-SQLite oracle 100% precision/recall. Initial p50/p95 58.29/103.42 ms; commit-time rerun 58.13/171.28 ms. |
 | T08-08 | Search API accuracy and safety | 24 fixed queries against an independent NFC literal-substring oracle, including 1–2 code points, emoji code-point counting, NFC/NFD, Thai/English, numeric and FTS metacharacters; session, owner/trash isolation, validation, pagination and rate limit | PASS in `apps/server/src/search.test.ts`; all 24 returned exact expected IDs; the 61st authenticated request returns HTTP 429 with `Retry-After`; 61 anonymous requests do not consume the authenticated limit. |
-| T08-09 | Search HTTP latency | 10k temporary rows; loopback HTTP with session; 10 warm-up and 40 measured requests per path; default page size 50 | Three runs; trigram p50/p95: 55.156/56.592, 54.779/57.250, 55.080/57.033 ms; short full scan: 19.131/20.196, 19.080/20.300, 19.177/21.141 ms. Means and variability are recorded in `DECISIONS.md`; all p95 values below 300 ms. Different query lengths/sets and the trigram join mean these are not same-query timings. |
+| T08-09 | Search HTTP latency, broad-match case | 10k temporary rows; loopback HTTP with session; 10 warm-up and 40 measured requests per path; default page size 50 | Three runs and variability are recorded in `DECISIONS.md`; all p95 values below 300 ms. |
+| T08-10 | Selective/no-hit HTTP benchmark | 1%, 10%, no-hit corpora; real trigram and short full-scan API; same long query forced through test-only full-scan route; three runs per case | PASS: exact count expectations 100/1,000/0 against 9,600 active owner notes; p50/p95, population SD, and all three rounds are in `DECISIONS.md`. Same-query comparison is possible only for the 3+ code-point queries using the test-only forced scan; short queries intentionally route only through production full-scan. All p95 <300 ms. |
+| T08-11 | Rate limit and debounce analysis | Route configuration, authenticated 61st request behavior, anonymous requests, 300 ms UI debounce | API: 60 requests per 1-minute window per client IP; request 61 returns 429. Calculation: an 8-keystroke burst typed over 0.8 s with inter-key gaps below 300 ms produces one search after the last key. Debounce is not a hard cap; 61 settled searches/minute could still hit 429. Browser UI behavior remains untested. |
 
-Latest full verification on 2026-10-19: `npm.cmd test` — 5 test files, 42 passed, 0 failed,
-0 skipped; `npm.cmd run lint`, `npm.cmd run build:server`, `npm.cmd run build:web`, and
-`git --no-pager diff --check` completed successfully (the latter two build/check commands ran after
-the test suite). The browser UI remains **ยังไม่ได้ทดสอบใน browser**.
+Latest full verification after the expanded T08-10 benchmark: `npm.cmd test` — 5 test files,
+42 passed, 0 failed, 0 skipped; `npm.cmd run lint`, `npm.cmd run build:server`,
+`npm.cmd run build:web`, and `git --no-pager diff --check` completed successfully. The benchmark
+was also run once as a harness validation and then three measured repetitions; all four invocations
+passed. The browser UI remains **ยังไม่ได้ทดสอบใน browser**.
 
 Run:
 

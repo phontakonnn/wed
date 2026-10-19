@@ -432,3 +432,32 @@ benchmark corpus). Final verification on the final diff:
 - The UI is **ยังไม่ได้ทดสอบใน browser**. No live `DATA_DIR` database was opened or migrated.
 - The browser UI was not tested in a browser. No live `DATA_DIR` database was opened or migrated;
   migration 003 must be preceded by a verified backup when deployed to an existing database.
+
+## T08 additional HTTP selectivity benchmark (2026-10-19)
+
+- Final validation after adding this benchmark: `npm.cmd test` — **5 files, 42 passed, 0 failed,
+  0 skipped**; `npm.cmd run lint`, `npm.cmd run build:server`, `npm.cmd run build:web`, and
+  `git --no-pager diff --check` all completed successfully.
+- Expanded `apps/server/src/search.test.ts` with marker-based cases on the same 10,000-row
+  temporary in-memory corpus. Match denominator is 9,600 active owner notes: 100 matches = 1.04%,
+  1,000 = 10.42%, and no-hit = 0. Both 3+ code-point trigram and 1–2 code-point production
+  full-scan API paths were measured.
+- For each long query, a test-only route added to the temporary Fastify app runs the production
+  NFC `instr()` count/page SQL under session validation, enabling an exact same-query trigram vs.
+  forced full-scan comparison without adding a production endpoint.
+- Three measured runs; each query/path had 10 warm-up + 40 measured loopback HTTP requests. All
+  expected match counts were asserted. Detailed per-run p50/p95, across-run means and population
+  standard deviations are in `docs/DECISIONS.md`. Same-long-query comparison showed p95:
+  1% trigram 2.368–3.098 ms vs forced scan 29.372–30.279 ms; 10% trigram 9.444–11.137 ms vs
+  forced scan 20.946–23.115 ms; no-hit trigram 0.738–0.928 ms vs forced scan 38.570–39.184 ms.
+  Short full-scan API p95 was 29.695–30.569 ms (1%), 21.584–23.302 ms (10%), and 38.977–39.978 ms
+  (no-hit). All measured p95s were below 300 ms.
+- Search rate limit is configured for 60 requests per `1 minute` per client IP. API test confirms
+  requests 1–60 succeed and request 61 returns 429 with `Retry-After`; anonymous requests do not
+  consume the authenticated caller's limit. The UI resets its search debounce timer at 300 ms, so
+  an ordinary rapid typing burst results in one request after the pause (e.g. 8 keystrokes in 0.8 s
+  with gaps below 300 ms = 1 search). Debounce is not a hard ceiling: 61 separate settled searches
+  within a minute could still hit 429. Browser behavior and the visible 429 UI state remain
+  **ยังไม่ได้ทดสอบใน browser**.
+- One pilot run was used to verify the corpus and harness before the three measured repetitions.
+  It is reported separately from their mean/SD in `docs/DECISIONS.md`.

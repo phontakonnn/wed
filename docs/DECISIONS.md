@@ -308,12 +308,74 @@ production-data test. All measured p95 values were below the unchanged 300 ms ta
   and write costs are also higher.
 - Do not choose word-only pre-tokenization for literal Notes search: its 78.05% overall recall and
   observed partial-word/Thai mark misses do not meet the target.
-- Limitations: the corpus is synthetic and single-machine; concurrent workload, selective-query
-  comparisons, and browser behavior were not tested. The UI implementation was build-checked but
-  not exercised in a browser. No production database was opened or migrated. Before applying
-  migration 003 to a database with existing data, follow the verified-backup requirement in
-  `BACKUP.md`.
+- Limitations: the corpus is synthetic and single-machine; concurrent workload and browser
+  behavior were not tested. The UI implementation was build-checked but not exercised in a
+  browser. No production database was opened or migrated. Before applying migration 003 to a
+  database with existing data, follow the verified-backup requirement in `BACKUP.md`.
 - No dependency, manifest, or lockfile changed. Migration 003 adds a separate trigram FTS5 table,
   backfills active notes, and adds insert/update/delete triggers; existing `notes_fts` and its
   triggers remain unchanged. Migration and backfill preservation were tested only with temporary
   databases.
+
+### Additional HTTP selectivity benchmark (2026-10-19)
+
+- This follow-up addresses the broad-match limitation above. It uses a fresh temporary in-memory
+  database for each of three measured runs and the same 10,000-note synthetic layout: 9,600 active
+  notes for the authenticated owner, 200 trashed notes for that owner, and 200 active notes for a
+  second owner. Marker strings were added only to this synthetic benchmark corpus: 100 matching
+  active-owner notes (100/9,600 = 1.04%), 1,000 matching active-owner notes (1,000/9,600 =
+  10.42%), and no matching notes. All returned `total` values matched those counts.
+- Each case used a separate temporary Fastify app and loopback HTTP port, with session resolution,
+  response serialization and JSON parsing, default page size 50, 10 warm-up plus 40 measured
+  sequential `fetch` requests timed using `performance.now()`. Each case stayed below the configured
+  60 requests per 1-minute rate-limit window. Cases were run sequentially, not concurrently.
+- A second route was attached only to the benchmark test's Fastify app (not registered in the
+  production application). It reproduced the production full-scan NFC `instr()` count and page
+  SQL, and retained the app's session hook. This permits testing the *same 3+ code-point query*
+  through trigram and forced full-scan SQL. Actual production API behavior still routes all
+  3+ code-point queries to trigram, so forced scan is comparative instrumentation, not a public
+  feature. The 1–2 code-point cases use the real production search API fallback and cannot be sent
+  through trigram with the same literal query because the production policy intentionally selects
+  the fallback for them.
+
+| Case | Match count / active-owner corpus | Query path | Run 1 p50/p95 ms | Run 2 p50/p95 ms | Run 3 p50/p95 ms | Mean p50 ± population SD | Mean p95 ± population SD |
+| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| 1% long query | 100 / 1.04% | Trigram | 2.204 / 2.693 | 2.450 / 3.098 | 2.206 / 2.368 | 2.287 ± 0.116 | 2.720 ± 0.298 |
+| 1% same long query | 100 / 1.04% | Forced full scan | 28.399 / 29.372 | 28.460 / 29.521 | 28.544 / 30.279 | 28.468 ± 0.060 | 29.724 ± 0.397 |
+| 10% long query | 1,000 / 10.42% | Trigram | 8.497 / 10.086 | 10.236 / 11.137 | 8.453 / 9.444 | 9.062 ± 0.830 | 10.222 ± 0.698 |
+| 10% same long query | 1,000 / 10.42% | Forced full scan | 19.859 / 20.946 | 20.885 / 23.115 | 20.277 / 21.715 | 20.340 ± 0.421 | 21.925 ± 0.898 |
+| No-hit long query | 0 / 0% | Trigram | 0.664 / 0.776 | 0.669 / 0.738 | 0.691 / 0.928 | 0.675 ± 0.011 | 0.814 ± 0.082 |
+| No-hit same long query | 0 / 0% | Forced full scan | 37.230 / 38.947 | 37.332 / 38.570 | 37.679 / 39.184 | 37.414 ± 0.192 | 38.900 ± 0.253 |
+| 1% short query | 100 / 1.04% | Full-scan API (`¤`) | 28.463 / 29.695 | 28.930 / 30.569 | 28.625 / 30.005 | 28.673 ± 0.194 | 30.090 ± 0.362 |
+| 10% short query | 1,000 / 10.42% | Full-scan API (`§§`) | 20.500 / 22.172 | 20.433 / 23.302 | 20.360 / 21.584 | 20.431 ± 0.057 | 22.353 ± 0.713 |
+| No-hit short query | 0 / 0% | Full-scan API (`※`) | 37.655 / 39.978 | 37.354 / 38.977 | 37.853 / 39.492 | 37.620 ± 0.205 | 39.482 ± 0.409 |
+
+The preliminary run used to validate marker counts and the forced-scan harness is not included in
+the three-run statistics: trigram/forced-scan for 1% p50/p95 was 2.149/2.350 and 28.371/30.388 ms;
+for 10%, 8.694/9.785 and 20.090/20.856 ms; for no-hit, 0.653/0.933 and 37.179/40.264 ms. Short
+fallback p50/p95 for 1%, 10%, and no-hit was 28.870/30.457, 20.248/21.229, and 37.620/39.051 ms.
+
+**Interpretation:** the same-query comparison is valid for the three long queries because both
+paths use the same literal query, owner, corpus, session, HTTP response shape, pagination, and
+count/page SQL semantics. It is not a comparison of public endpoint routes: forced full scan is a
+test-only route, while the real endpoint uses its configured rate limiter. The short-query
+fallback cases are separate literals and cannot be compared as same-query trigram requests. For
+the matched long queries, trigram is materially faster at 1%, 10%, and no-hit selectivity on this
+synthetic data. The short full scan is slower on rare and no-hit terms because it normalizes/scans
+all 9,600 active owner notes; the 10% case happens to be faster than the 1% case in this corpus and
+run, so do not infer a monotonic latency curve from match percentage. All p95 values were below
+300 ms. This is not a concurrent-load, production-data, or browser measurement.
+
+### Search rate limit and UI debounce
+
+- Production search route: `max: 60`, `timeWindow: '1 minute'` (60 requests per 60 seconds per
+  rate-limit key/client IP); API tests verify that authenticated requests 1–60 are accepted and
+  request 61 returns 429 with `Retry-After`. The test also verifies that 61 anonymous requests
+  return 401 and do not consume the authenticated requester's rate limit.
+- The existing UI resets a 300 ms timer on each input change. A continuous burst of any number of
+  keystrokes with gaps below 300 ms produces one search request after the last keystroke, so a
+  typical 8-character query typed over 0.8 seconds and followed by a pause yields 1 request, not 8.
+  One settled search per second would use all 60 requests in a minute; ordinary query entry is well
+  below that. However, debounce is not a hard rate cap: 61 distinct settled searches in one minute
+  can still receive 429, and the implementation does not prevent that edge case. The browser UI
+  and visible 429 state were not exercised in a browser.
