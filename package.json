@@ -1,0 +1,20 @@
+{
+  "name": "wed-phontakon",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm --prefix apps/web run dev",
+    "build:web": "npm --prefix apps/web run build",
+    "dev:server": "npm --prefix apps/server run dev",
+    "build:server": "npm --prefix apps/server run build",
+    "bootstrap:admin": "npm --prefix apps/server run bootstrap:admin",
+    "lint": "npm --prefix apps/web run lint",
+    "test": "npm --prefix apps/server run test"
+  },
+  "license": "MIT",
+  "type": "module"
+}
