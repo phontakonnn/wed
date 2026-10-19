@@ -231,6 +231,52 @@ Returns active notes, most recently updated first. `page` is an integer from 1 t
 
 Soft-deleted notes are omitted from both `notes` and `total`.
 
+### `GET /api/notes/search?q=...&page=1&pageSize=50`
+
+Searches the current user's active note titles and content using literal substring matching after
+NFC normalization. The route requires a valid session. As a `GET`, it does not require CSRF headers.
+Other owners' notes and notes in Trash are excluded from the result and count.
+
+`q` is required, trimmed and NFC-normalized, and limited to 500 characters; empty/whitespace-only
+queries and control characters are rejected with **400**. `page` is 1–1,000,000 and defaults to 1.
+`pageSize` is 1–200 and defaults to 50. Unknown parameters and invalid ranges return **400**.
+
+- Queries of at least 3 Unicode code points use the separate FTS5 trigram index as a quoted phrase.
+  Embedded quotes are escaped and the candidate matches are checked against normalized text.
+- Queries of 1–2 Unicode code points use an `instr()` scan over NFC-normalized title/content.
+  This path is linear in the owner's active note corpus; it always returns only the requested page.
+- Search requests are limited to 60 per client IP per minute after authentication. The 61st
+  authenticated request in the window returns **429**, a `Retry-After` header, and
+  `{ "statusCode": 429, "error": "ค้นหาบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่" }`.
+  Anonymous requests are denied by the session hook and do not consume the authenticated
+  requester's limit. The in-process limit resets when the server restarts and is not shared across
+  server processes.
+- Database/query failures return a generic **500** error without a filesystem path or stack trace.
+
+**200** response shape is the same as `GET /api/notes`:
+```json
+{
+  "notes": [
+    {
+      "id": "<uuid>",
+      "title": "Idea",
+      "content": "Note text",
+      "createdAt": 1760871912123,
+      "updatedAt": 1760871912123
+    }
+  ],
+  "page": 1,
+  "pageSize": 50,
+  "total": 1
+}
+```
+
+**401** — missing or invalid session.
+
+The 429 status, response body, and `Retry-After` header are covered by the Vitest API tests.
+Synthetic HTTP timing is recorded in `docs/DECISIONS.md`; it is not a production performance
+guarantee.
+
 ### `GET /api/notes/trash?page=1&pageSize=50`
 
 Returns soft-deleted notes for the current user, most recently moved to trash first. `page` is an
@@ -324,7 +370,7 @@ There is no automatic cleanup job. The UI's 30-day retention notice is informati
 | --- | --- |
 | `POST /api/auth/register` | No public signup. Admin creation is CLI-only (`npm run bootstrap:admin`). |
 | Password reset / email flows | Not implemented; no mail transport. |
-| Bookmarks, categories, tags, files, user-facing search | Not implemented yet. |
+| Bookmarks, categories, tags, files | Not implemented yet. |
 
 Requesting `POST /api/auth/register` without a session returns **401**, not 404, because the
 default-deny hook runs before routing.

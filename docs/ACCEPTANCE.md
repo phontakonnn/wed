@@ -91,7 +91,7 @@ may be made until RA-01..05 pass and the operator records the evidence here.
 | PR-03 | Categories, tags, favorites | FAIL |
 | PR-04 | Trash with restore | PARTIAL — owner-scoped API operations and FTS behavior pass API-15..19; browser UI flow has not been manually exercised |
 | PR-05 | File upload, preview, download | FAIL |
-| PR-06 | Thai-aware search (FTS5 evaluation) | PARTIAL — T08 measured three FTS options and a 10k full-scan short-query fallback (synthetic 100% precision/recall, p95 103.42 ms); search API/UI are not implemented, and the fallback policy awaits user decision |
+| PR-06 | Thai-aware search | PARTIAL — search API/UI and additive trigram index implemented; 24 API query cases matched the independent oracle exactly; authenticated 61st request returns 429. Three synthetic 10k HTTP runs measured trigram p95 56.592–57.250 ms and short full-scan p95 20.196–21.141 ms, below 300 ms. Query sets differ and trigram matches nearly the full corpus, so this is not a controlled selective-query comparison. UI is **ยังไม่ได้ทดสอบใน browser**; no concurrent or real-data test was run. |
 | PR-07 | Frontend wired to the API | PASS — React client calls authenticated Fastify endpoints; Vite proxy and production static serving are configured |
 | PR-08 | Orphan object detection and cleanup policy | FAIL |
 

@@ -1,6 +1,6 @@
 # Test Plan
 
-**Status:** reflects the automated suite as of 2026-10-19 plus the tests added for backup/restore.
+**Status:** reflects the automated suite as of 2026-10-19, including Notes search and backup/restore.
 **Runner:** Vitest (`npm test` → `vitest run src` from `apps/server`).
 **Rule:** tests must never touch `DATA_DIR`, real user data, or the network. Every test uses
 `:memory:` or a temporary directory.
@@ -26,7 +26,7 @@ L1–L3 are automated and must stay green. L4 cannot be automated and is a gate,
 
 | ID | Test | Asserts |
 | --- | --- | --- |
-| DB-01 | Applies versioned schema, enables foreign keys | `foreign_keys = 1`; `schema_migrations` contains versions 1 and 2; `sessions` table exists |
+| DB-01 | Applies versioned schema, enables foreign keys | `foreign_keys = 1`; `schema_migrations` contains versions 1, 2, and 3; `sessions` table exists |
 | DB-02 | WAL for file-backed databases | `journal_mode = wal`; `busy_timeout = 5000` |
 | DB-03 | Rolls back a failed transaction | Insert inside a throwing transaction leaves zero rows |
 | DB-04 | Applies additive Notes migration | Fresh database has versions 1 and 2, Notes table and FTS5 table |
@@ -133,7 +133,7 @@ Expected baseline after T15: 4 test files, 35 tests, 0 failures.
 
 Remote access is **not** part of Phase 2 exit and stays blocked by `docs/ACCEPTANCE.md`.
 
-## 7. T08 — Thai search strategy evaluation (evaluated, not implemented)
+## 7. T08 — Thai search strategy evaluation and implementation
 
 | ID | Test | Asserts / measures | Current result |
 | --- | --- | --- | --- |
@@ -143,7 +143,14 @@ Remote access is **not** part of Phase 2 exit and stays blocked by `docs/ACCEPTA
 | T08-04 | 10k benchmark | Warm-up + measured query latency, FTS page size, index-build time, insert/update cost for all three approaches | Measured; see `DECISIONS.md` |
 | T08-05 | Bounded short queries | One-/two-code-point queries including Thai letter, repetition mark, tone-marked text; additionally compare exact matches over the 10k archive to bounded results | 200-note fallback cases pass; bounded/indexed full-archive recall is below 95% |
 | T08-06 | NFC/NFD, mixed language, digits, partial/mid-sentence, no-hit | Expected matches fixed by exact substring oracle before evaluating each FTS strategy | Includes genuinely distinct NFC/NFD `Café`, English+Thai, numeric, partial, middle, and no-hit cases |
-| T08-07 | Full-scan short-query fallback (B2) | 10k temporary rows; NFC `instr()` matching; owner and non-trashed filtering; 7 one-/two-code-point queries; count plus page 1/2/last/beyond-end exact results | Synthetic direct-SQLite result 100% precision/recall; p50 58.29 ms, p95 103.42 ms. Not an HTTP/API acceptance test; decision awaits user |
+| T08-07 | Full-scan short-query fallback (B2) | 10k temporary rows; NFC `instr()` matching; owner and non-trashed filtering; 7 one-/two-code-point queries; count plus page 1/2/last/beyond-end exact results | Direct-SQLite oracle 100% precision/recall. Initial p50/p95 58.29/103.42 ms; commit-time rerun 58.13/171.28 ms. |
+| T08-08 | Search API accuracy and safety | 24 fixed queries against an independent NFC literal-substring oracle, including 1–2 code points, emoji code-point counting, NFC/NFD, Thai/English, numeric and FTS metacharacters; session, owner/trash isolation, validation, pagination and rate limit | PASS in `apps/server/src/search.test.ts`; all 24 returned exact expected IDs; the 61st authenticated request returns HTTP 429 with `Retry-After`; 61 anonymous requests do not consume the authenticated limit. |
+| T08-09 | Search HTTP latency | 10k temporary rows; loopback HTTP with session; 10 warm-up and 40 measured requests per path; default page size 50 | Three runs; trigram p50/p95: 55.156/56.592, 54.779/57.250, 55.080/57.033 ms; short full scan: 19.131/20.196, 19.080/20.300, 19.177/21.141 ms. Means and variability are recorded in `DECISIONS.md`; all p95 values below 300 ms. Different query lengths/sets and the trigram join mean these are not same-query timings. |
+
+Latest full verification on 2026-10-19: `npm.cmd test` — 5 test files, 42 passed, 0 failed,
+0 skipped; `npm.cmd run lint`, `npm.cmd run build:server`, `npm.cmd run build:web`, and
+`git --no-pager diff --check` completed successfully (the latter two build/check commands ran after
+the test suite). The browser UI remains **ยังไม่ได้ทดสอบใน browser**.
 
 Run:
 
@@ -151,9 +158,7 @@ Run:
 node tests\thai-search-evaluation.mjs
 ```
 
-The script uses only `better-sqlite3` already in the server workspace and SQLite files under the OS
-temporary directory; `finally` removes that directory. It is a standalone Node assertion/benchmark
-because the repository's Vitest command targets `apps/server/src`; it does not access `DATA_DIR`.
-The result is a **research outcome**, not an API/UI acceptance test. The proposed policy is to reject
-queries shorter than 3 Unicode code points with a Thai explanation; do not describe short search as
-passing the 95% criterion. No endpoint or UI has been implemented.
+The script uses only the existing `better-sqlite3` dependency and SQLite files under the OS
+temporary directory; `finally` removes that directory. The HTTP/API benchmark runs in Vitest using
+temporary in-memory SQLite and short-lived `127.0.0.1` listeners. No test accesses `DATA_DIR`.
+The 24 API query expectations come from an independent literal-substring oracle, not from FTS.

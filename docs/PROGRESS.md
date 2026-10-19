@@ -330,8 +330,9 @@ all prior `PROGRESS.md` history; do not restore this file wholesale from Git.
   requested. Both commits were made only after the requested test/lint/build commands passed on the
   staged implementation. No secrets/runtime files were found in the tracked list or staged content.
 - Immediately after the two commits, `git status --short` was empty. The B2 follow-up measurement
-  below changes the benchmark script and research docs after that checkpoint; those follow-up changes
-  are intentionally uncommitted.
+  and its documentation were then committed separately as `3971599 Record Thai short-query
+  benchmark`, after `git ls-files`, tracked-path/credential scans, `git diff --cached --check`, and
+  a successful rerun of `node tests\thai-search-evaluation.mjs`. No B2 files were left uncommitted.
 
 ### Evaluation performed
 
@@ -352,8 +353,9 @@ all prior `PROGRESS.md` history; do not restore this file wholesale from Git.
   active notes for the searched owner, 200 owner notes excluded as trashed, and 200 other-owner
   notes excluded, seven short queries (including distinct NFC/NFD text) matched the NFC substring
   oracle exactly. Page size 50; page 1/2/last/beyond-end assertions; 100 warm-up and 100 measured
-  rounds per query (700 samples). p50 58.29 ms, p95 103.42 ms. Method, counts, and limitations are
-  in `DECISIONS.md`; T08-07 is recorded in `TEST_PLAN.md`.
+  rounds per query (700 samples). The initial p50/p95 was 58.29/103.42 ms; the rerun before the B2
+  commit was 58.13/171.28 ms. Method, counts, and limitations are in `DECISIONS.md`; T08-07 is
+  recorded in `TEST_PLAN.md`.
 
 ### Results and proposed decision
 
@@ -363,14 +365,11 @@ all prior `PROGRESS.md` history; do not restore this file wholesale from Git.
 - Under the measured bounded short fallback (latest 1,000 candidates, max 200 returned), 10k
   archive recall was only 9.76% for `ๆ` and 2.02% for `กา`. All tested approaches therefore fail
   the combined 95% requirement when the full-archive short-query cases are included.
-- Proposed policy remains undecided pending the user's choice: use trigram for queries of at least 3
-  Unicode code points and consider full-scan `instr()` for shorter queries. Its synthetic p95 was
-  below 300 ms with 100% precision/recall, but the implementation has not been built or measured
-  through HTTP, under concurrent load, or on user data. Hybrid remains not recommended because it
-  did not improve 200-note accuracy and had a 62.5% larger index, 3.3x build time in this run, and
-  higher write cost.
-- No endpoint, UI, schema migration, dependency, manifest, lockfile, network, remote access, or real
-  user data was changed. Any trigram schema change remains a proposal only.
+- At the time of this checkpoint, the short-query policy and search implementation were awaiting
+  user approval. The user subsequently approved trigram for query lengths ≥3 and full-scan NFC
+  `instr()` for 1–2 Unicode code points; implementation is recorded below.
+- Hybrid remains not recommended because it did not improve 200-note accuracy and had a 62.5%
+  larger index, 3.3x build time in this run, and higher write cost.
 
 ### Verification
 
@@ -387,10 +386,49 @@ benchmark corpus). Final verification on the final diff:
 | `git --no-pager diff --check` | PASS — exit 0; LF-to-CRLF warnings only |
 | Tracked secret/runtime-data scan | PASS — no tracked `.env*`, DB/SQLite, WAL/SHM, uploads, backups, or logs |
 
-- Final `git rev-parse --show-toplevel` returned the expected workspace root. `git status --short`
-  remains dirty with the pre-existing PKH changes plus this evaluation; no changes were staged or
-  committed. `git --no-pager diff --stat` reports 21 tracked changed files, 2,818 insertions and
-  507 deletions; this excludes untracked `tests/` and `apps/server/migrations/002_notes.sql`.
+- At the end of the B2 research checkpoint, `git rev-parse --show-toplevel` returned the expected
+  workspace root. `git status --short` was dirty with the B2 follow-up before it was committed;
+  the then-current diff summary is historical and is not the present search-implementation diff.
 - The T08 synthetic DB benchmark was run separately and exited 0. Its latest measured values and
-  hardware/runtime baseline are recorded in `DECISIONS.md`; the 95% full-archive criterion for short
-  queries remains unmet. No production DB or real user data was accessed.
+  hardware/runtime baseline are recorded in `DECISIONS.md`; the earlier bounded-short-query variant
+  missed full-archive recall and was replaced by the user-approved complete full-scan fallback. No
+  production DB or real user data was accessed.
+
+## T08 search implementation
+
+- Added migration `003_notes_search.sql`, which additively creates `notes_fts_trigram`, backfills
+  active existing notes as NFC, and maintains the index with insert/update/delete triggers. The
+  existing `notes_fts` and its tokenizer remain unchanged. Migration/backfill tests use only
+  in-memory databases and include pre-existing active and trashed notes.
+- Added authenticated `GET /api/notes/search` with owner and non-trash filters, NFC normalization,
+  FTS5 phrase quoting/escaping for queries of at least 3 Unicode code points, and a full-scan
+  `instr()` fallback for 1–2 code points. Both branches count results and apply page limits (default
+  50, maximum 200); the route is limited to 60 requests per client IP per minute.
+- Added a Thai search field and clear button in the existing Notes page only, with a 300 ms debounce,
+  loading/empty/error behavior, pagination, and a Thai advisory that 1–2 character queries may
+  return broad results. No new page or route was added to the frontend.
+- `apps/server/src/search.test.ts` checks 24 query cases against an independent NFC substring oracle,
+  plus owner isolation, trash exclusion, authentication, validation, pagination, FTS punctuation,
+  NFC/NFD normalization, emoji code-point handling, and the 429 rate limit.
+- Full verification on 2026-10-19: `npm.cmd test` — **5 files, 42 passed, 0 failed,
+  0 skipped**; `npm.cmd run lint`, `npm.cmd run build:server`, and `npm.cmd run build:web`
+  completed successfully. Search rate-limit tests confirm HTTP 429, Thai response body and
+  `Retry-After`; 61 anonymous requests do not consume the authenticated caller's limit.
+- Repeated HTTP benchmark: three fresh Vitest runs against temporary in-memory SQLite with
+  10,000 synthetic rows (9,600 active owner, 200 trashed owner, 200 other owner), temporary
+  loopback HTTP ports, session resolution, JSON serialization/read, default page size 50, 10
+  warm-up and 40 measured requests per path. Trigram p50/p95 by run: **55.156/56.592**,
+  **54.779/57.250**, **55.080/57.033 ms**. Short full-scan p50/p95: **19.131/20.196**,
+  **19.080/20.300**, **19.177/21.141 ms**. Means across the three run percentiles: trigram
+  **55.005/56.958 ms**, full scan **19.129/20.545 ms**. Population SD: trigram **0.163/0.274 ms**,
+  full scan **0.040/0.423 ms**. Full methodology and query-path analysis are in
+  `docs/DECISIONS.md`.
+- In this benchmark the trigram query (`งบประมาณ`) differs from the short fallback queries
+  (`ก`, `กา`). Each path executes a count query and page query and returns 9,600 active owner notes;
+  trigram additionally joins the FTS table and matches almost the full active corpus. The result
+  does not isolate the benefit on selective queries. Baseline: Windows 10.0.19044, Node 24.22.0,
+  ICU 78.3, SQLite 3.53.4, Intel i5-13400F / 16 logical CPUs / 34,055,766,016 bytes RAM. All
+  measured p95s were below 300 ms. This is synthetic and not a concurrency or real-data test.
+- The UI is **ยังไม่ได้ทดสอบใน browser**. No live `DATA_DIR` database was opened or migrated.
+- The browser UI was not tested in a browser. No live `DATA_DIR` database was opened or migrated;
+  migration 003 must be preceded by a verified backup when deployed to an existing database.

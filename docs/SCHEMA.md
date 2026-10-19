@@ -1,12 +1,12 @@
 # Database Schema
 
-**Status:** reflects migrations `001_initial` and `002_notes`, and
+**Status:** reflects migrations `001_initial`, `002_notes`, and `003_notes_search`, and
 `apps/server/src/database.ts` as of 2026-10-19.
 **Engine:** SQLite (via `better-sqlite3` 13.0.3), `journal_mode = WAL` for file-backed databases.
 **Database file:** `DATA_DIR/db/knowledge.sqlite3`
 
-> This document describes what the code does today. Notes and a Notes FTS5 index are implemented.
-> Bookmarks, tags, files, and user-facing search are not implemented yet.
+> This document describes what the code does today. Notes, the original Notes FTS5 index, and
+> user-facing substring search are implemented. Bookmarks, tags, and files are not implemented yet.
 
 ---
 
@@ -110,8 +110,22 @@ The migration does not define tags, categories, or note relation tables.
 FTS5 virtual table maintained by insert/update/delete triggers on `notes`. It indexes title and
 content; note ID and owner ID are unindexed metadata columns. Soft-deleting a note removes it from
 the index. Restoring a note adds it back, and permanently deleting a note removes it; both behaviors
-use the existing SQLite triggers on `notes`. User-facing search endpoints are not implemented yet,
-and the tokenizer has not been evaluated for Thai search quality.
+use the existing SQLite triggers on `notes`. This original table and its tokenizer remain unchanged
+by the search feature.
+
+### 3.5 `notes_fts_trigram`
+
+Added additively by `003_notes_search.sql`. FTS5 trigram indexes the NFC-normalized title and
+content for active notes. `note_id` and `owner_id` are unindexed metadata. The migration backfills
+all current non-trash notes and installs insert/update/delete triggers; updates remove the old row
+and add it again only when the note remains active. Soft delete, restore, and permanent deletion
+therefore keep this index aligned with `notes` in the same SQLite transaction.
+
+`openDatabase()` registers a deterministic SQLite `nfc()` scalar function before applying
+migrations. The migration and write triggers use it to normalize indexed text without rewriting
+saved note content. Trigram search uses this index for queries of at least 3 Unicode code points.
+One- and two-code-point queries use a normalized `instr()` scan instead and do not require a
+persisted short-query index.
 
 ---
 
@@ -166,8 +180,6 @@ Because only the hash is stored, a database leak does not directly yield usable 
 The following are design targets from `ARCHITECTURE.md` and are not yet implemented:
 
 - `bookmarks`, `categories`, `tags`, `note_tags`, `files`, `favorites`
-- User-facing FTS5 search and a trigram schema extension (Thai tokenizer strategies are evaluated
-  in T08; no user-facing search implementation exists yet)
 - audit/event log
 - backup metadata tables (backup state lives in sidecar JSON files, not in SQLite)
 
@@ -176,16 +188,13 @@ Trash listing, restore, and confirmed permanent deletion operate on the existing
 field; no migration was required for T15. Tags, categories, and note relations do not exist, so
 restoration of those features is not testable yet.
 
-### Proposed only: T08 trigram index
+### Search migration and backup requirement
 
-The T08 evaluation recommends a separate FTS5 trigram virtual table for substring search; this is
-not part of the current schema and no migration has been run. A future, separately approved
-forward-only migration could add `notes_fts_trigram` with unindexed note/owner metadata and new
-insert/update/delete triggers, then backfill active notes in the same migration transaction. Keep
-the existing `notes_fts` and its triggers unchanged until compatibility and migration tests justify
-otherwise. Do not apply such a migration to a database with existing data before a backup has been
-created and verified. The proposed API would reject queries shorter than 3 Unicode code points;
-that behavior is not implemented.
+Migration 003 is additive: it leaves `notes`, migration 002, and the existing `notes_fts` table and
+triggers intact while adding the trigram table and its synchronization triggers. It was tested on
+temporary databases, including an upgrade where existing active and deleted Notes were present.
+Before applying it to any database with existing data, create and verify a backup as required by
+`BACKUP.md`. No production database was migrated during the search implementation.
 
 ---
 

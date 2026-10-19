@@ -40,8 +40,9 @@
 - Login throttling is currently in-process memory, per IP and normalized account, with a 15-minute window and exponential delays after five failures. Restart persistence and multi-process coordination are not implemented and remain a known limitation.
 
 ### Search, files, backup, and remote access
-- Thai search strategies were measured in T08 against synthetic data; no search endpoint or UI is
-  implemented. See the T08 evidence and limits below.
+- Thai substring search is implemented with an additive trigram FTS5 index for queries of at least
+  three Unicode code points and a full-scan NFC `instr()` fallback for one- and two-code-point
+  queries. The evidence, limits, and HTTP measurements are below.
 - File upload/preview is not implemented.
 - **Backup/restore is now implemented and tested** (`apps/server/src/backup.ts`, `backup-cli.ts`). The
   backup/restore *gate* is not yet passed: separate physical disk, scheduled runs, and a real restore
@@ -238,6 +239,10 @@ short-archive 95% criterion as **not met** for all three approaches.
   produced p50 **58.29 ms** and p95 **103.42 ms**. Baseline: Windows_NT 10.0.19044 x64, Node.js
   v24.22.0, SQLite 3.53.4 via better-sqlite3 13.0.3, Intel Core i5-13400F, 16 logical CPUs,
   34,055,766,016 bytes RAM. One machine and one run; no HTTP/API overhead or concurrency was measured.
+- The benchmark was rerun immediately before its separate commit using the same method and data
+  shape: p50 **58.13 ms**, p95 **171.28 ms**. This variation is retained as evidence rather than
+  replacing the earlier run; neither direct-SQLite result predicts HTTP latency or a safe archive
+  size.
 
 | Query | Expected = actual matches | Pagination check |
 | --- | ---: | --- |
@@ -249,25 +254,66 @@ short-archive 95% criterion as **not met** for all three approaches.
 | `é` (NFD) | 65 | page 1, page 2, last page, beyond end |
 | `zz` | 0 | empty result and beyond end |
 
-### Proposed decision (not implemented)
+### Approved policy and implementation
 
-- Use FTS5 trigram as the primary substring index for queries of at least 3 Unicode code points.
-- Prefer a full-scan `instr()` fallback for queries shorter than 3 Unicode code points rather than
-  rejecting them: the measured synthetic fallback preserved complete results and had p95 below the
-  300 ms target. This is a recommendation only; the user has not selected or approved it, and no
-  search route/UI exists yet. Keep the earlier rejection policy as an alternative if real workload
-  testing shows unacceptable latency.
+- The user approved FTS5 trigram for queries of at least 3 Unicode code points and a full-scan
+  `instr()` fallback over NFC text for one- and two-code-point queries. Queries are trimmed and
+  NFC-normalized; longer FTS queries are quoted as a phrase with embedded quotes escaped, then
+  checked against the NFC text to preserve literal-substring behavior.
+- The full-scan path is linear in the number and size of the caller's active notes: it normalizes
+  and scans candidate text, runs a count, then returns one bounded page. It always filters by
+  session owner and `deleted_at IS NULL`, defaults to 50 results, caps `pageSize` at 200, and is
+  limited to 60 requests per client IP per minute. The in-process limit resets on restart and is
+  not shared between server processes.
+- The HTTP-level synthetic benchmark used 10,000 SQLite rows (9,600 active owner notes, 200
+  trashed owner notes, and 200 active notes for another owner). Each run used local `fetch` requests
+  to temporary `127.0.0.1` ports, included session resolution, the count and page SQL queries,
+  response serialization and JSON reading, and used page size 50. Each path had 10 warm-up and 40
+  measured requests timed with `performance.now()`. The trigram path always queried `งบประมาณ`;
+  the short-query path alternated `ก` and `กา`. Each query returned a total of 9,600 rows.
+
+| Run | Trigram p50 / p95 (ms) | Short full-scan p50 / p95 (ms) |
+| --- | ---: | ---: |
+| 1 | 55.156 / 56.592 | 19.131 / 20.196 |
+| 2 | 54.779 / 57.250 | 19.080 / 20.300 |
+| 3 | 55.080 / 57.033 | 19.177 / 21.141 |
+| Mean across run percentiles | 55.005 / 56.958 | 19.129 / 20.545 |
+| Population SD across run percentiles | 0.163 / 0.274 | 0.040 / 0.423 |
+| Range across run percentiles | 54.779–55.156 / 56.592–57.250 | 19.080–19.177 / 20.196–21.141 |
+
+Baseline for all three runs: Windows_NT 10.0.19044 x64, Node.js v24.22.0, ICU 78.3,
+Unicode 17.0, better-sqlite3 13.0.3 / SQLite 3.53.4, Intel Core i5-13400F, 16 logical CPUs,
+34,055,766,016 bytes RAM. These are three repeated synthetic runs, not a concurrency or
+production-data test. All measured p95 values were below the unchanged 300 ms target.
+- The observed latency difference is real for this benchmark, but it is not a controlled
+  same-query comparison: the API selects its strategy from query length, so the trigram request
+  (`งบประมาณ`) and fallback requests (`ก`, `กา`) necessarily use different query sets here. The
+  test code confirms both paths use the same warm-up count (10), measured request count (40),
+  default page size (50), HTTP/JSON work, and exactly two SQL statements per request (a
+  `COUNT(*)` and a page query), with the same returned total (9,600). The short path reads `notes`
+  with owner/trash filters and NFC `instr()`; it has no FTS join. The trigram path additionally
+  joins `notes_fts_trigram`, applies `MATCH` and the FTS owner filter, then checks the NFC literal
+  match; it pays this extra work while the selected trigram query matches essentially the entire
+  active corpus. Thus the result does not show that trigram is generally slower for selective
+  searches; this benchmark does not isolate query selectivity or the tokenizer's benefit.
+- Request order is fixed within each fresh test: 10 trigram warm-ups, 40 trigram measurements,
+  then 10 fallback warm-ups and 40 fallback measurements. Repeating the test in three fresh
+  processes produced the low between-run variability shown above, but the sequential order and
+  differing queries remain limitations.
+- Because the fallback scans linearly, remeasure HTTP p95 as the active note corpus grows. Revisit
+  the policy when measured p95 approaches or exceeds 300 ms; the available single 10k point does not
+  justify extrapolating a specific maximum note count.
 - Do not choose the hybrid: it did not improve accuracy over trigram on the 200-note oracle, while
   its measured index is 62.5% larger; in this run its build time was 3.3x trigram's. 10k latency
   and write costs are also higher.
 - Do not choose word-only pre-tokenization for literal Notes search: its 78.05% overall recall and
   observed partial-word/Thai mark misses do not meet the target.
-- Limitations: only a synthetic corpus and one machine/run were measured; p95 is machine-specific;
-  no concurrent workload, long note stress, real-user relevance, backup/restore impact, HTTP/API
-  overhead, or browser behavior was tested. The full-scan fallback remains a benchmark, not an
-  implementation or API acceptance result.
-- No dependency was added. The recommendation would require a forward-only migration that adds a
-  separate trigram FTS table and its insert/update/delete synchronization for existing Notes. The
-  existing `002_notes.sql` is not edited. Implementation must remain blocked until the search
-  feature is separately approved, the migration is tested on temporary databases, and a verified
-  backup is confirmed before applying it to any database with existing data.
+- Limitations: the corpus is synthetic and single-machine; concurrent workload, selective-query
+  comparisons, and browser behavior were not tested. The UI implementation was build-checked but
+  not exercised in a browser. No production database was opened or migrated. Before applying
+  migration 003 to a database with existing data, follow the verified-backup requirement in
+  `BACKUP.md`.
+- No dependency, manifest, or lockfile changed. Migration 003 adds a separate trigram FTS5 table,
+  backfills active notes, and adds insert/update/delete triggers; existing `notes_fts` and its
+  triggers remain unchanged. Migration and backfill preservation were tested only with temporary
+  databases.

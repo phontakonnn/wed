@@ -38,8 +38,9 @@ workspace root was verified with `git rev-parse --show-toplevel` on 2026-10-19.
 
 ### Database
 - SQLite with WAL enabled
-- FTS5 index for Notes title/content, maintained by SQLite triggers. User-facing search is not yet
-  implemented.
+- FTS5 indexes for Notes title/content are maintained by SQLite triggers. User-facing substring
+  search uses a separate NFC trigram index for queries of at least 3 Unicode code points and a
+  paginated, owner-scoped NFC `instr()` fallback for shorter queries.
 - Strict foreign keys and a migration-driven schema
 
 ### Filesystem layer
@@ -70,7 +71,8 @@ workspace root was verified with `git rev-parse --show-toplevel` on 2026-10-19.
 ## Current implementation status
 
 The architecture above contains both current implementation and clearly marked future design.
-As of 2026-10-19, authentication/session handling, Notes CRUD, a local SQLite migration runner,
-and backup/restore tooling exist. Bookmarks, categories/tags, trash restore, file storage, user-facing
-FTS search, Tailwind, and remote access configuration do not yet exist. See `ACCEPTANCE.md` for
-release gates.
+As of 2026-10-19, authentication/session handling, Notes CRUD, Trash restore, user-facing Notes
+search, a local SQLite migration runner, and backup/restore tooling exist. Bookmarks, categories/tags,
+file storage, Tailwind, and remote access configuration do not yet exist. Search is rate-limited per
+client IP and was measured on a temporary synthetic corpus; see `DECISIONS.md` and `ACCEPTANCE.md`
+for evidence and release gates.
