@@ -411,3 +411,167 @@ build and API from the same origin.
 | `NODE_ENV` | no | `test` disables the logger. |
 
 `DATA_DIR` is validated at startup: a missing or relative path aborts the process.
+
+## 7. Proposed file API (design only; not implemented)
+
+This section is a proposal based on §6 of `MASTER_PROMPT.md`; none of these routes, headers, or
+behaviors exist in the current server. It must not be treated as an implemented contract.
+
+### 7.1 Shared security and storage rules
+
+- Every route requires a valid authenticated session and is default-deny. The owner is derived only
+  from that session; client-supplied owner IDs, filesystem paths, object keys, and storage locations
+  are never trusted.
+- Every mutating method (`POST`, `PATCH`, and `DELETE`) requires the global Origin, Host, and
+  `X-PKH-Request: 1` checks in §1.1. `HEAD` and `OPTIONS` also require authentication; `OPTIONS`
+  must satisfy the current global non-GET CSRF/origin checks. Do not enable cross-origin CORS as
+  part of this design.
+- The browser/client filename is metadata only. The storage name is an internally generated UUID;
+  the client filename is never concatenated into a path.
+- Upload content is streamed to `DATA_DIR/tmp/<upload-uuid>.part`; final objects are stored at
+  `DATA_DIR/objects/<first-two-uuid-characters>/<uuid>`. Both directories must be on the same
+  volume so rename can be atomic. Hash SHA-256 as bytes arrive; enforce the configured size limit,
+  request/idle timeout, abort handling, and disk-space reserve before accepting data.
+- `MAX_UPLOAD_BYTES` is 10 GiB per file and the proposed server-wide concurrent upload limit is two,
+  following the Master Prompt defaults. Before accepting an upload, available space after the
+  declared size must remain at least `max(10 GiB, 5% of the destination volume)`. These values must
+  be verified on a disposable test volume; they are not evidence of safe capacity on every host.
+- Flush the completed temporary file, call `fsync` where supported/appropriate, atomically rename
+  it into the object shard, and only then commit the file metadata row. Do not hold a SQLite write
+  transaction open while the client streams bytes.
+- A bounded Defender/file-lock retry with backoff may be used for transient rename failures; never
+  disable Defender and never retry forever.
+
+### 7.2 Proposed protocol and routes
+
+The recommended protocol choice is Tus 1.0.0 for resumable uploads, using a Fastify-integrated Tus
+handler for files larger than 1 GiB in phase 4. The library/dependency proposal and reasons are in
+`DECISIONS.md`; no package has been installed or approved. The exact route adapter and dependency
+approval remain implementation gates.
+
+For MVP files of at most 1 GiB, propose a streaming single-request route:
+
+#### `POST /api/files` — authenticated, CSRF protected
+
+Request body is the raw file byte stream (`application/octet-stream` or a validated declared media
+type); do not buffer the request body or use a JSON/base64 payload. Required headers:
+
+| Header | Proposed contract |
+| --- | --- |
+| `X-File-Name` | UTF-8 filename percent-encoded once; decoded once by the server, NFC-normalized, and validated by the filename rules below. |
+| `Content-Length` | Required declared size in bytes; positive integer no greater than 1 GiB and no greater than `MAX_UPLOAD_BYTES`. Reject missing, malformed, oversized, or inconsistent lengths. Files greater than 1 GiB use Tus in phase 4. |
+| `Content-Type` | Untrusted hint only; never use it alone to permit inline preview. |
+
+The server must preflight declared size and free-space reserve before accepting the body. Apply a
+bounded request timeout and an inactivity timeout; exact timeout values are implementation
+configuration to be settled and tested before coding, not silently invented here. On successful
+stream, hash and size are verified, the file is fsynced and atomically renamed, and
+the metadata row is committed. **201** returns `{ "file": { "id", "name", "size", "sha256",
+"mediaType", "createdAt" } }`. Invalid metadata/size is **400/413**; insufficient reserved disk
+space is **507**; timeout is **408**; request abort does not create a completed row; unexpected
+storage/DB failure returns a generic Thai **500** without a path or stack trace. Errors must be
+logged with a request/upload ID and failure stage, never file contents or credentials.
+
+#### `POST /api/uploads` — authenticated, CSRF protected; Tus creation for files larger than 1 GiB
+
+Use Tus protocol headers (`Tus-Resumable: 1.0.0`, `Upload-Length`, and `Upload-Metadata`). The
+server must reject lengths at or below 1 GiB on this route if the policy reserves it for large
+files, as well as lengths over 10 GiB. `Upload-Metadata` is untrusted, bounded input; parse the
+`filename` value, validate/normalize it, and ignore any client-provided owner, path, or storage
+key. The authenticated user ID is inserted server-side.
+
+On success return **201** with an opaque, unpredictable upload URL and `Upload-Offset: 0`,
+`Upload-Length`, `Tus-Resumable`, and `Upload-Expires`. Persist an upload-session row before
+returning the URL. The ID is a random UUID v4 and is not an authorization token: every operation
+also checks the current authenticated owner.
+
+#### `HEAD /api/uploads/:uploadId` — authenticated
+
+Returns the current `Upload-Offset`, `Upload-Length`, `Tus-Resumable`, and `Upload-Expires`.
+Unknown, expired, malformed, or other-owner IDs return a non-enumerating **404**. The route never
+reveals whether another user's upload ID exists.
+
+#### `PATCH /api/uploads/:uploadId` — authenticated, CSRF protected
+
+Accept Tus `application/offset+octet-stream`, `Upload-Offset`, and `Tus-Resumable`. Verify owner,
+unexpired session, exact current offset, declared remaining length, and per-upload exclusivity
+before writing. A wrong offset returns **409** with the authoritative `Upload-Offset`; concurrent
+PATCH requests for the same upload return **409** (not interleaved writes). A Tus checksum extension
+should be enabled and its checksum verified before advancing the durable offset; the extension
+requires at least the protocol's `sha1` algorithm. Independently compute the required whole-object
+SHA-256 at finalization. A failed chunk checksum must discard that chunk and leave the offset
+unchanged. Recheck global disk
+reserve and the overall size limit. Return **204** with the new offset and expiry only after the
+chunk is durable and its offset has been committed.
+
+When the offset reaches the declared length, stream-verify the complete SHA-256, fsync, atomically
+rename the temporary object, and commit the `files` row and completed upload state. Return the
+standard successful Tus response only after finalization is durable. Repeated final PATCH requests
+must not create duplicate file rows or overwrite an object.
+
+#### `DELETE /api/uploads/:uploadId` — authenticated, CSRF protected
+
+Proposed Tus termination behavior: an owner may explicitly cancel their own incomplete upload.
+Return **204** after marking it cancelled and safely removing its temporary bytes. Another user's
+upload returns **404** and is untouched. If the file is actively being written, first stop/abort
+and join the writer before cleanup.
+
+#### `GET /api/files/:fileId` and `HEAD /api/files/:fileId` — authenticated
+
+Resolve the file ID and owner before opening or sending any byte. Missing and other-owner IDs both
+return **404**. Never map a request path directly to the object path; derive the shard and object
+name from the validated database UUID. Set `X-Content-Type-Options: nosniff` on every file
+response. Use the server-detected media type, not the upload's claimed `Content-Type`.
+
+For a single valid `Range: bytes=...` request, stream only that byte interval and return **206**
+with correct `Content-Range`, `Content-Length`, and `Accept-Ranges: bytes`; do not send the entire
+file. For unsatisfiable ranges return **416** with `Content-Range: bytes */<size>`. Malformed or
+unsupported multiple ranges must be rejected consistently (proposed **416**, with the same
+unsatisfied-range header); this policy must be covered by tests. No Range request returns **200**.
+HEAD returns headers without body. The route must not leak partial file bytes before authorization.
+
+### 7.3 Windows filename and content policy
+
+- Decode the declared filename exactly once; reject invalid UTF-8/percent encoding, empty names,
+  `.`/`..`, control characters, `/`, `\`, colon/alternate data stream syntax, and any path
+  separator. Do not strip separators and then accept the remainder.
+- Normalize the accepted display filename to Unicode NFC and store only the normalized display
+  name in metadata. NFC and NFD spellings therefore normalize to the same display string. Do not
+  use the display name in any filesystem path.
+- Reject Windows device basenames case-insensitively, including extensions: `CON`, `PRN`, `AUX`,
+  `NUL`, `COM1`–`COM9`, and `LPT1`–`LPT9` (for example, `CON.txt`). Reject trailing dots/spaces.
+- Limit names to 255 UTF-16 code units after NFC normalization; this is a component-level display
+  limit, not a storage-path limit. Long absolute paths never come from the client and are never
+  constructed from filenames.
+- Do not impose uniqueness on display names. Names colliding only by case, or that become equal
+  after NFC normalization, remain distinct file records and distinct UUID objects; the UI may
+  disambiguate them using creation time or an ID suffix.
+- Determine preview type by server-side content inspection and a conservative allowlist. Proposed
+  inline preview types: JPEG, PNG, GIF, WebP, AVIF, MP4, WebM, MP3, OGG, and WAV. PDF remains an
+  attachment until sandbox/CSP and origin-isolation behavior is explicitly reviewed. HTML, SVG,
+  unknown types, and all other non-allowlisted formats always use
+  `Content-Disposition: attachment`; never render active content on the app origin.
+
+### 7.4 Expiration, recovery, errors, and orphan policy
+
+- Proposed incomplete-upload idle expiry: 24 hours since last durable chunk; proposed absolute
+  expiry: 7 days after creation. Return `Upload-Expires`; expired IDs return **410** when retained
+  as expired metadata, otherwise **404**. These are design defaults, not implemented values.
+- On startup, reconcile `.part` files, object files, and `files` rows. Log each discrepancy with
+  the opaque ID and category. Never automatically delete an orphan object or a metadata row.
+  Expired `.part` cleanup is allowed only after proving no active writer and no live resumable
+  upload session references it; log the cleanup decision. Preserve unexpected `.part` and object
+  files for operator inspection.
+- File renamed successfully but DB transaction fails: leave the UUID object as a logged orphan;
+  do not automatically delete it. Reconciliation can identify it for an explicit recovery action.
+- DB metadata commit reports failure after object rename: query by generated file/upload ID to
+  determine whether the transaction committed despite a lost/ambiguous response. If not present,
+  preserve the orphan. If present, return the durable result on a safe retry.
+- DB row exists but object is absent (for example, later disk loss or an ambiguous crash): return a
+  generic storage error without bytes, log the missing-object ID, and mark for reconciliation.
+  The chosen rename-before-DB sequence prevents the ordinary DB-first partial state but cannot
+  prevent later media damage.
+- For disk-full, abort, timeout, hash mismatch, lock, and DB failures, never return a success-shaped
+  response. Do not create a completed metadata row or expose a partial object. A resumable PATCH
+  failure leaves the durable offset unchanged; only cleanup code proven to own an inactive expired
+  temporary file may remove it.

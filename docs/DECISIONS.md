@@ -379,3 +379,124 @@ run, so do not infer a monotonic latency curve from match percentage. All p95 va
   below that. However, debounce is not a hard rate cap: 61 distinct settled searches in one minute
   can still receive 429, and the implementation does not prevent that edge case. The browser UI
   and visible 429 state were not exercised in a browser.
+
+## File upload and serving design (proposal only; 2026-10-19)
+
+### Current status and scope
+
+- Files, uploads, previews, and file migrations are **not implemented**. This entry records a design
+  for review; it does not approve implementation or a dependency.
+- No code, package manifest, lockfile, migration, database, or runtime configuration was changed
+  for this proposal. No file data or real user data was accessed.
+- The governing requirements are `MASTER_PROMPT.md` §6, defaults in §5, large-file work in phase 4,
+  and test IDs T03–T07 and T09.
+
+### Alternatives considered
+
+| Option | Description | Advantages | Risks / costs |
+| --- | --- | --- | --- |
+| A. Application-specific streaming and resume protocol | Implement the small-file streaming route and custom large-file create/status/append/cancel routes directly in Fastify. Store owner, offset and expiry in SQLite; serialize chunk writes; stream to `.part` and finalize using the required rename-then-DB order. | No added package; can exactly fit the existing auth, CSRF, DATA_DIR, offset and recovery model; easiest to make opaque IDs strictly owner-bound; avoids adapting a framework to the current file transaction order. | Invents a nonstandard client protocol; application owns every edge case (offset conflicts, duplicate/chunk retries, expiry, checksum, concurrent PATCH, lost responses and compatibility); more bespoke code to review and test long term. |
+| B. Tus 1.0.0 resumable protocol with a Fastify-integrated server | Use the open Tus protocol for uploads larger than 1 GiB and an adapter/custom datastore that writes to `DATA_DIR/tmp/<uuid>.part`, retains offset/owner state, and performs the required atomic object rename before the metadata transaction. Keep the MVP single-request streaming path for files up to 1 GiB. | Published protocol defines upload creation, offset/HEAD, PATCH, expiry, checksum and error semantics; compatible clients can resume without a proprietary wire contract; server package advertises Fastify integration and Node support. | Requires dependency approval and a custom datastore/finalization adapter; integrating Tus handlers must not bypass default-deny session/CSRF checks or Fastify limits; protocol-library behavior may conflict with this app's atomic rename, DB metadata and orphan-preservation rules; new transitive dependencies and maintenance surface. Must verify supported extensions and licensing during dependency review. |
+
+### Evidence for Tus candidate (not an installation)
+
+- The official Tus protocol page identifies version 1.0.0 and its license as MIT.
+- npm registry metadata for `@tus/server` reports latest `2.4.6`, MIT, Node engine `>=20.19.0`,
+  ESM package, `unpackedSize: 194205` bytes, and runtime dependencies. The project's documented
+  Node.js version is v24.22.0, so it satisfies the declared Node engine range. Registry `unpackedSize`
+  is not the compressed download size; compressed size was not established here and must not be
+  inferred from it.
+- Registry metadata for `@tus/file-store` reports `2.1.1`, MIT, Node `>=20.19.0`, and
+  `unpackedSize: 26538` bytes. It is **not** recommended as the direct storage backend because its
+  generic file-store lifecycle has not been shown to meet the required `tmp/<uuid>.part` → sharded
+  UUID object → DB transaction ordering. A custom datastore may make that ordering explicit.
+- Both candidates report MIT; their transitive dependencies still require a license/security review.
+  The `@tus/server` README demonstrates Fastify integration. These metadata/docs checks are not a
+  compatibility test with the installed app and do not approve a dependency.
+- No package was installed and no package manifest or lockfile changed. If the user selects Tus,
+  request approval for `@tus/server` and any required adapter/runtime dependency before installing;
+  report exact dependency tree, versions, licenses, engine support and security implications then.
+
+Sources checked on 2026-10-19:
+
+- [Tus resumable upload protocol](https://tus.io/protocols/resumable-upload)
+- [`@tus/server` npm registry metadata](https://registry.npmjs.org/@tus%2Fserver/latest)
+- [`@tus/file-store` npm registry metadata](https://registry.npmjs.org/@tus%2Ffile-store/latest)
+- [Official tus-node-server repository and Fastify example](https://github.com/tus/tus-node-server)
+
+### Recommendation
+
+Recommend **Option B (Tus protocol for >1 GiB)**, with an application-owned datastore/finalizer and
+the existing streamed one-request path for files up to 1 GiB. This keeps the interoperable resumable
+wire protocol while leaving filesystem naming, owner authorization, DB rows and orphan handling
+under the application's control. Use the official Tus protocol's offset, expiry and checksum
+extensions; independently calculate the complete SHA-256 of the finished object before finalizing.
+
+This is a proposed design choice only. Do not implement it or install `@tus/server` until the user
+approves both the approach and any dependency addition. If the dependency is not approved, use
+Option A only after explicit protocol/design approval and equivalent test coverage. Do not use the
+generic `@tus/file-store` as-is without proving it preserves the required storage ordering.
+
+### Cross-cutting file safety decisions proposed
+
+- Stream both request and response bodies; never buffer a large file. Default maximum is 10 GiB per
+  file, at most two concurrent uploads, and refuse a start if remaining free space would be below
+  `max(10 GiB, 5% of the destination volume)`. These are Master Prompt defaults, not measured
+  guarantees; test on a temporary volume/fault injector.
+- Generate UUID v4 object IDs server-side. Store the original display name in DB only, normalized to
+  NFC, and never use it in a path. Reject invalid encoding, empty/dot names, controls, separators,
+  traversal, Windows device basenames including extensions (`CON.txt`, `NUL`, `COM1`–`COM9`,
+  `LPT1`–`LPT9`, `PRN`, `AUX`), trailing dots/spaces and names over 255 UTF-16 code units. Do not
+  make display names unique; case collisions and NFC-equivalent names remain separate UUID objects.
+- Write to `DATA_DIR/tmp/<uuid>.part`, stream-hash SHA-256, validate declared size/space, enforce
+  request and idle timeouts, and handle abort/disk/lock errors. After completion, fsync where
+  appropriate, atomically rename on the same volume to
+  `DATA_DIR/objects/<first-two-uuid-characters>/<uuid>`, then commit metadata in one DB transaction.
+  Retry Windows Defender/file-lock errors only a bounded number of times with backoff; never disable
+  Defender or retry forever.
+- If object rename succeeds but the DB transaction fails, keep and log the UUID orphan for explicit
+  reconciliation; never auto-delete it. If the DB commit result is ambiguous, query by the generated
+  ID before retrying. If a DB record points to a missing object, deny byte delivery and log the
+  discrepancy. Startup reconciliation reports `.part`, orphan object, and missing-object records;
+  it never auto-deletes an object or metadata row. An expired `.part` may be removed only after
+  proving no active writer or live resumable session references it, with an audit log.
+- Require session and owner authorization before opening a file or sending the first byte. Set
+  `X-Content-Type-Options: nosniff`. Server-detected JPEG, PNG, GIF, WebP, AVIF, MP4, WebM, MP3,
+  OGG and WAV are the proposed inline allowlist. Keep PDF as attachment pending explicit
+  sandbox/CSP review. HTML, SVG, unknown and all non-allowlisted types are attachment-only and must
+  never execute on the application origin.
+- For one valid byte range, return 206 with exact `Content-Range` and only the requested bytes;
+  unsatisfiable ranges return 416 with `Content-Range: bytes */<size>`. Define and test a consistent
+  rejection for malformed/multiple ranges. HEAD returns headers only.
+- Proposed resumable session defaults: opaque random UUID upload ID; every HEAD/PATCH/DELETE checks
+  current owner; persist declared total size and durable offset; per-upload exclusive writer; wrong
+  offset returns 409 and authoritative offset; duplicate finalization is idempotent; chunk checksum
+  failure leaves the offset unchanged. Proposed expiry is 24 hours idle and 7 days absolute; tell
+  clients via Upload-Expires. Never trust IDs as bearer authorization.
+- Proposed cross-resource transaction order and reconciliation details are specified in `API.md`
+  and `SCHEMA.md`. Neither document claims that the design is already implemented.
+
+### Proposed migration
+
+- Propose additive migration `004_files.sql` with `files`, `upload_sessions`, owner/state/expiry
+  indexes and foreign keys. The SQL shape is documented in `SCHEMA.md` for review only; no migration
+  file was created or run.
+- The migration proposal does not alter Notes, existing FTS tables/triggers, or existing rows. It
+  must still be tested on fresh and temporary upgraded databases. Before any real-data migration,
+  create and verify a backup; stop for explicit approval if implementation requires any
+  non-additive change.
+
+### Implementation-phase test plan (planned; not run)
+
+| Test ID | Planned implementation-phase coverage |
+| --- | --- |
+| T03 — Path traversal / Windows filenames | Table-driven API tests for `..\\..\\x.txt`, `/` and `\\`, ADS colon, `CON.txt`, `NUL`, reserved device names with case/extensions, trailing dot/space, overlong names, NFC/NFD equivalents, case-collisions, malformed encoding, and Unicode boundaries. Assert rejected inputs create no object; accepted files use only generated UUID paths contained under the temp storage root. |
+| T04 — XSS / file serving | Upload synthetic HTML and SVG with script and verify attachment disposition, `nosniff`, no execution on the app origin, owner authorization before bytes, and all allowlist/non-allowlist response headers. PDF stays attachment until sandbox/CSP acceptance exists. |
+| T05 — Streaming / RAM | Use generated disposable files (1 MiB, 200 MiB, and 2 GiB only when safe space allows; add 5 GiB only when at least 50 GiB is free and time/storage permit). If available space is below 50 GiB, reduce test sizes safely and report the actual sizes. Stream upload and download; compare SHA-256 and size; measure idle and active RSS, with a single 2 GiB stream increase <=150 MiB. Never allocate the test file in memory. |
+| T06 — Cancel / disconnect / resume | Abort single-request stream and Tus PATCH at controlled offsets; assert no completed metadata/object from incomplete data, safe temp lifecycle, exact offset after reconnect, owner isolation, wrong-offset 409, checksum mismatch does not advance offset, duplicate completion does not duplicate rows, expired session rejected, and concurrent PATCH is serialized/rejected. |
+| T07 — Disk full | Use fault injection or a small disposable VHD only; never fill a real volume. Force failure during write, fsync, rename and DB transaction; assert Thai error response, no half-complete row, no falsely completed object, retained/logged orphan when rename precedes DB failure, and SQLite `integrity_check` passes. |
+| T09 — HTTP Range | For synthetic media sizes, test no Range (200), valid start/end/suffix ranges (206), exact body length and Content-Range, unsatisfiable and malformed/multiple ranges (416 per approved policy), HEAD (no body), `nosniff`, attachment/inline disposition, authorization before first byte, and that a valid range never sends the whole file. |
+
+The 2 GiB/RSS test depends on measured free space and temporary test storage. If preconditions are
+not safe, report BLOCKED with evidence rather than lowering the threshold or filling a real disk.
+These tests are only a plan; no T03/T04/T05/T06/T07/T09 file tests have been run.
