@@ -83,7 +83,7 @@ Written next to each backup, JSON, one object:
   "file": "knowledge-20261019T134512123Z-a1b2c3d4.sqlite3",
   "sizeBytes": 40960,
   "sha256": "…64 hex chars…",
-  "schemaVersions": [1],
+  "schemaVersions": [1, 2],
   "sqliteVersion": "3.x.y",
   "integrityCheck": "ok",
   "foreignKeyViolations": 0
@@ -148,7 +148,7 @@ Checks, in order:
 4. `PRAGMA integrity_check` returns `ok`.
 5. `PRAGMA foreign_key_check` returns no rows.
 6. `schema_migrations` versions match the manifest.
-7. Required tables `users` and `sessions` exist.
+7. Required tables `users`, `sessions`, `notes`, and `notes_fts` exist.
 
 Exit code `0` on success, `1` with a printed list of problems otherwise. Verification is
 read-only: it never modifies the backup.
@@ -202,7 +202,7 @@ Tool behaviour:
 4. Copy the backup to `knowledge.sqlite3.restore-partial` in the same directory, flush it, then
    rename it over `knowledge.sqlite3` (atomic on the same volume).
 5. Re-open the restored database and assert `integrity_check = ok`, expected schema versions, and
-   that `users`/`sessions` are queryable.
+   that the required user, session, and Notes tables are queryable.
 6. Print the safety-copy path.
 
 If step 5 fails, the tool copies the safety copy back over the database automatically and reports

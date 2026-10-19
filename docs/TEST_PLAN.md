@@ -22,13 +22,16 @@ L1–L3 are automated and must stay green. L4 cannot be automated and is a gate,
 
 ## 2. Automated coverage (current)
 
-### 2.1 `database.test.ts` — schema and connection behaviour (3 tests)
+### 2.1 `database.test.ts` — schema and connection behaviour (6 tests)
 
 | ID | Test | Asserts |
 | --- | --- | --- |
-| DB-01 | Applies versioned schema, enables foreign keys | `foreign_keys = 1`; `schema_migrations` contains exactly version 1; `sessions` table exists |
+| DB-01 | Applies versioned schema, enables foreign keys | `foreign_keys = 1`; `schema_migrations` contains versions 1 and 2; `sessions` table exists |
 | DB-02 | WAL for file-backed databases | `journal_mode = wal`; `busy_timeout = 5000` |
 | DB-03 | Rolls back a failed transaction | Insert inside a throwing transaction leaves zero rows |
+| DB-04 | Applies additive Notes migration | Fresh database has versions 1 and 2, Notes table and FTS5 table |
+| DB-05 | Preserves data on upgrade | Existing version-1 user row remains after applying version 2 |
+| DB-06 | Rejects migration gaps and rolls back failure | Missing sequence rejected before changes; failed SQL rolls back schema and version record |
 
 ### 2.2 `auth.test.ts` — primitives (3 tests)
 
@@ -38,7 +41,7 @@ L1–L3 are automated and must stay green. L4 cannot be automated and is a gate,
 | AU-02 | One-time bootstrap | Username stored; hash matches `^scrypt$`; second bootstrap throws `already initialized` |
 | AU-03 | Token hashing and expiry | Stored value equals `sha256(token)` and differs from the token; alive at day 3 and day 9 (sliding); dead at day 17 (idle); dead at day 31 (absolute) |
 
-### 2.3 `index.test.ts` — HTTP behaviour (8 tests)
+### 2.3 `index.test.ts` — HTTP behaviour (19 tests)
 
 | ID | Test | Asserts |
 | --- | --- | --- |
@@ -50,13 +53,27 @@ L1–L3 are automated and must stay green. L4 cannot be automated and is a gate,
 | API-06 | Per-device session revocation | Two sessions listed, `current` flag correct, deleting one leaves the other usable |
 | API-07 | `logout-all` | Revokes 2, clears cookie with `Max-Age=0`, both sessions dead |
 | API-08 | Login throttle | Five failures → 401; sixth → 429 with `Retry-After: 1` |
+| API-09 | Notes require a session | Anonymous list/create requests → 401 |
+| API-10 | Notes CRUD and soft delete | Create/list/detail/update/delete, retained DB row, FTS index updates and active list excludes deleted note |
+| API-11 | Notes validation | Blank titles, unknown fields, empty updates, malformed UUIDs, and invalid pagination → 400 |
+| API-12 | Owner isolation | Another session gets no list result and cannot read/update/delete the owner's note |
+| API-13 | Pagination | Page boundaries and total count are correct |
+| API-14 | Same-origin production web serving | Built assets and root are public; Notes API remains protected |
+| API-15 | Trash restore and FTS | Restore retains title/content, clears `deleted_at`, returns the note to active list and FTS |
+| API-16 | Confirmed permanent delete | Missing/false confirmation and active-note deletion are rejected; confirmed trash deletion removes the row and FTS entry |
+| API-17 | Trash authentication and CSRF | Anonymous requests return 401; mutating requests without CSRF headers return 403 |
+| API-18 | Trash owner isolation | Another session cannot list, restore, or permanently delete the owner's deleted note |
+| API-19 | Trash pagination | Default page size is 50, page boundaries work, maximum 200 is accepted and 201 is rejected |
+
+Tags, categories, and note relations are not present in the schema. Their preservation during restore
+is **ยังไม่ได้ทดสอบ** because those features do not exist yet.
 
 ### 2.4 `backup.test.ts` — backup/restore MVP (new)
 
 | ID | Test | Asserts |
 | --- | --- | --- |
 | BK-01 | WAL-safe snapshot | A row inserted but not checkpointed is present in the backup (proves the Online Backup API is used, not a file copy) |
-| BK-02 | Manifest integrity | SHA-256 and size match the file; `verify` reports no problems; `schemaVersions` = `[1]`; `integrityCheck` = `ok` |
+| BK-02 | Manifest integrity | SHA-256 and size match the file; `verify` reports no problems; `schemaVersions` = `[1, 2]`; `integrityCheck` = `ok` |
 | BK-03 | Tamper detection | Appending one byte makes `verify` fail with a checksum problem |
 | BK-04 | Restore round-trip + rollback | Data added after the backup disappears, data present at backup time returns, schema is usable, the `*.pre-restore-*` copy verifies **and can itself be restored** to undo the restore |
 | BK-05 | Refuses a live database | Restore throws while a connection holds the `-shm` mapping (EBUSY on delete) |
@@ -102,7 +119,7 @@ npm run lint                # web package ESLint
 npm run build:web           # Vite production build
 ```
 
-Expected baseline: 4 test files, 21 tests, 0 failures.
+Expected baseline after T15: 4 test files, 35 tests, 0 failures.
 
 ---
 
@@ -115,3 +132,27 @@ Expected baseline: 4 test files, 21 tests, 0 failures.
 - [ ] No secrets, databases, or `dist/` output tracked by Git (`git status` clean after a build).
 
 Remote access is **not** part of Phase 2 exit and stays blocked by `docs/ACCEPTANCE.md`.
+
+## 7. T08 — Thai search strategy evaluation (evaluated, not implemented)
+
+| ID | Test | Asserts / measures | Current result |
+| --- | --- | --- | --- |
+| T08-01 | Driver capability | Existing `better-sqlite3` can create `fts5(... tokenize='trigram')` and match Thai; a 2-code-point trigram query returns no match | PASS on recorded baseline |
+| T08-02 | Thai segmenter | ICU supports locale `th`; sample Thai sentence segments into words | PASS on recorded baseline |
+| T08-03 | Accuracy corpus | 200 synthetic note-like Thai records; 22 predeclared query cases against an independent NFC substring oracle | Trigram/hybrid 100% P/R; token FTS recall 74.76% |
+| T08-04 | 10k benchmark | Warm-up + measured query latency, FTS page size, index-build time, insert/update cost for all three approaches | Measured; see `DECISIONS.md` |
+| T08-05 | Short queries | One-/two-code-point queries including Thai letter, repetition mark, tone-marked text; additionally compare exact matches over the 10k archive to bounded results | 200-note fallback cases pass; full-archive recall is below 95% for all bounded/indexed short-query approaches |
+| T08-06 | NFC/NFD, mixed language, digits, partial/mid-sentence, no-hit | Expected matches fixed by exact substring oracle before evaluating each FTS strategy | Includes NFC/NFD `น้ำ`, English+Thai, numeric, partial, middle, and no-hit cases |
+
+Run:
+
+```powershell
+node tests\thai-search-evaluation.mjs
+```
+
+The script uses only `better-sqlite3` already in the server workspace and SQLite files under the OS
+temporary directory; `finally` removes that directory. It is a standalone Node assertion/benchmark
+because the repository's Vitest command targets `apps/server/src`; it does not access `DATA_DIR`.
+The result is a **research outcome**, not an API/UI acceptance test. The proposed policy is to reject
+queries shorter than 3 Unicode code points with a Thai explanation; do not describe short search as
+passing the 95% criterion. No endpoint or UI has been implemented.

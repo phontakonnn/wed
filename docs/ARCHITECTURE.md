@@ -12,53 +12,65 @@ This is a self-hosted Personal Knowledge Hub intended to run on a single local W
 - Require authentication for all protected endpoints
 
 ## Proposed deployment layout
-- Repo: C:\Users\_phontakonnn\Documents\Wed_Phontakon\PKH\app
+- Repo: C:\Users\_phontakonnn\Documents\Wed_Phontakon
 - Data directory: C:\PKH-data
 - Log directory: C:\PKH-data\logs
 - Object storage: C:\PKH-data\objects
 - Temporary uploads: C:\PKH-data\tmp
 - Backup directory: not approved yet; must be physical disk separate from DATA_DIR and verified before backup acceptance
 
+The paths above are deployment targets, not evidence that those directories exist. The actual
+workspace root was verified with `git rev-parse --show-toplevel` on 2026-10-19.
+
 ## Components
 ### Frontend
 - React + TypeScript + Vite + Tailwind CSS
-- Runs under the same-origin local app service in production
-- Not served via the Vite dev server in production mode
+- The current UI implements authenticated Notes CRUD and uses the Fastify API; styling currently
+  uses CSS because Tailwind is not declared in the web manifest.
+- Vite proxies `/api` to the loopback Fastify server during development.
+- The production Vite build is served by Fastify from `apps/web/dist` on the same origin.
 
 ### Backend
 - Node.js LTS + Fastify
-- Exposes REST API
-- Handles authentication, file uploads, metadata operations, and health checks
-- Binds to 127.0.0.1 only in production
+- Exposes health, authentication/session, and Notes REST endpoints.
+- Handles authentication and note metadata. File upload/object operations remain planned.
+- Binds to `127.0.0.1`; no public port is opened by the application.
 
 ### Database
 - SQLite with WAL enabled
-- FTS5 for search indexing
+- FTS5 index for Notes title/content, maintained by SQLite triggers. User-facing search is not yet
+  implemented.
 - Strict foreign keys and a migration-driven schema
 
 ### Filesystem layer
-- Objects stored in DATA_DIR\objects with immutable UUID-based names
-- Temporary upload segments stored in DATA_DIR\tmp
-- Orphan detection and cleanup rules documented in the file policy because the system cannot delete object records or object files automatically without evidence
+- Planned: objects stored in DATA_DIR\objects with immutable UUID-based names.
+- Planned: temporary upload segments stored in DATA_DIR\tmp.
+- Orphan detection and cleanup rules must be documented before implementing file storage.
 
 ## Data flow
-1. User authenticates via local login flow.
-2. API validates request, session, auth, and input.
-3. For note/bookmark actions, metadata is stored in SQLite.
-4. For file uploads, a temp file is written and hashed while streaming.
-5. The temp file is finalized atomically into objects storage.
-6. Final metadata is committed in DB transaction only after object finalization succeeds.
-7. Download/preview requests validate session, permissions, and path before sending bytes.
+1. User authenticates via the local login flow.
+2. API validates request origin, session, input, and ownership.
+3. Notes metadata is stored in SQLite; deleted notes are soft-deleted and omitted from active lists.
+4. File upload/download and object-storage steps are planned and not implemented.
 
 ## Trust boundaries
 - Browser -> local app service
 - App -> SQLite
 - App -> filesystem object store
-- App -> Tailscale only after explicit approval for remote access
+- App -> Tailscale only after explicit approval and acceptance gates pass
 
 ## Security posture
 - Default deny for all protected endpoints
 - Login endpoint only for unauthenticated access
 - Health endpoint is intentionally minimal and non-sensitive
 - No public signup; administrator bootstrap is CLI-based locally only
+- Remote access, if approved later, is Tailscale-only: never Funnel and never a public port.
 - No secrets, databases, or object files in Git tracking
+
+## Current implementation status
+
+The architecture above contains both current implementation and clearly marked future design.
+As of 2026-10-19, authentication/session handling, Notes CRUD, a local SQLite migration runner,
+and backup/restore tooling exist. Bookmarks, categories/tags, trash restore, file storage, user-facing
+FTS search, Tailwind, and remote access configuration do not yet exist. See `ACCEPTANCE.md` for
+release gates.

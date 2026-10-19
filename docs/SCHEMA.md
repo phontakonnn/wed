@@ -1,11 +1,12 @@
 # Database Schema
 
-**Status:** reflects migration `001_initial` and `apps/server/src/database.ts` as of 2026-10-19.
+**Status:** reflects migrations `001_initial` and `002_notes`, and
+`apps/server/src/database.ts` as of 2026-10-19.
 **Engine:** SQLite (via `better-sqlite3` 13.0.3), `journal_mode = WAL` for file-backed databases.
 **Database file:** `DATA_DIR/db/knowledge.sqlite3`
 
-> This document describes what the code does today. It is not a target schema. Tables for notes,
-> bookmarks, tags, files, and search are **not implemented yet**.
+> This document describes what the code does today. Notes and a Notes FTS5 index are implemented.
+> Bookmarks, tags, files, and user-facing search are not implemented yet.
 
 ---
 
@@ -38,11 +39,14 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 );
 ```
 
-On open, the server checks for `version = 1`. If absent, it runs `001_initial.sql` **and** inserts
-the tracking row inside a single transaction. A failure rolls the whole migration back.
+On open, the runner discovers SQL files matching `NNN_description.sql`, sorts them by version, and
+requires a gap-free sequence beginning at 001. Each unapplied migration and its tracking row are
+applied in an individual transaction. A failed migration rolls back its schema changes. An applied
+history with gaps, or a database schema newer than the available migration set, is rejected rather
+than silently skipped or downgraded.
 
-Adding migration `002` requires a code change in `database.ts`; the runner is not generic yet.
-This is a known limitation recorded in `DECISIONS.md`.
+Migration files are forward-only. Never edit a migration after it has been deployed; add the next
+numbered file instead.
 
 ---
 
@@ -81,6 +85,33 @@ There is no registration route.
 
 > Note: `sessions_idle_expiry_idx` currently has no consumer. There is no background sweeper;
 > expired rows are deleted lazily when `resolveSession()` encounters them.
+
+### 3.3 `notes`
+
+Created additively by `002_notes.sql`. Notes are scoped to their owner, and deleting an owner
+cascades as required by the existing user/session ownership model.
+
+| Column | Type | Constraints | Notes |
+| --- | --- | --- | --- |
+| `id` | TEXT | PRIMARY KEY | UUID v4. |
+| `owner_id` | TEXT | NOT NULL, FK → `users(id)` ON DELETE CASCADE | Every read and write is scoped to the authenticated session owner. |
+| `title` | TEXT | NOT NULL, length 1–200 | API trims whitespace and rejects an empty title. |
+| `content` | TEXT | NOT NULL, maximum 100,000 characters | Plain text; HTML is not rendered. Empty content is allowed. |
+| `created_at` | INTEGER | NOT NULL | Epoch ms. |
+| `updated_at` | INTEGER | NOT NULL | Epoch ms; changes on edits and soft deletion. |
+| `deleted_at` | INTEGER | NULL | NULL means active. Deletion sets a timestamp; the row is retained. |
+
+`notes_owner_updated_idx` supports the active-note list ordered by update time and ID.
+Restore clears `deleted_at` without replacing the note row, preserving its existing title/content.
+The migration does not define tags, categories, or note relation tables.
+
+### 3.4 `notes_fts`
+
+FTS5 virtual table maintained by insert/update/delete triggers on `notes`. It indexes title and
+content; note ID and owner ID are unindexed metadata columns. Soft-deleting a note removes it from
+the index. Restoring a note adds it back, and permanently deleting a note removes it; both behaviors
+use the existing SQLite triggers on `notes`. User-facing search endpoints are not implemented yet,
+and the tokenizer has not been evaluated for Thai search quality.
 
 ---
 
@@ -125,28 +156,43 @@ Because only the hash is stored, a database leak does not directly yield usable 
 
 - **All timestamps are INTEGER Unix epoch milliseconds** (`Date.now()`). No SQLite `DATETIME`
   strings, no timezone ambiguity.
-- **IDs are TEXT**: UUID v4 for users; SHA-256 hex for sessions.
+- **IDs are TEXT**: UUID v4 for users and notes; SHA-256 hex for sessions.
 - **Booleans** are not stored yet; when needed, use `INTEGER` 0/1.
 
 ---
 
 ## 7. Not yet in the schema
 
-The following are design targets from `ARCHITECTURE.md` and are absent from `001_initial.sql`:
+The following are design targets from `ARCHITECTURE.md` and are not yet implemented:
 
-- `notes`, `bookmarks`, `categories`, `tags`, `note_tags`, `files`, `favorites`, `trash`
-- FTS5 virtual tables for Thai-aware search
+- `bookmarks`, `categories`, `tags`, `note_tags`, `files`, `favorites`
+- User-facing FTS5 search and a trigram schema extension (Thai tokenizer strategies are evaluated
+  in T08; no user-facing search implementation exists yet)
 - audit/event log
 - backup metadata tables (backup state lives in sidecar JSON files, not in SQLite)
 
 Do not assume these exist when writing queries.
+Trash listing, restore, and confirmed permanent deletion operate on the existing `notes.deleted_at`
+field; no migration was required for T15. Tags, categories, and note relations do not exist, so
+restoration of those features is not testable yet.
+
+### Proposed only: T08 trigram index
+
+The T08 evaluation recommends a separate FTS5 trigram virtual table for substring search; this is
+not part of the current schema and no migration has been run. A future, separately approved
+forward-only migration could add `notes_fts_trigram` with unindexed note/owner metadata and new
+insert/update/delete triggers, then backfill active notes in the same migration transaction. Keep
+the existing `notes_fts` and its triggers unchanged until compatibility and migration tests justify
+otherwise. Do not apply such a migration to a database with existing data before a backup has been
+created and verified. The proposed API would reject queries shorter than 3 Unicode code points;
+that behavior is not implemented.
 
 ---
 
 ## 8. Changing the schema
 
-1. Add `apps/server/migrations/00N_description.sql`. Never edit an applied migration.
-2. Extend the runner in `database.ts` so the new version is applied transactionally and recorded.
-3. Add a test in `database.test.ts` that opens a fresh database and asserts the new objects exist.
+1. Add `apps/server/migrations/00N_description.sql` at the next sequential version. Never edit an applied migration.
+2. The runner discovers and applies the new migration transactionally.
+3. Add tests in `database.test.ts` for fresh install and upgrade preservation.
 4. Run `npm test` and `npm run build:server`.
 5. Take a backup before deploying to any database that holds real data (see `BACKUP.md`).

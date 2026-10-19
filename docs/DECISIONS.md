@@ -40,7 +40,8 @@
 - Login throttling is currently in-process memory, per IP and normalized account, with a 15-minute window and exponential delays after five failures. Restart persistence and multi-process coordination are not implemented and remain a known limitation.
 
 ### Search, files, backup, and remote access
-- Thai search strategy remains a design candidate only; no accuracy/latency comparison has been run.
+- Thai search strategies were measured in T08 against synthetic data; no search endpoint or UI is
+  implemented. See the T08 evidence and limits below.
 - File upload/preview is not implemented.
 - **Backup/restore is now implemented and tested** (`apps/server/src/backup.ts`, `backup-cli.ts`). The
   backup/restore *gate* is not yet passed: separate physical disk, scheduled runs, and a real restore
@@ -110,8 +111,9 @@
 
 
 ## Approval and implementation status
-- The user authorized proceeding through phases on 2026-10-19, and again authorized this
-  documentation and backup/restore work in the same session.
+- The user authorized proceeding through phases on 2026-10-19, approved Phase 0 and Phase 1, and
+  separately authorized the documentation/backup work in this session. Approval is not evidence
+  that a phase or its acceptance criteria passed.
 - The Phase 1 documentation package is now present: `SCHEMA.md`, `API.md`, `BACKUP.md`,
   `TEST_PLAN.md`, and `ACCEPTANCE.md`. `MASTER_PROMPT.md` is still missing, and the transitive
   license inventory in `DEPENDENCIES.md` is still incomplete.
@@ -125,3 +127,115 @@
 - Backup/restore is implemented and tested, but the **backup gate remains closed**: separate
   physical disk, scheduled runs, and a real restore drill are still outstanding.
 
+## Notes CRUD implementation (2026-10-19)
+
+- The approved product scope remains Personal Knowledge Hub. No restaurant, Firebase, Next.js,
+  Google Sheets, PWA, network, or remote-access feature was introduced.
+- `database.ts` now discovers sequential `NNN_description.sql` migrations and applies each
+  transactionally with its `schema_migrations` row. It rejects gaps, invalid SQL migration names,
+  nonsequential applied history, and databases newer than available migrations.
+- `002_notes.sql` adds owner-scoped notes with `deleted_at` soft deletion and an FTS5 title/content
+  index maintained by triggers. Existing authentication data is not rewritten. The migration and
+  upgrade-preservation tests use temporary SQLite databases only.
+- Authenticated Notes routes provide create, paginated list, detail, patch, and soft-delete. Reads
+  and writes are owner-scoped; mutating routes remain covered by existing Origin/Host/CSRF checks.
+  Deleted notes remain in SQLite but are omitted from active list/detail and FTS.
+- The React client now uses real same-origin API requests, shows the login screen, and supports Notes
+  CRUD. Vite proxies `/api` to the loopback server for development; Fastify serves `apps/web/dist`
+  when that build exists. No production mock data was added.
+- Existing `@fastify/static` is reused; no dependency was added, upgraded, or removed. Tailwind is
+  still not present in the web manifest; the new UI uses CSS rather than adding a dependency without
+  the required package review/approval.
+- This work does not pass production acceptance. Backup/restore gates remain open, Notes trash
+  restore is not implemented, browser automation is not present, and remote access remains
+  unconfigured/disabled. If later approved, remote access must be Tailscale-only, never Funnel and
+  never a public port.
+
+## T15 Notes trash (2026-10-19)
+
+- The user approved Phase 0 and Phase 1 and explicitly authorized the T15 Notes trash slice. The
+  authorization is limited to this task; stop for acceptance before starting another product task.
+- Reuse `notes.deleted_at` and the existing `notes_fts_update` / `notes_fts_delete` triggers; do not
+  add a migration or alter schema for trash listing, restore, or permanent deletion.
+- Trash listing uses session-owner filtering, page 1 by default, page size 50 by default and 200
+  maximum. Restore clears `deleted_at`; permanent deletion requires `{ "confirm": true }` and only
+  deletes an owned row whose `deleted_at` is non-null.
+- Do not add automatic deletion. The 30-day policy is a UI information/warning only.
+- Keep both views in the existing Notes page and route. The permanent-delete UI must explicitly
+  confirm in Thai; the API independently enforces a boolean confirmation.
+- No tag/category/relation tables exist today. Preservation of such associations cannot be tested
+  until those features exist; report it as **ยังไม่ได้ทดสอบ** rather than claiming support.
+- Historical mentions of other project scopes in the prior audit text were observed and preserved
+  per user instruction. No out-of-scope project implementation was found in source or migrations.
+- No dependency, manifest, lockfile, backup, network, firewall, registry, power, or remote-access
+  changes are authorized or included.
+
+## T08 Thai search evaluation (2026-10-19)
+
+### Scope and evidence
+
+- This is a local synthetic-data evaluation only. It adds no endpoint, UI, migration, dependency, or
+  production data access. Re-run with `node tests\thai-search-evaluation.mjs`.
+- The standalone test generates 200 diverse Thai note-like records for a fixed 22-query literal
+  substring oracle, plus 10,000 synthetic records for latency, index size, and short-query coverage.
+  The three temporary SQLite database files are removed after the run.
+- Baseline observed during the run: Windows_NT 10.0.19044 x64; Node.js v24.22.0, ICU 78.3,
+  Unicode 17.0; `Intl.Segmenter.supportedLocalesOf(['th'])` returned `['th']` and split
+  `ภาษาไทยไม่มีช่องว่าง` into `ภาษา`, `ไทย`, `ไม่มี`, `ช่อง`, `ว่าง`. `better-sqlite3` 13.0.3
+  uses SQLite 3.53.4; creating an FTS5 `tokenize='trigram'` table and matching Thai succeeded.
+  CPU: 13th Gen Intel(R) Core(TM) i5-13400F (10 cores / 16 logical processors); RAM:
+  34,055,766,016 bytes.
+- The expected-result oracle NFC-normalizes query and title/content, then performs exact substring
+  matching independently of FTS. This measures substring retrieval, not semantic relevance,
+  synonyms, ranking, or real-user query distribution.
+
+### Measured results
+
+Single run on the baseline above; latency uses `performance.now()`, 100 warm-up and 100 measured
+rounds for each of 8 queries (800 samples per approach), with results capped at 200. Index size is
+the sum of FTS and shadow-table pages from SQLite `dbstat`, excluding the base notes table. Insert
+and update are measured over 250 indexed operations in a transaction and reported as mean per note.
+
+| Approach | 200-note precision / recall | 10k p50 / p95 (ms) | FTS index (KiB) | Index build (ms) | Insert mean (ms/note) | Update mean (ms/note) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| (a) FTS5 trigram + bounded short fallback | 100% / 100% | 0.703 / 2.599 | 17,632 | 233.2 | 0.494 | 0.192 |
+| (b) `Intl.Segmenter('th')` words in FTS5 `unicode61` | 100% / 74.76% | 12.777 / 15.452 | 11,024 | 543.4 | 0.289 | 0.271 |
+| (c) Hybrid trigram + word FTS + bounded short fallback | 100% / 100% | 13.757 / 18.193 | 28,656 | 2,407.5 | 1.054 | 0.559 |
+
+Approach (b) misses partial terms such as `งบประมา` and `กา`, and returns only 40 of 67 expected
+matches for `น้ำ` (recall 59.70%); the same 40/67 result occurs for both NFC and NFD input after
+query normalization. It also finds only 20 of 40 results for `ก่อนเดินทาง`. Its overall recall is
+74.76%, below the 95% target. No missed cases were silently removed from the expected set.
+
+All three approaches return 100% precision/recall on the 200-note accuracy set for the four tested
+short queries. This does **not** mean short-query fallback scales without omissions:
+
+| Short query (<3 Unicode code points) | Literal matches in 10k archive | Matches in latest 1k candidate window | Approach (a)/(c) returned | Full-archive recall |
+| --- | ---: | ---: | ---: | ---: |
+| `ๆ` | 2,050 | 205 | 200 | 9.76% |
+| `กา` | 9,914 | 1,000 | 200 | 2.02% |
+
+Approach (b) returned 200/0 respectively under its 200-result cap and tokenizer semantics. Thus no
+tested short-query path meets 95% full-archive recall; the benchmark marks the combined 200-note plus
+short-archive 95% criterion as **not met** for all three approaches.
+
+### Proposed decision (not implemented)
+
+- Use FTS5 trigram as the primary substring index for queries of at least 3 Unicode code points.
+- Reject shorter queries with a clear Thai explanation rather than return a bounded, incomplete
+  subset or imply that search was exhaustive. This is the selected short-query policy for a future
+  implementation, subject to approval; no search route/UI exists yet.
+- Do not choose the hybrid: it did not improve accuracy over trigram on the 200-note oracle, while
+  its measured index is 62.5% larger and index build is 10.3x slower than trigram alone; 10k latency
+  and write costs are also higher.
+- Do not choose word-only pre-tokenization for literal Notes search: its 74.76% overall recall and
+  observed partial-word/Thai mark misses do not meet the target.
+- Limitations: only a synthetic corpus and one machine/run were measured; p95 is machine-specific;
+  no concurrent workload, long note stress, real-user relevance, backup/restore impact, or browser
+  behavior was tested. The short-query reject policy is preferred over an unmeasured exhaustive
+  fallback.
+- No dependency was added. The recommendation would require a forward-only migration that adds a
+  separate trigram FTS table and its insert/update/delete synchronization for existing Notes. The
+  existing `002_notes.sql` is not edited. Implementation must remain blocked until the search
+  feature is separately approved, the migration is tested on temporary databases, and a verified
+  backup is confirmed before applying it to any database with existing data.

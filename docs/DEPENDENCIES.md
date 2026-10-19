@@ -2,7 +2,9 @@
 
 ## Runtime state observed 2026-10-19
 - Node.js v24.22.0; npm 11.19.1, verified by `node -v` and `npm -v`.
-- Git for Windows 2.56.0.windows.2 is available, but the workspace has no `.git` directory.
+- Git repository root was verified as `C:\Users\_phontakonnn\Documents\Wed_Phontakon` on
+  2026-10-19 using `git rev-parse --show-toplevel`. Earlier wording that the workspace had no
+  `.git` directory was stale and is corrected here.
 - Tailscale is not installed according to the earlier Phase 0 command output. No Tailscale configuration was changed.
 - No package was installed or upgraded during the current implementation task.
 
@@ -25,7 +27,11 @@
 - Status: existing duplicate driver; no removal or package-lock change was made in this task.
 
 ## Other existing stack packages
-- Frontend package manifest lists React, React DOM, TypeScript, Vite, and ESLint packages. The frontend lint/build completed successfully, but a complete license inventory for all transitive packages has not been performed.
+- Frontend package manifest lists React, React DOM, TypeScript, Vite, and ESLint packages. Tailwind
+  is part of the approved target stack but is not declared or used; the current Notes UI uses CSS.
+  Tailwind has not been installed because dependency changes require a separate review and approval.
+  The frontend lint/build completed successfully, but a complete license inventory for all
+  transitive packages has not been performed.
 - Server package manifest lists Fastify and other plugins, TypeScript, Vitest, and `tsx`. Full direct/transitive license and maintenance review remains incomplete.
 - Password hashing and session-token hashing use Node's built-in `crypto` APIs; no external cryptography package was added.
 - Tailwind CSS is required by the target stack but is not currently listed in the web package manifest.

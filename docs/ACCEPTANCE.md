@@ -1,8 +1,9 @@
 # Acceptance Criteria
 
 **Verdict as of 2026-10-19: NOT ACCEPTABLE FOR REAL DATA / NOT PRODUCTION-READY.**
-Phase 2 is partially complete. The authentication slice is implemented and tested; the product
-surface (notes, bookmarks, files, search) does not exist, and the backup gate is open.
+Phase 2 is partially complete. Authentication and Notes CRUD are implemented and tested. Bookmarks,
+files, user-facing search, and several other product features are still absent; the backup gate
+remains open.
 
 A criterion is only `PASS` with evidence that can be re-run. "It works on my machine" is not
 evidence. Every `FAIL`/`PARTIAL` line is a blocker, not a backlog item.
@@ -29,7 +30,7 @@ evidence. Every `FAIL`/`PARTIAL` line is a blocker, not a backlog item.
 | ID | Criterion | Status | Evidence |
 | --- | --- | --- | --- |
 | P2-01 | SQLite with foreign keys, WAL, busy timeout | PASS | `database.ts`; DB-01..03 |
-| P2-02 | Versioned, transactional migrations | PASS | `001_initial.sql`; `schema_migrations` row written in the same transaction |
+| P2-02 | Versioned, transactional migrations | PASS | `database.ts` discovers sequential migrations; each migration and tracking row share a transaction; DB migration tests include upgrade preservation and failure rollback |
 | P2-03 | Password hashing with a modern KDF | PASS | scrypt N=32768, r=8, p=1, 64-byte key, 16-byte salt; AU-01 |
 | P2-04 | No plaintext password stored anywhere | PASS | Only `scrypt$…` strings; AU-01 asserts the hash does not contain the password |
 | P2-05 | Session tokens stored hashed | PASS | SHA-256 hex in `sessions.id_hash`; AU-03 |
@@ -42,7 +43,7 @@ evidence. Every `FAIL`/`PARTIAL` line is a blocker, not a backlog item.
 | P2-12 | No account enumeration | PASS | Identical 401 body and dummy-hash timing path; API-03 |
 | P2-13 | Per-device session revocation | PASS | List/revoke-one/revoke-others/logout-all; API-06/07 |
 | P2-14 | Server binds to loopback only | PASS | `listen({ host: '127.0.0.1' })` |
-| P2-15 | Automated test suite green | PASS | 4 files / 21 tests (see §6) |
+| P2-15 | Automated test suite green | PASS | 4 test files; latest full-suite result is recorded in `PROGRESS.md` |
 
 ---
 
@@ -81,20 +82,23 @@ may be made until RA-01..05 pass and the operator records the evidence here.
 
 ---
 
-## 5. Product scope (Phase 2+ — not started)
+## 5. Product scope (Phase 2+ — partial implementation)
 
 | ID | Criterion | Status |
 | --- | --- | --- |
-| PR-01 | Notes CRUD | FAIL |
+| PR-01 | Notes CRUD | PASS — create/list/detail/update/soft-delete, owner-scoped and paginated (`apps/server/src/index.test.ts`) |
 | PR-02 | Bookmarks CRUD | FAIL |
 | PR-03 | Categories, tags, favorites | FAIL |
-| PR-04 | Trash with restore | FAIL |
+| PR-04 | Trash with restore | PARTIAL — owner-scoped API operations and FTS behavior pass API-15..19; browser UI flow has not been manually exercised |
 | PR-05 | File upload, preview, download | FAIL |
-| PR-06 | Thai-aware search (FTS5 evaluation) | FAIL |
-| PR-07 | Frontend wired to the API | FAIL — Vite template only |
+| PR-06 | Thai-aware search (FTS5 evaluation) | PARTIAL — T08 measured three options; proposed trigram index/API/UI are not implemented, and short-query full-archive accuracy is below 95% for bounded fallbacks |
+| PR-07 | Frontend wired to the API | PASS — React client calls authenticated Fastify endpoints; Vite proxy and production static serving are configured |
 | PR-08 | Orphan object detection and cleanup policy | FAIL |
 
-The current UI is the unmodified Vite starter; it does not call the API.
+The current UI supports login, Notes CRUD, and a trash view within the existing Notes page. The
+30-day trash notice is informational; no background permanent-delete job exists. Tailwind is not
+installed or used; styling remains plain CSS pending dependency approval. No Playwright/browser
+automation suite exists.
 
 ---
 
@@ -111,7 +115,7 @@ git status --short          # must be clean after a build
 git ls-files | grep -Ei '\.(sqlite3?|db|env|pem|key)$'   # must print nothing
 ```
 
-Expected: 4 test files, 21 tests, 0 failures; all builds exit 0; no database or secret tracked.
+Expected after T15: 4 test files, 35 tests, 0 failures; all builds exit 0; no database or secret tracked.
 
 ---
 

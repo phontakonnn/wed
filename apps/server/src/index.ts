@@ -1,4 +1,7 @@
 import Fastify from 'fastify';
+import fastifyStatic from '@fastify/static';
+import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createSession, hashPassword, hashSessionToken, resolveSession, verifyPassword } from './auth.js';
@@ -18,6 +21,18 @@ const LOGIN_DELAY_MAX_MS = 60 * 1000;
 const dummyPasswordHash = hashPassword('PKH-dummy-password-never-valid');
 
 type LoginBucket = { failures: number; windowStartedAt: number; blockedUntil: number };
+type Note = {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
+const noteSelect = `
+  SELECT id, title, content, created_at AS createdAt, updated_at AS updatedAt
+  FROM notes
+`;
 
 class LoginThrottle {
   private readonly buckets = new Map<string, LoginBucket>();
@@ -93,19 +108,38 @@ function loginKeys(ip: string, username: string): string[] {
 
 export function createApp(
   database: SqliteDatabase,
-  options: { expectedOrigin?: string; sleep?: (milliseconds: number) => Promise<void>; logger?: boolean } = {},
+  options: {
+    expectedOrigin?: string;
+    sleep?: (milliseconds: number) => Promise<void>;
+    logger?: boolean;
+    webRoot?: string;
+  } = {},
 ) {
   const expectedOrigin = options.expectedOrigin ?? process.env.EXPECTED_ORIGIN ?? 'http://127.0.0.1:3001';
   const throttle = new LoginThrottle();
   const sleep = options.sleep ?? ((milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
-  const app = Fastify({ logger: options.logger ?? (process.env.NODE_ENV !== 'test') });
+  const app = Fastify({
+    logger: options.logger ?? (process.env.NODE_ENV !== 'test'),
+    ajv: { customOptions: { removeAdditional: false } },
+  });
   app.decorateRequest('sessionUserId', null);
+  if (options.webRoot) {
+    app.register(fastifyStatic, {
+      root: options.webRoot,
+      prefix: '/',
+      maxAge: '30d',
+      immutable: true,
+    });
+    app.get('/', async (_request, reply) => reply.sendFile('index.html', { maxAge: 0, immutable: false }));
+  }
 
   app.addHook('preHandler', async (request, reply) => {
     const path = request.url.split('?')[0];
     const isHealth = request.method === 'GET' && path === '/api/health';
     const isLogin = request.method === 'POST' && path === '/api/auth/login';
-    const isPublic = isHealth || isLogin;
+    const isWebAsset = request.method === 'GET' &&
+      (path === '/' || path === '/favicon.svg' || path === '/icons.svg' || path.startsWith('/assets/'));
+    const isPublic = isHealth || isLogin || isWebAsset;
 
     if (request.method !== 'GET' && !csrfIsValid(
       request.headers.origin,
@@ -243,14 +277,248 @@ export function createApp(
     return reply.send({ ok: true });
   });
 
+  app.get<{ Querystring: { page: number; pageSize: number } }>('/api/notes', {
+    schema: {
+      querystring: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          page: { type: 'integer', minimum: 1, maximum: 1000000, default: 1 },
+          pageSize: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const ownerId = request.sessionUserId;
+    if (!ownerId) return reply.code(401).send({ error: 'กรุณาเข้าสู่ระบบ' });
+    const { page, pageSize } = request.query;
+    const offset = (page - 1) * pageSize;
+    const total = (database.prepare(`
+      SELECT COUNT(*) AS total
+      FROM notes
+      WHERE owner_id = ? AND deleted_at IS NULL
+    `).get(ownerId) as { total: number }).total;
+    const notes = database.prepare(`
+      ${noteSelect}
+      WHERE owner_id = ? AND deleted_at IS NULL
+      ORDER BY updated_at DESC, id
+      LIMIT ? OFFSET ?
+    `).all(ownerId, pageSize, offset) as Note[];
+
+    return { notes, page, pageSize, total };
+  });
+
+  app.get<{ Querystring: { page: number; pageSize: number } }>('/api/notes/trash', {
+    schema: {
+      querystring: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          page: { type: 'integer', minimum: 1, maximum: 1000000, default: 1 },
+          pageSize: { type: 'integer', minimum: 1, maximum: 200, default: 50 },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const ownerId = request.sessionUserId;
+    if (!ownerId) return reply.code(401).send({ error: 'กรุณาเข้าสู่ระบบ' });
+    const { page, pageSize } = request.query;
+    const offset = (page - 1) * pageSize;
+    const total = (database.prepare(`
+      SELECT COUNT(*) AS total
+      FROM notes
+      WHERE owner_id = ? AND deleted_at IS NOT NULL
+    `).get(ownerId) as { total: number }).total;
+    const notes = database.prepare(`
+      ${noteSelect}
+      WHERE owner_id = ? AND deleted_at IS NOT NULL
+      ORDER BY deleted_at DESC, id
+      LIMIT ? OFFSET ?
+    `).all(ownerId, pageSize, offset) as Note[];
+
+    return { notes, page, pageSize, total };
+  });
+
+  app.post<{ Body: { title: string; content: string } }>('/api/notes', {
+    schema: {
+      body: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['title', 'content'],
+        properties: {
+          title: { type: 'string', minLength: 1, maxLength: 200 },
+          content: { type: 'string', maxLength: 100000 },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const ownerId = request.sessionUserId;
+    if (!ownerId) return reply.code(401).send({ error: 'กรุณาเข้าสู่ระบบ' });
+    const title = request.body.title.trim();
+    if (!title) return reply.code(400).send({ error: 'หัวข้อโน้ตต้องไม่ว่าง' });
+
+    const now = Date.now();
+    const id = randomUUID();
+    database.prepare(`
+      INSERT INTO notes (id, owner_id, title, content, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(id, ownerId, title, request.body.content, now, now);
+    const note = database.prepare(`${noteSelect} WHERE id = ? AND owner_id = ?`)
+      .get(id, ownerId) as Note;
+
+    return reply.code(201).send({ note });
+  });
+
+  app.post<{ Params: { noteId: string } }>('/api/notes/:noteId/restore', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['noteId'],
+        properties: {
+          noteId: { type: 'string', pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const ownerId = request.sessionUserId;
+    if (!ownerId) return reply.code(401).send({ error: 'กรุณาเข้าสู่ระบบ' });
+    const result = database.prepare(`
+      UPDATE notes
+      SET deleted_at = NULL, updated_at = ?
+      WHERE id = ? AND owner_id = ? AND deleted_at IS NOT NULL
+    `).run(Date.now(), request.params.noteId, ownerId);
+    if (result.changes === 0) return reply.code(404).send({ error: 'ไม่พบโน้ตในถังขยะ' });
+    const note = database.prepare(`${noteSelect} WHERE id = ? AND owner_id = ?`)
+      .get(request.params.noteId, ownerId) as Note;
+    return { note };
+  });
+
+  app.delete<{ Params: { noteId: string }; Body: { confirm: boolean } }>('/api/notes/:noteId/permanent', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['noteId'],
+        properties: {
+          noteId: { type: 'string', pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' },
+        },
+      },
+      body: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['confirm'],
+        properties: { confirm: { type: 'boolean', enum: [true] } },
+      },
+    },
+  }, async (request, reply) => {
+    const ownerId = request.sessionUserId;
+    if (!ownerId) return reply.code(401).send({ error: 'กรุณาเข้าสู่ระบบ' });
+    const result = database.prepare(`
+      DELETE FROM notes
+      WHERE id = ? AND owner_id = ? AND deleted_at IS NOT NULL
+    `).run(request.params.noteId, ownerId);
+    if (result.changes === 0) return reply.code(404).send({ error: 'ไม่พบโน้ตในถังขยะ' });
+    return reply.code(204).send();
+  });
+
+  app.get<{ Params: { noteId: string } }>('/api/notes/:noteId', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['noteId'],
+        properties: {
+          noteId: { type: 'string', pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const ownerId = request.sessionUserId;
+    if (!ownerId) return reply.code(401).send({ error: 'กรุณาเข้าสู่ระบบ' });
+    const note = database.prepare(`
+      ${noteSelect}
+      WHERE id = ? AND owner_id = ? AND deleted_at IS NULL
+    `).get(request.params.noteId, ownerId) as Note | undefined;
+    if (!note) return reply.code(404).send({ error: 'ไม่พบโน้ต' });
+    return { note };
+  });
+
+  app.patch<{ Params: { noteId: string }; Body: { title?: string; content?: string } }>('/api/notes/:noteId', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['noteId'],
+        properties: {
+          noteId: { type: 'string', pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' },
+        },
+      },
+      body: {
+        type: 'object',
+        additionalProperties: false,
+        minProperties: 1,
+        properties: {
+          title: { type: 'string', minLength: 1, maxLength: 200 },
+          content: { type: 'string', maxLength: 100000 },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const ownerId = request.sessionUserId;
+    if (!ownerId) return reply.code(401).send({ error: 'กรุณาเข้าสู่ระบบ' });
+    const { title, content } = request.body;
+    const normalizedTitle = title?.trim();
+    if (title !== undefined && !normalizedTitle) {
+      return reply.code(400).send({ error: 'หัวข้อโน้ตต้องไม่ว่าง' });
+    }
+
+    const result = database.prepare(`
+      UPDATE notes
+      SET title = COALESCE(?, title),
+        content = COALESCE(?, content),
+        updated_at = ?
+      WHERE id = ? AND owner_id = ? AND deleted_at IS NULL
+    `).run(normalizedTitle ?? null, content ?? null, Date.now(), request.params.noteId, ownerId);
+    if (result.changes === 0) return reply.code(404).send({ error: 'ไม่พบโน้ต' });
+
+    const note = database.prepare(`${noteSelect} WHERE id = ? AND owner_id = ?`)
+      .get(request.params.noteId, ownerId) as Note;
+    return { note };
+  });
+
+  app.delete<{ Params: { noteId: string } }>('/api/notes/:noteId', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['noteId'],
+        properties: {
+          noteId: { type: 'string', pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const ownerId = request.sessionUserId;
+    if (!ownerId) return reply.code(401).send({ error: 'กรุณาเข้าสู่ระบบ' });
+    const now = Date.now();
+    const result = database.prepare(`
+      UPDATE notes
+      SET deleted_at = ?, updated_at = ?
+      WHERE id = ? AND owner_id = ? AND deleted_at IS NULL
+    `).run(now, now, request.params.noteId, ownerId);
+    if (result.changes === 0) return reply.code(404).send({ error: 'ไม่พบโน้ต' });
+    return reply.code(204).send();
+  });
+
   return app;
 }
 
 export async function startServer() {
   const dataDirectory = process.env.DATA_DIR;
   if (!dataDirectory) throw new Error('DATA_DIR must be configured before starting the server');
+  const webRoot = fileURLToPath(new URL('../../web/dist/', import.meta.url));
+  const hasWebBuild = existsSync(resolve(webRoot, 'index.html'));
+  if (!hasWebBuild) {
+    console.warn('Web build is missing; serving API only. Run npm run build:web or use the Vite dev server.');
+  }
   const database = openDataDatabase(dataDirectory);
-  const server = createApp(database);
+  const server = createApp(database, hasWebBuild ? { webRoot } : {});
   await server.listen({ port: Number(process.env.PORT || 3001), host: '127.0.0.1' });
   return server;
 }

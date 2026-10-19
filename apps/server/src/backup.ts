@@ -40,7 +40,7 @@ export const DEFAULT_DATABASE_FILENAME = 'knowledge.sqlite3';
 const BACKUP_NAME_PATTERN = /^knowledge-\d{8}T\d{9}Z-[0-9a-f]{8}\.sqlite3$/;
 const MANIFEST_SUFFIX = '.manifest.json';
 const PARTIAL_SUFFIX = '.partial';
-const REQUIRED_TABLES = ['users', 'sessions', 'schema_migrations'] as const;
+const REQUIRED_TABLES = ['users', 'sessions', 'schema_migrations', 'notes', 'notes_fts'] as const;
 
 export interface BackupManifest {
   formatVersion: number;
