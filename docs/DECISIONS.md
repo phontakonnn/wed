@@ -6,7 +6,8 @@
 ## Current evidence
 - Windows 10 Enterprise LTSC build 19044, x64; 32,478 MB RAM (Phase 0 `systeminfo` output)
 - Node.js v24.22.0 and npm 11.19.1 are active in the current environment
-- Git 2.56.0.windows.2 is available, but this workspace is not initialized as a Git repository
+- Git 2.55.0.windows.3 is available and the workspace **is now** an initialized Git repository on
+  branch `main` (earlier notes in this file recorded no `.git` and version 2.56.0.windows.2)
 - The earlier Phase 0 audit found Tailscale absent, C: with approximately 789 GB free, and D: with approximately 6.97 GB free
 - BitLocker status and physical-disk/volume separation remain unverified
 - The user explicitly approved continuing through phases; approval does not replace evidence or acceptance criteria
@@ -40,12 +41,81 @@
 
 ### Search, files, backup, and remote access
 - Thai search strategy remains a design candidate only; no accuracy/latency comparison has been run.
-- File upload/preview, backup/restore, and remote access are not implemented.
+- File upload/preview is not implemented.
+- **Backup/restore is now implemented and tested** (`apps/server/src/backup.ts`, `backup-cli.ts`). The
+  backup/restore *gate* is not yet passed: separate physical disk, scheduled runs, and a real restore
+  drill remain outstanding (see `ACCEPTANCE.md` BK-08..BK-11).
 - Remote access remains deferred until the required QA and backup/restore gates pass. No Tailscale Serve, firewall, public port, or proxy configuration was changed.
 - Backup/DR cannot pass until a separate physical backup target is identified and tested.
 
+### Version control
+- The workspace was initialized in place (`git init -b main`); no second project tree was created.
+- The verified Phase 2 slice was committed as the first commit (`9da93bd`, 38 files) **before** any
+  documentation or backup code was written, so a rollback target exists for every later change.
+- `.gitignore` is deny-by-default for runtime artefacts: `node_modules/`, `**/dist/`, every SQLite
+  file with its `-wal`/`-shm` sidecars, `DATA_DIR` patterns (`**/data/`, `**/db/knowledge.sqlite3*`),
+  `**/backups/`, `*.pre-restore-*`, and secret material (`.env*`, `*.pem`, `*.key`, `credentials.json`).
+  `.workbuddy-ai/` is ignored because it holds local agent state, not application code.
+- No global Git identity existed on this machine, so a repository-local identity was set to
+  `Phontakon <phontakon@localhost>`. It is a placeholder; rewriting author metadata later requires
+  a history rewrite, so set the real identity before pushing anywhere.
+- Line endings: Git reports LF→CRLF conversion warnings on Windows. No `.gitattributes` was added
+  because no build or CI currently depends on line endings.
+
+### Documentation
+- `SCHEMA.md`, `API.md`, `BACKUP.md`, `TEST_PLAN.md`, and `ACCEPTANCE.md` were written from the
+  implementation, not from the design intent. Where code and intent disagree, the document records
+  the code and flags the gap (for example: cookie lifetime 7 days vs. session lifetime 30 days;
+  `sessions_idle_expiry_idx` has no consumer).
+- `ACCEPTANCE.md` uses PASS/PARTIAL/FAIL with a re-runnable evidence reference per row. It records
+  the system as **not acceptable for real data** rather than declaring the phase complete.
+
+### Backup and restore
+- Use SQLite's **Online Backup API** (`better-sqlite3` `database.backup()`) for every snapshot.
+  Rationale: in WAL mode, committed rows may live only in the `-wal` file, so a file copy can
+  silently miss data. Verified by test BK-01, which inserts a row without checkpointing and finds it
+  in the backup.
+- Every backup gets a sidecar JSON manifest with SHA-256, size, schema versions, SQLite version, and
+  integrity result. A backup without a manifest is treated as unverified and cannot be restored by
+  the CLI. Rationale: silent corruption is otherwise discovered only during a real recovery.
+- Retention defaults to 7, newest-first by filename (timestamps are fixed-width and sort correctly).
+  Pruning only touches files matching `knowledge-<stamp>-<hex>.sqlite3`, so unrelated files in the
+  backup directory are never deleted. Verified by BK-07.
+- Restore keeps an automatic `*.pre-restore-<stamp>` safety copy taken with the same Online Backup
+  API, removes stale `-wal`/`-shm` before replacing the file, then re-verifies integrity, schema
+  versions, and required tables. On post-restore failure it copies the safety copy back.
+- **In-use detection:** a probe using only `BEGIN EXCLUSIVE` cannot detect an idle open connection —
+  measured on this machine: the probe succeeded while another `better-sqlite3` handle was open, and
+  failed only when that handle held a write transaction. The implemented check therefore treats the
+  presence of `knowledge.sqlite3-shm` as "still in use", because SQLite creates that file while any
+  connection is attached and deletes it on the last close (also measured). `BEGIN EXCLUSIVE` remains
+  as a second check. `--force` bypasses the `-shm` check for a confirmed-dead server.
+  Rejected alternative: renaming the database file as a probe — on Windows it fails while the file is
+  open, but a crash mid-probe would leave the live database renamed.
+- Backups are **not encrypted**. They contain scrypt password hashes and session-token hashes, so
+  they are as sensitive as the live database and rely on NTFS ACLs. Encryption is deferred, not done.
+- The backup directory must be a separate physical disk. That is not yet verified, so the backup gate
+  in `ACCEPTANCE.md` stays closed.
+
+### Scope discipline for this session
+- `auth.ts`, the `preHandler` hook, the CSRF checks, and all pre-existing routes were left untouched.
+  The only edits to existing files were `.gitignore`, `package.json` (scripts), and
+  `better-sqlite3.d.ts` (type declarations for `backup()` and connection options).
+
+
 ## Approval and implementation status
-- The user authorized proceeding through phases on 2026-10-19.
-- The workspace's Phase 1 design package remains incomplete: `SCHEMA.md`, `API.md`, `BACKUP.md`, `TEST_PLAN.md`, and `ACCEPTANCE.md` are absent. The current phase is partial Phase 2 work, not a claim that all phase gates passed.
-- This task added no npm dependency and did not create or modify a persistent user database. Tests used memory/temp databases only.
-- Git status/diff/track checks are unavailable because there is no `.git` directory. No claim is made that secrets are absent from Git history or tracked files.
+- The user authorized proceeding through phases on 2026-10-19, and again authorized this
+  documentation and backup/restore work in the same session.
+- The Phase 1 documentation package is now present: `SCHEMA.md`, `API.md`, `BACKUP.md`,
+  `TEST_PLAN.md`, and `ACCEPTANCE.md`. `MASTER_PROMPT.md` is still missing, and the transitive
+  license inventory in `DEPENDENCIES.md` is still incomplete.
+- The current phase is partial Phase 2 work, not a claim that all phase gates passed. Notes,
+  bookmarks, files, and search do not exist.
+- This session added no npm dependency. Tests and the CLI smoke run used in-memory, temporary, and
+  throwaway directories only; no real `DATA_DIR` was created or modified.
+- Git now exists, so status/diff/log checks are available. The initial commit `9da93bd` was taken
+  before any new code. No claim is made that the future history will stay secret-free; run
+  `git ls-files` checks before publishing.
+- Backup/restore is implemented and tested, but the **backup gate remains closed**: separate
+  physical disk, scheduled runs, and a real restore drill are still outstanding.
+

@@ -8,6 +8,10 @@
     "build": "tsc -p tsconfig.json",
     "test": "vitest run src",
     "bootstrap:admin": "tsx src/bootstrap-admin.ts",
+    "backup:create": "tsx src/backup-cli.ts create",
+    "backup:list": "tsx src/backup-cli.ts list",
+    "backup:verify": "tsx src/backup-cli.ts verify",
+    "backup:restore": "tsx src/backup-cli.ts restore",
     "start": "node dist/index.js"
   },
   "dependencies": {

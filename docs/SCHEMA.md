@@ -1,0 +1,152 @@
+# Database Schema
+
+**Status:** reflects migration `001_initial` and `apps/server/src/database.ts` as of 2026-10-19.
+**Engine:** SQLite (via `better-sqlite3` 13.0.3), `journal_mode = WAL` for file-backed databases.
+**Database file:** `DATA_DIR/db/knowledge.sqlite3`
+
+> This document describes what the code does today. It is not a target schema. Tables for notes,
+> bookmarks, tags, files, and search are **not implemented yet**.
+
+---
+
+## 1. Connection pragmas
+
+Applied by `openDatabase()` every time a connection is opened:
+
+| Pragma | Value | Reason |
+| --- | --- | --- |
+| `foreign_keys` | `ON` | Enforce referential integrity (SQLite default is OFF). |
+| `busy_timeout` | `5000` ms | Wait instead of failing immediately on a short lock. |
+| `journal_mode` | `WAL` | Only for file-backed databases. In-memory (`:memory:`) keeps SQLite's default. |
+
+`openDataDatabase()` requires `DATA_DIR` to be an **absolute** path and creates `DATA_DIR/db`
+recursively before opening the file.
+
+---
+
+## 2. Migration framework
+
+Migrations are forward-only SQL files in `apps/server/migrations/`, named `NNN_description.sql`.
+
+The tracking table is created in application code, not in a migration file:
+
+```sql
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  version    INTEGER PRIMARY KEY,
+  name       TEXT NOT NULL,
+  applied_at INTEGER NOT NULL   -- Unix epoch milliseconds
+);
+```
+
+On open, the server checks for `version = 1`. If absent, it runs `001_initial.sql` **and** inserts
+the tracking row inside a single transaction. A failure rolls the whole migration back.
+
+Adding migration `002` requires a code change in `database.ts`; the runner is not generic yet.
+This is a known limitation recorded in `DECISIONS.md`.
+
+---
+
+## 3. Tables
+
+### 3.1 `users`
+
+| Column | Type | Constraints | Notes |
+| --- | --- | --- | --- |
+| `id` | TEXT | PRIMARY KEY | UUID v4 (`randomUUID()`). |
+| `username` | TEXT | NOT NULL, UNIQUE, `COLLATE NOCASE` | Trimmed and NFC-normalized before insert. 1–80 printable characters; control characters `U+0000`–`U+001F` and `U+007F` rejected. |
+| `password_hash` | TEXT | NOT NULL | Encoded scrypt string, see §4. |
+| `created_at` | INTEGER | NOT NULL | Unix epoch milliseconds. |
+
+Only one row can exist in practice: `bootstrapUser()` refuses to run when `COUNT(*) != 0`.
+There is no registration route.
+
+### 3.2 `sessions`
+
+| Column | Type | Constraints | Notes |
+| --- | --- | --- | --- |
+| `id_hash` | TEXT | PRIMARY KEY | SHA-256 **hex** of the raw session token. The raw token is never stored. |
+| `user_id` | TEXT | NOT NULL, FK → `users(id)` ON DELETE CASCADE | Deleting a user removes their sessions. |
+| `user_agent` | TEXT | NOT NULL, DEFAULT `''` | Truncated to 512 characters. Used as a human-readable device label. |
+| `created_at` | INTEGER | NOT NULL | Epoch ms. |
+| `last_seen_at` | INTEGER | NOT NULL | Epoch ms, updated on each successful `resolveSession()`. |
+| `idle_expires_at` | INTEGER | NOT NULL | Epoch ms. Sliding, 7 days from last activity, clamped to `absolute_expires_at`. |
+| `absolute_expires_at` | INTEGER | NOT NULL | Epoch ms. Fixed, 30 days from creation. Never extended. |
+
+**Indexes**
+
+| Name | Columns | Purpose |
+| --- | --- | --- |
+| `sessions_user_id_idx` | `user_id` | Session listing and bulk revocation per user. |
+| `sessions_idle_expiry_idx` | `idle_expires_at` | Candidate index for future expired-session cleanup. |
+
+> Note: `sessions_idle_expiry_idx` currently has no consumer. There is no background sweeper;
+> expired rows are deleted lazily when `resolveSession()` encounters them.
+
+---
+
+## 4. Password hash format
+
+```
+scrypt$32768$8$1$<salt_base64url>$<derived_key_base64url>
+```
+
+| Field | Value |
+| --- | --- |
+| Algorithm | `scrypt` (Node built-in `crypto.scrypt`) |
+| `N` (cost) | 32768 |
+| `r` (block size) | 8 |
+| `p` (parallelization) | 1 |
+| Salt | 16 random bytes |
+| Derived key | 64 bytes |
+| `maxmem` | 64 MiB |
+| Minimum password length | 12 Unicode code points (counted with `[...password]`, not UTF-16 units) |
+
+`verifyPassword()` rejects the hash when the algorithm, `N`, `r`, `p`, salt length, or key length
+do not match the current parameters, and compares with `timingSafeEqual`. Re-hashing on parameter
+change is **not** implemented.
+
+---
+
+## 5. Session token lifecycle
+
+1. `createSession()` generates 32 random bytes, encodes them as base64url (the raw token).
+2. Only `sha256(token)` hex is written to `sessions.id_hash`.
+3. The raw token is returned once and placed in the `pkh_session` cookie.
+4. `resolveSession()` hashes the presented token, loads the row, and rejects it if either
+   `idle_expires_at` or `absolute_expires_at` is `<= now` (deleting the row in that case).
+5. On success it sets `last_seen_at = now` and
+   `idle_expires_at = MIN(absolute_expires_at, now + 7 days)`.
+
+Because only the hash is stored, a database leak does not directly yield usable cookies.
+
+---
+
+## 6. Data type conventions
+
+- **All timestamps are INTEGER Unix epoch milliseconds** (`Date.now()`). No SQLite `DATETIME`
+  strings, no timezone ambiguity.
+- **IDs are TEXT**: UUID v4 for users; SHA-256 hex for sessions.
+- **Booleans** are not stored yet; when needed, use `INTEGER` 0/1.
+
+---
+
+## 7. Not yet in the schema
+
+The following are design targets from `ARCHITECTURE.md` and are absent from `001_initial.sql`:
+
+- `notes`, `bookmarks`, `categories`, `tags`, `note_tags`, `files`, `favorites`, `trash`
+- FTS5 virtual tables for Thai-aware search
+- audit/event log
+- backup metadata tables (backup state lives in sidecar JSON files, not in SQLite)
+
+Do not assume these exist when writing queries.
+
+---
+
+## 8. Changing the schema
+
+1. Add `apps/server/migrations/00N_description.sql`. Never edit an applied migration.
+2. Extend the runner in `database.ts` so the new version is applied transactionally and recorded.
+3. Add a test in `database.test.ts` that opens a fresh database and asserts the new objects exist.
+4. Run `npm test` and `npm run build:server`.
+5. Take a backup before deploying to any database that holds real data (see `BACKUP.md`).

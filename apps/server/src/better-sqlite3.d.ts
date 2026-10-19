@@ -1,6 +1,23 @@
 declare module 'better-sqlite3' {
+  interface DatabaseOptions {
+    readonly?: boolean;
+    fileMustExist?: boolean;
+    timeout?: number;
+    verbose?: (message?: unknown, ...additionalArguments: unknown[]) => void;
+  }
+
+  interface BackupProgress {
+    totalPages: number;
+    remainingPages: number;
+  }
+
+  interface BackupMetadata {
+    totalPages: number;
+    remainingPages: number;
+  }
+
   class Database {
-    constructor(filename: string);
+    constructor(filename: string, options?: DatabaseOptions);
     exec(sql: string): this;
     prepare(sql: string): {
       all(...parameters: unknown[]): unknown[];
@@ -9,6 +26,7 @@ declare module 'better-sqlite3' {
     };
     pragma(source: string, options?: { simple?: boolean }): unknown;
     transaction<T extends (...args: never[]) => unknown>(operation: T): (...args: Parameters<T>) => ReturnType<T>;
+    backup(destination: string, options?: { progress?: (progress: BackupProgress) => void }): Promise<BackupMetadata>;
     close(): void;
   }
 
