@@ -48,6 +48,33 @@ if ([System.IO.Path]::GetFullPath($BackupDir).TrimEnd('\') -eq [System.IO.Path]:
     throw 'BACKUP_DIR must not be the DATA_DIR itself.'
 }
 
+# A nested destination is usable but fails the separate-disk gate; make that explicit.
+if ([System.IO.Path]::GetFullPath($BackupDir).StartsWith([System.IO.Path]::GetFullPath($DataDir).TrimEnd('\') + '\')) {
+    Write-Warning 'BACKUP_DIR is inside DATA_DIR. This does not satisfy BK-08 (separate physical disk).'
+}
+if (-not (Test-Path -LiteralPath $BackupDir)) {
+    Write-Warning "BACKUP_DIR does not exist yet: $BackupDir. Create it before the first scheduled run."
+}
+if ($env:BACKUP_ENCRYPTION_REQUIRED -eq 'true' -and -not $env:BACKUP_ENCRYPTION_KEY) {
+    Write-Warning 'BACKUP_ENCRYPTION_REQUIRED=true but BACKUP_ENCRYPTION_KEY is not set in this session. The task account must have the key or every run will fail closed.'
+} elseif (-not $env:BACKUP_ENCRYPTION_REQUIRED) {
+    Write-Warning 'Encryption is not required. Set BACKUP_ENCRYPTION_REQUIRED=true and a key for the task account before using real data.'
+}
+
+# Read-only preflight. It never writes to DATA_DIR or BACKUP_DIR.
+Push-Location $repoRoot
+try {
+    $env:DATA_DIR = $DataDir
+    $env:BACKUP_DIR = $BackupDir
+    & npm run backup:preflight
+    if ($LASTEXITCODE -ne 0) {
+        throw "Preflight failed (exit $LASTEXITCODE). Fix the configuration before registering the task."
+    }
+}
+finally {
+    Pop-Location
+}
+
 $configPath = Join-Path $PSScriptRoot 'backup-config.cmd'
 $configBody = @"
 @echo off
@@ -84,6 +111,9 @@ catch {
     Write-Host "Registered '$TaskName' (Interactive)."
 }
 
+Write-Host ''
+Write-Host 'Physical disk separation is NOT VERIFIED by this script.'
+Write-Host 'Confirm the destination is a different physical disk before relying on these backups.'
 Write-Host ''
 Write-Host 'Verify with:'
 Write-Host "  Get-ScheduledTask -TaskName '$TaskName' | Get-ScheduledTaskInfo"

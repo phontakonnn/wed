@@ -1,0 +1,169 @@
+﻿wiped earlier test notes: {"removedActive":1,"removedTrash":0}
+CH-03: {"panelLabel":"สร้างโน้ต","titleValue":"","contentValue":""} {"titles":["Manual UI test note A"],"editorTitle":"Manual UI test note A","editorContent":"manual-search-needle เนื้อหาทดสอบ กา และคำอื่น ๆ","count":"1"}
+CH-03 PASS {"titles":["Manual UI test note A"],"editorTitle":"Manual UI test note A","editorContent":"manual-search-needle เนื้อหาทดสอบ กา และคำอื่น ๆ","count":"1"}
+CH-03-console PASS []
+CH-04: {"titles":["Manual UI test note A (edited)"],"api":[{"id":"ec9ad772-f2a2-48a8-b8c8-420f16c7e738","title":"Manual UI test note A (edited)","content":"manual-search-needle เนื้อหาทดสอบ กา และคำอื่น ๆ แก้ไขเพิ่มเติม"}]} {"title":"Manual UI test note A (edited)","content":"manual-search-needle เนื้อหาทดสอบ กา และคำอื่น ๆ แก้ไขเพิ่มเติม"}
+CH-04 PASS {"afterReload":{"titles":["Manual UI test note A (edited)"],"api":[{"id":"ec9ad772-f2a2-48a8-b8c8-420f16c7e738","title":"Manual UI test note A (edited)","content":"manual-search-needle เนื้อหาทดสอบ กา และคำอื่น ๆ แก้ไขเพิ่มเติม"}]},"editorAfterReload":{"title":"Manual UI test note A (edited)","content":"manual-search-needle เนื้อหาทดสอบ กา และคำอื่น ๆ แก้ไขเพิ่มเติม"}}
+CH-04-console PASS []
+CH-05: [{"query":"ก","hint":"คำค้นสั้น 1–2 อักขระอาจได้ผลลัพธ์กว้าง ระบบจะค้นทุกโน้ตที่ยังไม่อยู่ในถังขยะ","titles":["Manual UI test note A (edited)"],"loading":false},{"query":"กา","hint":"คำค้นสั้น 1–2 อักขระอาจได้ผลลัพธ์กว้าง ระบบจะค้นทุกโน้ตที่ยังไม่อยู่ในถังขยะ","titles":["Manual UI test note A (edited)"],"loading":false}]
+CH-05 PASS [{"query":"ก","hint":"คำค้นสั้น 1–2 อักขระอาจได้ผลลัพธ์กว้าง ระบบจะค้นทุกโน้ตที่ยังไม่อยู่ในถังขยะ","titles":["Manual UI test note A (edited)"],"loading":false},{"query":"กา","hint":"คำค้นสั้น 1–2 อักขระอาจได้ผลลัพธ์กว้าง ระบบจะค้นทุกโน้ตที่ยังไม่อยู่ในถังขยะ","titles":["Manual UI test note A (edited)"],"loading":false}]
+CH-05-console PASS []
+CH-06: {"titles":["Manual UI test note A (edited)"],"hint":"","apiTitles":["Manual UI test note A (edited)"],"apiTotal":1}
+CH-06 PASS {"titles":["Manual UI test note A (edited)"],"hint":"","apiTitles":["Manual UI test note A (edited)"],"apiTotal":1}
+CH-07: {"emptyText":"✎ ไม่พบโน้ตที่ตรงกับคำค้น ลองใช้คำค้นอื่น หรือกดล้างเพื่อกลับไปดูโน้ตทั้งหมด","titles":[]}
+CH-07 PASS {"emptyText":"✎ ไม่พบโน้ตที่ตรงกับคำค้น ลองใช้คำค้นอื่น หรือกดล้างเพื่อกลับไปดูโน้ตทั้งหมด","titles":[]}
+CH-07-console PASS []
+CH-08: {"titles":[],"count":"0","apiTrashTitles":["Manual UI test note A (edited)"],"apiTrashTotal":1} [{"type":"confirm","message":"ย้ายโน้ตนี้ไปถังขยะหรือไม่? เนื้อหาจะยังถูกเก็บไว้"}]
+CH-08 PASS {"afterTrash":{"titles":[],"count":"0","apiTrashTitles":["Manual UI test note A (edited)"],"apiTrashTotal":1},"trashDialogs":[{"type":"confirm","message":"ย้ายโน้ตนี้ไปถังขยะหรือไม่? เนื้อหาจะยังถูกเก็บไว้"}]}
+CH-08-console PASS []
+CH-09: {"panelLabel":"จัดการโน้ตในถังขยะ","preview":"Manual UI test note A (edited) manual-search-needle เนื้อหาทดสอบ กา และคำอื่น ๆ แก้ไขเพิ่มเติม","retention":"หมายเหตุ: นโยบายเก็บถังขยะ 30 วันเป็นข้อมูลเตือนเท่านั้น ระบบไม่ลบโน้ตอัตโนมัติ"}
+CH-09 PASS {"panelLabel":"จัดการโน้ตในถังขยะ","preview":"Manual UI test note A (edited) manual-search-needle เนื้อหาทดสอบ กา และคำอื่น ๆ แก้ไขเพิ่มเติม","retention":"หมายเหตุ: นโยบายเก็บถังขยะ 30 วันเป็นข้อมูลเตือนเท่านั้น ระบบไม่ลบโน้ตอัตโนมัติ"}
+CH-10: {"titles":["Manual UI test note A (edited)"],"count":"1"}
+CH-10 PASS {"titles":["Manual UI test note A (edited)"],"count":"1"}
+CH-10-console PASS []
+CH-11: {"modal":"true","labelledby":"permanent-delete-title","title":"ลบโน้ตนี้ถาวรหรือไม่?","description":"“Manual UI test permanent-delete” จะถูกลบและไม่สามารถกู้คืนได้ การดำเนินการนี้ไม่สามารถย้อนกลับได้","buttons":["ยกเลิก","ยืนยันลบถาวร"],"focusInDialog":false} {"dialogGone":true,"trashTitles":["Manual UI test permanent-delete"]}
+CH-11 PASS {"dialogState":{"modal":"true","labelledby":"permanent-delete-title","title":"ลบโน้ตนี้ถาวรหรือไม่?","description":"“Manual UI test permanent-delete” จะถูกลบและไม่สามารถกู้คืนได้ การดำเนินการนี้ไม่สามารถย้อนกลับได้","buttons":["ยกเลิก","ยืนยันลบถาวร"],"focusInDialog":false},"afterCancel":{"dialogGone":true,"trashTitles":["Manual UI test permanent-delete"]}}
+CH-11-console PASS []
+CH-12: {"trashTitles":[],"apiTrashTotal":0,"apiSearchTotal":0,"dialogGone":true}
+CH-12 PASS {"trashTitles":[],"apiTrashTotal":0,"apiSearchTotal":0,"dialogGone":true}
+CH-12-console PASS []
+CH-13: {"inputValue":"manualui","titles":[]} [{"url":"http://127.0.0.1:3459/api/notes/search?q=manualui&page=1&pageSize=50","at":1792478946320}]
+CH-13 PASS {"requestCount":1,"requests":["http://127.0.0.1:3459/api/notes/search?q=manualui&page=1&pageSize=50"],"debounce":{"inputValue":"manualui","titles":[]}}
+pagination: {"created":21,"pageOne":{"labels":"ก่อนหน้า 1 / 2 ถัดไป","prevDisabled":true,"listCount":20,"total":"22"},"pageTwo":{"labels":"ก่อนหน้า 2 / 2 ถัดไป","titles":["Manual UI page note 01","Manual UI test note A (edited)"],"apiTitles":["Manual UI page note 01","Manual UI test note A (edited)"],"apiTotal":22},"backToPageOne":"ก่อนหน้า 1 / 2 ถัดไป"}
+PAGE-01 PASS {"pageOne":{"labels":"ก่อนหน้า 1 / 2 ถัดไป","prevDisabled":true,"listCount":20,"total":"22"},"pageTwo":{"labels":"ก่อนหน้า 2 / 2 ถัดไป","titles":["Manual UI page note 01","Manual UI test note A (edited)"],"apiTitles":["Manual UI page note 01","Manual UI test note A (edited)"],"apiTotal":22},"backToPageOne":"ก่อนหน้า 1 / 2 ถัดไป"}
+notes cleanup: {"removed":21,"activeTotal":1,"activeTitles":["Manual UI test note A (edited)"],"trashTotal":0}
+PAGE-02 PASS {"removed":21,"activeTotal":1,"activeTitles":["Manual UI test note A (edited)"],"trashTotal":0}
+PAGE-console PASS []
+notes scenario console summary: {"stage":"notes scenario","clean":true,"problems":[],"suppressed":[]}
+NOTES-console PASS no unexpected console errors, CSP violations or failed requests
+---DIAG---
+{
+  "consoleErrors": [],
+  "consoleWarnings": [],
+  "exceptions": [],
+  "csp": [],
+  "httpErrors": [],
+  "loadingFailed": [],
+  "searches": []
+}
+---RESULT-JSON---
+{
+  "chromePid": 26596,
+  "results": [
+    {
+      "id": "CH-03",
+      "status": "PASS",
+      "detail": "{\"titles\":[\"Manual UI test note A\"],\"editorTitle\":\"Manual UI test note A\",\"editorContent\":\"manual-search-needle เนื้อหาทดสอบ กา และคำอื่น ๆ\",\"count\":\"1\"}"
+    },
+    {
+      "id": "CH-03-console",
+      "status": "PASS",
+      "detail": "[]"
+    },
+    {
+      "id": "CH-04",
+      "status": "PASS",
+      "detail": "{\"afterReload\":{\"titles\":[\"Manual UI test note A (edited)\"],\"api\":[{\"id\":\"ec9ad772-f2a2-48a8-b8c8-420f16c7e738\",\"title\":\"Manual UI test note A (edited)\",\"content\":\"manual-search-needle เนื้อหาทดสอบ กา และคำอื่น ๆ แก้ไขเพิ่มเติม\"}]},\"editorAfterReload\":{\"title\":\"Manual UI test note A (edited)\",\"content\":\"manual-search-needle เนื้อหาทดสอบ กา และคำอื่น ๆ แก้ไขเพิ่มเติม\"}}"
+    },
+    {
+      "id": "CH-04-console",
+      "status": "PASS",
+      "detail": "[]"
+    },
+    {
+      "id": "CH-05",
+      "status": "PASS",
+      "detail": "[{\"query\":\"ก\",\"hint\":\"คำค้นสั้น 1–2 อักขระอาจได้ผลลัพธ์กว้าง ระบบจะค้นทุกโน้ตที่ยังไม่อยู่ในถังขยะ\",\"titles\":[\"Manual UI test note A (edited)\"],\"loading\":false},{\"query\":\"กา\",\"hint\":\"คำค้นสั้น 1–2 อักขระอาจได้ผลลัพธ์กว้าง ระบบจะค้นทุกโน้ตที่ยังไม่อยู่ในถังขยะ\",\"titles\":[\"Manual UI test note A (edited)\"],\"loading\":false}]"
+    },
+    {
+      "id": "CH-05-console",
+      "status": "PASS",
+      "detail": "[]"
+    },
+    {
+      "id": "CH-06",
+      "status": "PASS",
+      "detail": "{\"titles\":[\"Manual UI test note A (edited)\"],\"hint\":\"\",\"apiTitles\":[\"Manual UI test note A (edited)\"],\"apiTotal\":1}"
+    },
+    {
+      "id": "CH-07",
+      "status": "PASS",
+      "detail": "{\"emptyText\":\"✎ ไม่พบโน้ตที่ตรงกับคำค้น ลองใช้คำค้นอื่น หรือกดล้างเพื่อกลับไปดูโน้ตทั้งหมด\",\"titles\":[]}"
+    },
+    {
+      "id": "CH-07-console",
+      "status": "PASS",
+      "detail": "[]"
+    },
+    {
+      "id": "CH-08",
+      "status": "PASS",
+      "detail": "{\"afterTrash\":{\"titles\":[],\"count\":\"0\",\"apiTrashTitles\":[\"Manual UI test note A (edited)\"],\"apiTrashTotal\":1},\"trashDialogs\":[{\"type\":\"confirm\",\"message\":\"ย้ายโน้ตนี้ไปถังขยะหรือไม่? เนื้อหาจะยังถูกเก็บไว้\"}]}"
+    },
+    {
+      "id": "CH-08-console",
+      "status": "PASS",
+      "detail": "[]"
+    },
+    {
+      "id": "CH-09",
+      "status": "PASS",
+      "detail": "{\"panelLabel\":\"จัดการโน้ตในถังขยะ\",\"preview\":\"Manual UI test note A (edited) manual-search-needle เนื้อหาทดสอบ กา และคำอื่น ๆ แก้ไขเพิ่มเติม\",\"retention\":\"หมายเหตุ: นโยบายเก็บถังขยะ 30 วันเป็นข้อมูลเตือนเท่านั้น ระบบไม่ลบโน้ตอัตโนมัติ\"}"
+    },
+    {
+      "id": "CH-10",
+      "status": "PASS",
+      "detail": "{\"titles\":[\"Manual UI test note A (edited)\"],\"count\":\"1\"}"
+    },
+    {
+      "id": "CH-10-console",
+      "status": "PASS",
+      "detail": "[]"
+    },
+    {
+      "id": "CH-11",
+      "status": "PASS",
+      "detail": "{\"dialogState\":{\"modal\":\"true\",\"labelledby\":\"permanent-delete-title\",\"title\":\"ลบโน้ตนี้ถาวรหรือไม่?\",\"description\":\"“Manual UI test permanent-delete” จะถูกลบและไม่สามารถกู้คืนได้ การดำเนินการนี้ไม่สามารถย้อนกลับได้\",\"buttons\":[\"ยกเลิก\",\"ยืนยันลบถาวร\"],\"focusInDialog\":false},\"afterCancel\":{\"dialogGone\":true,\"trashTitles\":[\"Manual UI test permanent-delete\"]}}"
+    },
+    {
+      "id": "CH-11-console",
+      "status": "PASS",
+      "detail": "[]"
+    },
+    {
+      "id": "CH-12",
+      "status": "PASS",
+      "detail": "{\"trashTitles\":[],\"apiTrashTotal\":0,\"apiSearchTotal\":0,\"dialogGone\":true}"
+    },
+    {
+      "id": "CH-12-console",
+      "status": "PASS",
+      "detail": "[]"
+    },
+    {
+      "id": "CH-13",
+      "status": "PASS",
+      "detail": "{\"requestCount\":1,\"requests\":[\"http://127.0.0.1:3459/api/notes/search?q=manualui&page=1&pageSize=50\"],\"debounce\":{\"inputValue\":\"manualui\",\"titles\":[]}}"
+    },
+    {
+      "id": "PAGE-01",
+      "status": "PASS",
+      "detail": "{\"pageOne\":{\"labels\":\"ก่อนหน้า 1 / 2 ถัดไป\",\"prevDisabled\":true,\"listCount\":20,\"total\":\"22\"},\"pageTwo\":{\"labels\":\"ก่อนหน้า 2 / 2 ถัดไป\",\"titles\":[\"Manual UI page note 01\",\"Manual UI test note A (edited)\"],\"apiTitles\":[\"Manual UI page note 01\",\"Manual UI test note A (edited)\"],\"apiTotal\":22},\"backToPageOne\":\"ก่อนหน้า 1 / 2 ถัดไป\"}"
+    },
+    {
+      "id": "PAGE-02",
+      "status": "PASS",
+      "detail": "{\"removed\":21,\"activeTotal\":1,\"activeTitles\":[\"Manual UI test note A (edited)\"],\"trashTotal\":0}"
+    },
+    {
+      "id": "PAGE-console",
+      "status": "PASS",
+      "detail": "[]"
+    },
+    {
+      "id": "NOTES-console",
+      "status": "PASS",
+      "detail": "no unexpected console errors, CSP violations or failed requests"
+    }
+  ]
+}

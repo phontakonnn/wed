@@ -29,6 +29,11 @@
 - Use versioned forward-only SQL migrations under `apps/server/migrations`.
 - Enable `foreign_keys=ON`, `busy_timeout=5000`, and WAL for file-backed databases. In-memory test databases use SQLite's in-memory journal mode.
 - Production database path is `DATA_DIR/db/knowledge.sqlite3`; server startup rejects a missing DATA_DIR and requires an absolute path.
+- Before startup or administrator bootstrap applies pending migrations to a database with user rows,
+  create and verify an Online Backup API snapshot of the pre-migration schema. Do not prune this
+  safety backup. Preflight must not apply migrations or change journal mode. Abort before migration
+  if backup creation or verification fails. The backup CLI must open the existing database without
+  applying migrations.
 - Keep large files outside SQLite; no file storage implementation exists yet.
 
 ### Authentication and sessions
@@ -100,10 +105,20 @@
   open, but a crash mid-probe would leave the live database renamed.
 - Read-only inspections (`verify`, post-restore checks) remove any `-shm`/empty `-wal` sidecar they
   created themselves, so verification does not leave artefacts next to backups.
-- Backups are **not encrypted**. They contain scrypt password hashes and session-token hashes, so
-  they are as sensitive as the live database and rely on NTFS ACLs. Encryption is deferred, not done.
+- Backup encryption now uses Node's built-in `aes-256-gcm` with a 32-byte Base64 runtime key,
+  random 96-bit IV, and 128-bit authentication tag. An explicit `BACKUP_ENCRYPTION_REQUIRED=true`
+  fails closed when the key is unavailable; encrypted create/verify/restore and wrong/missing-key
+  behavior are covered on temporary databases. Runtime key provisioning, key escrow/rotation, and a
+  real encrypted backup target remain unverified. The SQLite snapshot is briefly plaintext in the
+  OS temporary directory during encryption/decryption; abrupt termination can leave a residue.
 - The backup directory must be a separate physical disk. That is not yet verified, so the backup gate
   in `ACCEPTANCE.md` stays closed.
+- Migration pre-backup is now enforced by `openDataDatabaseSafely()` in server startup and admin
+  bootstrap. Evidence is limited to temporary databases: MIG-01 verifies an earlier-schema backup
+  before upgrade, and MIG-02 verifies a failed backup prevents migration and preserves the schema,
+  data, and original journal mode. No live database was opened or migrated; this safeguard does not
+  satisfy the separate-disk, schedule, encryption-key operations, or real restore-drill acceptance
+  items.
 
 ### Scope discipline for this session
 - `auth.ts`, the `preHandler` hook, the CSRF checks, and all pre-existing routes were left untouched.
@@ -380,6 +395,18 @@ run, so do not infer a monotonic latency curve from match percentage. All p95 va
   can still receive 429, and the implementation does not prevent that edge case. The browser UI
   and visible 429 state were not exercised in a browser.
 
+## Bookmarks CRUD implementation (2026-10-19)
+
+- Added additive migration `004_bookmarks.sql` for owner-scoped bookmark metadata; existing Notes,
+  authentication rows, and FTS indexes are unchanged. Migration and upgrade preservation tests use
+  temporary in-memory SQLite databases only.
+- Implemented paginated, session-protected list and owner-scoped create/read/update/delete API
+  operations. URL validation accepts only HTTP/HTTPS and rejects embedded credentials and control
+  characters. Metadata is user-entered; the server does not fetch URLs, so no metadata-fetch SSRF
+  behavior was added.
+- Added a Bookmarks view and editor within the existing authenticated Notes page; no new page or
+  frontend route was introduced. API and build tests pass; visual behavior remains **ยังไม่ได้ทดสอบใน browser**.
+
 ## File upload and serving design (proposal only; 2026-10-19)
 
 ### Current status and scope
@@ -478,7 +505,7 @@ generic `@tus/file-store` as-is without proving it preserves the required storag
 
 ### Proposed migration
 
-- Propose additive migration `004_files.sql` with `files`, `upload_sessions`, owner/state/expiry
+- Propose additive migration `006_files.sql` with `files`, `upload_sessions`, owner/state/expiry
   indexes and foreign keys. The SQL shape is documented in `SCHEMA.md` for review only; no migration
   file was created or run.
 - The migration proposal does not alter Notes, existing FTS tables/triggers, or existing rows. It
@@ -500,3 +527,325 @@ generic `@tus/file-store` as-is without proving it preserves the required storag
 The 2 GiB/RSS test depends on measured free space and temporary test storage. If preconditions are
 not safe, report BLOCKED with evidence rather than lowering the threshold or filling a real disk.
 These tests are only a plan; no T03/T04/T05/T06/T07/T09 file tests have been run.
+
+## Categories, tags, and note relations (2026-10-19)
+
+- Implemented additive migration `005_categories_tags.sql`. It adds owner-scoped `categories`,
+  `tags`, `note_categories`, and `note_tags`; existing Notes, bookmarks, FTS indexes, and rows are
+  not rewritten. Foreign keys cascade relation rows on permanent deletion, and relation triggers
+  reject cross-owner links. Soft deletion leaves the assignments intact for restore.
+- Implemented session-protected, owner-scoped paginated taxonomy CRUD and transactional replacement
+  of an active Note's category/tag assignments. Names are NFC-normalized and limited to 80 Unicode
+  code points; relation updates accept up to 100 unique IDs per kind and roll back on invalid or
+  other-owner IDs. The UI adds controls to the existing Notes page only; no route/page or dependency
+  was added.
+- Migration, API ownership/CSRF/validation, pagination, Trash restore, relation retention, and
+  cascade tests use in-memory SQLite. Latest full verification results are recorded in the current
+  `PROGRESS.md` checkpoint. The visual UI flow is **ยังไม่ได้ทดสอบใน browser**.
+- Favorites and files remain unimplemented. This work does not pass production or remote-access
+  acceptance; existing backup, operator, and real-data gates remain unchanged.
+
+## Favorites and file storage implementation (2026-10-19)
+
+### Scope actually implemented
+
+- Additive migrations `006_favorites.sql` and `007_files.sql`; no existing table, FTS index or row
+  was altered.
+- Owner-scoped Favorites API and same-page UI for notes and bookmarks.
+- Streaming single-request file upload, metadata list, owner-scoped download with single-range
+  support, and delete. Files are stored under `DATA_DIR/objects` with server-generated UUIDs.
+- Backup/restore extended to snapshot and restore `DATA_DIR/objects`, including a safety copy that
+  can roll back database and files in one command.
+- Not implemented: resumable/Tus uploads, `upload_sessions`, previews/thumbnails, file search, file
+  favoriting, note↔file attachments, startup orphan reconciliation, object encryption.
+
+### Decision: polymorphic favorites table instead of two join tables
+
+A single `favorites(owner_id, item_type, item_id, created_at)` table with a composite primary key
+keeps "add" idempotent and makes one paginated query possible across both content types. The cost
+is that SQLite cannot enforce a foreign key on a polymorphic target, so a `BEFORE INSERT` trigger
+checks ownership and `AFTER DELETE` triggers on `notes` and `bookmarks` remove stale rows. Two
+separate tables would give real foreign keys but would need a UNION for the combined list and two
+different endpoints for a single UI concept.
+
+Soft-deleted notes keep their favorite row on purpose: the user's intent ("this matters to me")
+should survive a trip to the trash and a restore. The list hides trashed notes so no dead links
+appear.
+
+### Decision: single-request streaming upload for the MVP, not Tus
+
+`DECISIONS.md` previously recommended Tus for files above 1 GiB, conditional on dependency
+approval. No dependency was approved, and adding `@tus/server` would introduce a new transitive
+surface plus a custom datastore to preserve the rename-then-commit order. The MVP therefore
+implements the protocol-free streaming path only, with a hard 1 GiB limit:
+
+- `MAX_UPLOAD_BYTES` defaults to 1 GiB and is configurable; larger declarations are rejected with
+  413 before any byte is accepted.
+- The body is streamed to `DATA_DIR/tmp/<uuid>.part` and hashed with SHA-256 while it arrives; it
+  is never buffered in memory or converted to base64.
+- The temp file is fsynced and atomically renamed to
+  `DATA_DIR/objects/<first two id chars>/<uuid>`, and only then is the row inserted.
+- At most two uploads run concurrently per process; a third gets 429.
+
+Consequences, stated plainly: a dropped connection restarts the upload from zero, and uploads above
+1 GiB are impossible until a resumable protocol is approved. This is a scope reduction, not a
+completed requirement.
+
+### Decision: disk reserve scaled to the MVP limit
+
+The design proposed refusing an upload unless `max(10 GiB, 5% of the volume)` remains free. With a
+1 GiB per-file limit, a 10 GiB reserve would reject ordinary uploads on small volumes for no
+benefit. The implemented reserve is `max(MAX_UPLOAD_BYTES, 5% of the volume)`; it is still checked
+before the body is read, and failure returns 507. This must be re-evaluated before any limit above
+1 GiB is allowed.
+
+### Decision: server-detected media type and attachment-by-default
+
+The client `Content-Type` is discarded. The stored type comes from magic bytes for PNG, JPEG, GIF,
+WebP, AVIF, MP4, WebM, MP3, OGG, WAV, PDF, and otherwise `application/octet-stream`. Only the
+image/video/audio allowlist is served `inline`; HTML, SVG, PDF and unknown types are always
+`attachment`. Every file response sets `X-Content-Type-Options: nosniff` and
+`Cache-Control: private, no-store`. PDF stays an attachment until sandbox/CSP behavior is reviewed,
+as the earlier design proposed.
+
+Filename handling follows the earlier proposal exactly: percent-decoded once, NFC-normalized,
+rejected (not repaired) on separators, ADS colon, control characters, reserved device basenames,
+trailing dot/space, and length over 255 UTF-16 code units. Display names are not unique; two files
+may share a name because the UUID path differs.
+
+### Decision: single-range only, malformed ranges are 416
+
+`bytes=start-end`, `bytes=start-`, and `bytes=-suffix` are supported with exact `Content-Range`.
+Multiple ranges and malformed values return 416 with `Content-Range: bytes */<size>` rather than
+being silently collapsed or answered with a full body. This is the policy the earlier design left
+open; tests pin it.
+
+### Security change: HEAD is exempt from the CSRF header
+
+`TEST_PLAN.md` requires an explicit decision for any change to the `preHandler`/CSRF logic, so this
+is recorded here. The preHandler previously required `Origin`, `Host` and `X-PKH-Request: 1` for
+every non-GET method, including HEAD. That made `HEAD /api/files/:id` unusable from a browser
+address bar or a download manager, which is exactly where a HEAD probe is useful.
+
+The change is narrow: the origin/CSRF check now runs for every method except `GET` and `HEAD`.
+HEAD remains default-deny and requires a valid session; it returns headers only, never a body, and
+cannot mutate state. `GET` was already exempt on the same reasoning. A regression test (FILE-12)
+asserts that HEAD without a session still returns 401.
+
+### Decision: object snapshot beside the backup, with a tree hash
+
+A backup must return file metadata and bytes from the same point in time. The chosen shape is a
+sibling directory `<backup file>.objects` plus a manifest entry
+`{ directory, fileCount, totalBytes, treeSha256 }`:
+
+- `treeSha256` hashes the sorted relative path, size and per-file SHA-256, so a same-size byte swap
+  is detected (tested).
+- `verify` checks existence, counts, bytes and the tree hash, and rejects a `directory` value that
+  is not a plain basename.
+- Retention deletes `<name>.objects` with its backup.
+- The object snapshot is a full copy per backup, not incremental; this is simple and correct but
+  expensive for a large store.
+- The snapshot is **not encrypted** even when the database backup is. This is an open gap.
+
+Restore moves the live `DATA_DIR/objects` aside into `<safety copy>.objects` and records it in the
+safety copy's manifest, then copies the backup's objects into place before replacing the database.
+A failed restore rolls both back. A completed-but-unwanted restore is undone with a single
+`backup:restore -- <safety copy> --yes`, verified by BK-12.
+
+A backup created without `dataDirectory` contains no objects and restores no objects; it must be
+treated as a database-only rollback.
+
+## Backup hardening and object encryption (2026-10-19)
+
+### Decision: encrypt objects per file with the existing envelope
+
+The database backup already used a `PKHBAK01` envelope (8-byte magic, 12-byte IV, ciphertext,
+16-byte GCM tag). Stored objects now use the same envelope per file instead of a new archive format:
+
+- One crypto implementation and one key; no second system to review.
+- Each file gets a fresh random IV, so IV reuse across files and runs is avoided by construction.
+- A single damaged object fails that file's GCM check without making the rest unreadable, and the
+  manifest pinpoints it.
+- Encryption streams live file → cipher → snapshot. No plaintext temporary copy of an object is
+  written, on create or on verify (verification decrypts into a hash sink).
+- The cost is per-file overhead (28 bytes of header/tag) and a per-file inventory in the manifest.
+
+An alternative was a single encrypted container (tar-like). It would hide the file list and add
+less overhead, but it would require a new archive format, make partial restore harder, and make a
+single corrupt block affect the whole set. For a personal store of modest size, per-file encryption
+is the better trade.
+
+### Decision: manifest `objects.formatVersion: 2` with a per-file inventory
+
+`objects.files[]` records the logical path, plaintext size/hash, stored path, stored size/hash.
+Verification checks existence, stored hash, decrypted plaintext hash, duplicate paths, unexpected
+files, counts, totals and the tree hash. A count/size match alone is explicitly not accepted.
+
+Manifests without `formatVersion`/`files` are treated as the legacy plaintext tree and still verify
+by count, size and tree hash. This keeps backups written before this change restorable while making
+the stronger checks mandatory for new ones.
+
+### Decision: reject mixed encryption policies
+
+Verification fails when the database backup is encrypted but the object snapshot is not, or the
+reverse. This closes the exact gap that motivated the round: a set that looks protected but contains
+readable attachments. The same rule applies to restore safety copies, which are now built with the
+same policy as the backup being restored; a plaintext rollback directory exists only transiently
+during a restore and is removed once the encrypted safety snapshot is recorded.
+
+### Decision: narrow, not eliminate, plaintext staging for the database
+
+SQLite cannot be inspected without a file, so encrypted verification still decrypts the database
+into the OS temp directory. Mitigations: `mkdtemp` with mode 0700, file mode 0600 where POSIX modes
+apply, cleanup in `finally` on every success and failure path. On Windows these modes are
+best-effort; the per-user temp ACL is the real control. A crash or power loss can still leave a
+staging file. This is recorded as a residual risk, not as solved.
+
+### Decision: preflight distinguishes volume from physical disk
+
+`backup:preflight` compares device ids and reports "same volume" or "different volume". It always
+prints `Physical disk separation: NOT VERIFIED`, because drive letters and volumes do not prove
+physical separation. BK-08 therefore cannot pass from source code or this tool; it needs machine
+evidence. Preflight is read-only and never creates the destination.
+
+### Decision: reconciliation separates detection, quarantine and deletion
+
+`storage:check` is read-only and exits 1 when it finds problems. `storage:quarantine` is a dry run by
+default and, with `--yes`, **moves** orphans and stale temp files into `DATA_DIR/quarantine/<stamp>/`
+with a JSON record. Deletion is deliberately not implemented:
+
+- An orphan object may be the only copy of a file whose metadata insert failed.
+- A stale `.part` may still be referenced by an in-flight upload on another process.
+- A missing object or hash mismatch needs a human decision, not an automatic repair.
+
+Quarantine re-checks that a file still has no metadata row at move time and skips it otherwise.
+Nothing is removed automatically at startup; the operator runs the check.
+
+### Decision: keep the 1 GiB single-request upload; no Tus in this round
+
+Resumable upload was evaluated and deferred:
+
+- The current architecture (SQLite metadata, local object store, single-process loopback server)
+  has no multi-writer or large-media workflow that requires resumable transfer.
+- Tus would add a dependency and a custom datastore to preserve the rename-then-commit order, plus
+  session ownership, chunk integrity, expiry and recovery semantics that need their own tests.
+- The integrity work in this round (encrypted backups, restore safety, reconciliation) is more
+  valuable than resumability, and shipping a chunk uploader without full state recovery would be
+  worse than the current hard limit.
+
+`MAX_UPLOAD_BYTES` remains 1 GiB and is documented as a limitation. A dropped upload restarts from
+zero.
+
+### Decision: browser UI remains NOT VERIFIED
+
+No Playwright, Puppeteer, or browser driver is installed in the workspace, and there is no cached
+Chromium. The available agent-browser skill would require a global npm install plus a ~500 MB
+Chromium download, which is an environment/dependency change outside this round's approval. The UI
+is therefore verified only by TypeScript build, API tests, and the manual checklist (CH-01..CH-20).
+No browser result is claimed.
+
+## Final hardening pass (2026-10-19)
+
+### Decision: key ids plus a decryption ring, no automatic re-encryption
+
+A single active key is not enough once it has to change. The implemented model is:
+
+- `BACKUP_ENCRYPTION_KEY` (+ optional `BACKUP_ENCRYPTION_KEY_ID`) is the only key used to create
+  new backups.
+- `BACKUP_ENCRYPTION_KEY_RING` is a JSON map of older ids to keys, used **only** to decrypt a
+  manifest that names that id.
+- Manifests record the id, never the key. Verification selects by id and fails clearly when the id
+  is unavailable, instead of trying unrelated keys.
+- Rotation is an operator action: add the new active key, keep the old one in the ring, remove it
+  only after the backups it protects expire. Nothing re-encrypts old backups automatically.
+
+This is the smallest mechanism that preserves old-backup recoverability without a key-management
+service or a new crypto format. Key storage, escrow, and loss recovery remain operational problems,
+not code, and are still NOT VERIFIED.
+
+### Decision: a read-only disk probe that is allowed to say UNKNOWN
+
+`backup:preflight` now maps a drive-letter path to a physical disk number with two read-only
+Windows strategies: `Get-Partition -DriveLetter`, then the `Win32_LogicalDiskToPartition` CIM
+association parsed for `Disk #N`. It never reads file content, creates files, or changes volumes.
+
+The probe is allowed to return UNKNOWN, and does so for UNC paths, mount points without a drive
+letter, non-Windows hosts, and any query failure. That is deliberate: a wrong "different disk"
+verdict would be worse than no verdict. On the current machine the storage cmdlets found no volume
+and the fallback produced no disk number, so the tool reported UNKNOWN and BK-08 stayed NOT
+VERIFIED. Tests inject a fake runner; no test touches the real partition table.
+
+### Decision: staging residue is reported, not deleted automatically
+
+`backup:staging` lists `pkh-backup-create-*`, `pkh-backup-verify-*`, and `pkh-restore-safety-*`
+directories with age and size, defaulting to a 12-hour stale threshold. It never deletes: a
+directory may belong to a running backup, and the cost of deleting the wrong one is a corrupted
+backup. Operators get visibility; removal stays a deliberate act.
+
+### Decision: bound the login throttle map instead of letting it grow
+
+The throttle now holds at most 10,000 keys. Expired buckets are dropped first; if the map is still
+full, the oldest entries are evicted. This can reset a victim's bucket under extreme key churn, but
+unbounded memory growth is a worse failure for a long-running single-instance service. The limit is
+a constant, the behaviour is documented, and tests pin the bound.
+
+Forwarded headers remain untrusted: `trustProxy` is off, so `request.ip` is the socket address. A
+test sends five failures with different `X-Forwarded-For` values and still receives 429 on the
+sixth request.
+
+### Decision: add Permissions-Policy, keep HSTS off
+
+A deny-all `Permissions-Policy` (`camera`, `microphone`, `geolocation`, `payment`, `usb`) is added
+as an `onSend` header. Helmet does not provide it, and the app needs none of those features. HSTS
+stays disabled because the service is HTTP loopback; enabling it before HTTPS exists would be
+misleading. CSP remains self-only with no `unsafe-inline`/`unsafe-eval` for scripts, and the UI
+uses external stylesheets rather than inline styles.
+
+### Decision: still no browser install
+
+No browser driver or cached Chromium exists. Installing one would mean a global package plus a
+large download, which this round explicitly forbids. UI status remains NOT VERIFIED, backed only by
+the TypeScript build, API tests, and the manual checklist.
+
+## Stabilization pass: throttle churn and restore evidence (2026-10-19)
+
+### Defect found: key churn could evict an active rate-limit block
+
+The previous bound evicted entries in insertion order once the map reached 10,000 keys. That meant
+an attacker could create thousands of distinct account keys and push out a victim's **blocked**
+bucket, clearing an active limit. This was a real weakness, not a theoretical one, because account
+keys are fully attacker-controlled.
+
+### Fix: eviction may never discard an active protection
+
+`makeRoom` now frees a slot in this order:
+
+1. expired buckets (window over and not blocked);
+2. buckets that never recorded a failure;
+3. the least-progressed unprotected bucket (oldest wins ties).
+
+A bucket at or above the failure limit, or currently blocked, is never evicted. If every tracked
+bucket is protected, the new key is simply not tracked. That is safe because the per-IP bucket is a
+single protected key and still enforces the limit for that client; the untracked account key cannot
+be used to bypass it. `delay()` also no longer creates entries, so ordinary successful logins and
+one-off usernames cannot fill the map.
+
+Residual trade-off: a victim that has accumulated 1–4 failures but is not yet blocked can still lose
+that partial progress under extreme churn. The blocked state, which is the actual protection, cannot
+be removed. This is recorded rather than hidden. The map remains bounded and per-process.
+
+Tests: TH-01..TH-08 cover the cap, expiry-first eviction, reset, window expiry, read-without-create,
+blocked-bucket survival under 500 churning keys, IP enforcement when every bucket is protected, and
+least-progressed eviction.
+
+### Mid-restore failure is now proven, not assumed
+
+`backup-e2e.test.ts` holds a second SQLite handle on the live database and calls restore with
+`force: true`. Objects are swapped, then the database rename fails because Windows refuses to
+replace a file another handle holds open. The test asserts the pre-restore marker object is back and
+the original object bytes are intact. No fault-injection hook was added to production code; the
+failure is induced through real filesystem behavior.
+
+E2E-01 also restores notes, bookmarks, categories, tags, both relation tables, favorites, file
+metadata and objects, and checks counts, content, owner boundaries, checksums and safety-copy
+verification in one pass.

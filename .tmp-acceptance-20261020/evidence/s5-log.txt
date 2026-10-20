@@ -1,0 +1,374 @@
+﻿CH-15 fixture note: b57d9b24-2128-49bc-a54f-be3871904e31
+screenshot c:\Users\_phontakonnn\Documents\Wed_Phontakon\.tmp-acceptance-20261020\evidence\ch15-desktop-notes.png
+screenshot c:\Users\_phontakonnn\Documents\Wed_Phontakon\.tmp-acceptance-20261020\evidence\ch15-desktop-dialog.png
+CH-15 desktop: {"desktopOverflow":{"scrollWidth":1351,"clientWidth":1351,"innerWidth":1366,"bodyScrollWidth":1351,"offenders":[]},"desktopReach":{".view-switcher button":{"found":true,"width":93,"height":38,"left":20,"right":113,"within":true},"#note-search":{"found":true,"width":289,"height":38,"left":20,"right":309,"within":true},".new-note-button":{"found":true,"width":289,"height":43,"left":20,"right":309,"within":true},".note-list button":{"found":true,"width":289,"height":89,"left":20,"right":309,"within":true},".editor-panel":{"found":true,"width":1021,"height":759,"left":330,"right":1351,"within":true},"[aria-label=\"หัวข้อโน้ต\"]":{"found":true,"width":857,"height":51,"left":412,"right":1269,"within":true}},"desktopTrashOverflow":{"scrollWidth":1366,"clientWidth":1366,"innerWidth":1366,"bodyScrollWidth":1366,"offenders":[]},"desktopDialog":{"text":"ยืนยันการลบ ลบโน้ตนี้ถาวรหรือไม่? “Manual UI responsive trash note” จะถูกลบและไม่สามารถกู้คืนได้ การดำเนินการนี้ไม่สามารถย้อนกลับได้ ยกเลิก ยืนยันลบถาวร","width":440,"right":903,"within":true,"buttons":["ยกเลิก","ยืนยันลบถาวร"],"buttonReach":[true,true]},"desktopAfterCancel":{"dialogGone":true,"trashTitles":["Manual UI responsive trash note"],"bodyHasFixture":true}}
+CH-15-desktop PASS {"desktopOverflow":{"scrollWidth":1351,"clientWidth":1351,"innerWidth":1366,"bodyScrollWidth":1351,"offenders":[]},"desktopReach":{".view-switcher button":{"found":true,"width":93,"height":38,"left":20,"right":113,"within":true},"#note-search":{"found":true,"width":289,"height":38,"left":20,"right":309,"within":true},".new-note-button":{"found":true,"width":289,"height":43,"left":20,"right":309,"within":true},".note-list button":{"found":true,"width":289,"height":89,"left":20,"right":309,"within":true},".editor-panel":{"found":true,"width":1021,"height":759,"left":330,"right":1351,"within":true},"[aria-label=\"หัวข้อโน้ต\"]":{"found":true,"width":857,"height":51,"left":412,"right":1269,"within":true}},"desktopTrashOverflow":{"scrollWidth":1366,"clientWidth":1366,"innerWidth":1366,"bodyScrollWidth":1366,"offenders":[]}}
+CH-15-desktop-dialog PASS {"desktopDialog":{"text":"ยืนยันการลบ ลบโน้ตนี้ถาวรหรือไม่? “Manual UI responsive trash note” จะถูกลบและไม่สามารถกู้คืนได้ การดำเนินการนี้ไม่สามารถย้อนกลับได้ ยกเลิก ยืนยันลบถาวร","width":440,"right":903,"within":true,"buttons":["ยกเลิก","ยืนยันลบถาวร"],"buttonReach":[true,true]},"desktopAfterCancel":{"dialogGone":true,"trashTitles":["Manual UI responsive trash note"],"bodyHasFixture":true}}
+screenshot c:\Users\_phontakonnn\Documents\Wed_Phontakon\.tmp-acceptance-20261020\evidence\ch15-mobile-notes.png
+screenshot c:\Users\_phontakonnn\Documents\Wed_Phontakon\.tmp-acceptance-20261020\evidence\ch15-mobile-dialog.png
+CH-15 mobile: {"mobileViewport":{"width":390,"height":844},"mobileOverflowNotes":{"scrollWidth":390,"clientWidth":390,"innerWidth":390,"bodyScrollWidth":390,"offenders":[]},"mobileReach":{".view-switcher button":{"found":true,"width":116,"height":38,"left":16,"right":132,"within":true},"#note-search":{"found":true,"width":358,"height":38,"left":16,"right":374,"within":true},".new-note-button":{"found":true,"width":358,"height":43,"left":16,"right":374,"within":true},".note-list button":{"found":true,"width":358,"height":89,"left":16,"right":374,"within":true},".editor-panel":{"found":true,"width":390,"height":918,"left":0,"right":390,"within":true},"[aria-label=\"หัวข้อโน้ต\"]":{"found":true,"width":354,"height":33,"left":18,"right":372,"within":true},".editor-panel button":{"found":true,"width":118,"height":38,"left":18,"right":136,"within":true}},"mobileOverflowSearch":{"scrollWidth":390,"clientWidth":390,"innerWidth":390,"bodyScrollWidth":390,"offenders":[]},"mobileOverflowTrash":{"scrollWidth":390,"clientWidth":390,"innerWidth":390,"bodyScrollWidth":390,"offenders":[]},"mobileDialog":{"text":"ยืนยันการลบ ลบโน้ตนี้ถาวรหรือไม่? “Manual UI responsive trash note” จะถูกลบและไม่สามารถกู้คืนได้ การดำเนินการนี้ไม่สามารถย้อนกลับได้ ยกเลิก ยืนยันลบถาวร","right":370,"width":350,"within":true,"buttonReach":[true,true]}}
+CH-15-mobile PASS {"mobileViewport":{"width":390,"height":844},"mobileOverflowNotes":{"scrollWidth":390,"clientWidth":390,"innerWidth":390,"bodyScrollWidth":390,"offenders":[]},"mobileReach":{".view-switcher button":{"found":true,"width":116,"height":38,"left":16,"right":132,"within":true},"#note-search":{"found":true,"width":358,"height":38,"left":16,"right":374,"within":true},".new-note-button":{"found":true,"width":358,"height":43,"left":16,"right":374,"within":true},".note-list button":{"found":true,"width":358,"height":89,"left":16,"right":374,"within":true},".editor-panel":{"found":true,"width":390,"height":918,"left":0,"right":390,"within":true},"[aria-label=\"หัวข้อโน้ต\"]":{"found":true,"width":354,"height":33,"left":18,"right":372,"within":true},".editor-panel button":{"found":true,"width":118,"height":38,"left":18,"right":136,"within":true}},"mobileOverflowSearch":{"scrollWidth":390,"clientWidth":390,"innerWidth":390,"bodyScrollWidth":390,"offenders":[]},"mobileOverflowTrash":{"scrollWidth":390,"clientWidth":390,"innerWidth":390,"bodyScrollWidth":390,"offenders":[]}}
+CH-15-mobile-dialog PASS {"mobileDialog":{"text":"ยืนยันการลบ ลบโน้ตนี้ถาวรหรือไม่? “Manual UI responsive trash note” จะถูกลบและไม่สามารถกู้คืนได้ การดำเนินการนี้ไม่สามารถย้อนกลับได้ ยกเลิก ยืนยันลบถาวร","right":370,"width":350,"within":true,"buttonReach":[true,true]}}
+CH-15-console PASS []
+CH-14 waiting for the rate-limit window to clear…
+CH-14 probe: {"accepted":60,"lastStatus":429}
+CH-14 ui: true {"message":"ค้นหาบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่ | ค้นหาบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่","shellPresent":true,"loginFormPresent":false,"searchInputPresent":true}
+CH-14a PASS {"accepted":60,"lastStatus":429,"firstStatuses":[200,200,200],"last3":[200,200,429]}
+CH-14b PASS {"message":"ค้นหาบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่ | ค้นหาบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่","shellPresent":true,"loginFormPresent":false,"searchInputPresent":true}
+CH-14 waiting for the window to reset before the recovery search…
+CH-14 recovery: true {"listText":["Manual UI test note A (edited)manual-search-needle เนื้อหาทดสอบ กา และคำอื่น ๆ แก้ไขเพิ่มเติมแก้ไข 20 ต.ค. 2569 14:09"],"errorText":""}
+CH-14c PASS {"listText":["Manual UI test note A (edited)manual-search-needle เนื้อหาทดสอบ กา และคำอื่น ๆ แก้ไขเพิ่มเติมแก้ไข 20 ต.ค. 2569 14:09"],"errorText":""}
+CH-14-console PASS []
+CH-15 fixture cleanup status: 204
+scenario console summary: {"stage":"responsive+rate-limit scenario","clean":true,"problems":[],"suppressed":["console: Failed to load resource: the server responded with a status of 429 (Too Many Requests)","console: Failed to load resource: the server responded with a status of 429 (Too Many Requests)"]}
+S5-console PASS no unexpected console errors, CSP violations or failed requests
+---DIAG---
+{
+  "consoleErrors": [
+    {
+      "type": "log-error",
+      "text": "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-60"
+    },
+    {
+      "type": "log-error",
+      "text": "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-rate-limit-ui&page=1&pageSize=50"
+    }
+  ],
+  "consoleWarnings": [],
+  "exceptions": [],
+  "csp": [],
+  "httpErrors": [
+    {
+      "status": 429,
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-60",
+      "type": "Fetch"
+    },
+    {
+      "status": 429,
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-rate-limit-ui&page=1&pageSize=50",
+      "type": "Fetch"
+    }
+  ],
+  "loadingFailed": [],
+  "searches": [
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-0",
+      "at": 1792480275479
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-1",
+      "at": 1792480275483
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-2",
+      "at": 1792480275486
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-3",
+      "at": 1792480275488
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-4",
+      "at": 1792480275491
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-5",
+      "at": 1792480275494
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-6",
+      "at": 1792480275497
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-7",
+      "at": 1792480275500
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-8",
+      "at": 1792480275503
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-9",
+      "at": 1792480275506
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-10",
+      "at": 1792480275508
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-11",
+      "at": 1792480275512
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-12",
+      "at": 1792480275514
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-13",
+      "at": 1792480275517
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-14",
+      "at": 1792480275519
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-15",
+      "at": 1792480275522
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-16",
+      "at": 1792480275524
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-17",
+      "at": 1792480275527
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-18",
+      "at": 1792480275530
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-19",
+      "at": 1792480275533
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-20",
+      "at": 1792480275536
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-21",
+      "at": 1792480275538
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-22",
+      "at": 1792480275541
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-23",
+      "at": 1792480275544
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-24",
+      "at": 1792480275548
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-25",
+      "at": 1792480275550
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-26",
+      "at": 1792480275553
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-27",
+      "at": 1792480275556
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-28",
+      "at": 1792480275558
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-29",
+      "at": 1792480275561
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-30",
+      "at": 1792480275564
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-31",
+      "at": 1792480275567
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-32",
+      "at": 1792480275569
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-33",
+      "at": 1792480275572
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-34",
+      "at": 1792480275575
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-35",
+      "at": 1792480275578
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-36",
+      "at": 1792480275580
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-37",
+      "at": 1792480275583
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-38",
+      "at": 1792480275586
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-39",
+      "at": 1792480275589
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-40",
+      "at": 1792480275591
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-41",
+      "at": 1792480275594
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-42",
+      "at": 1792480275597
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-43",
+      "at": 1792480275600
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-44",
+      "at": 1792480275602
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-45",
+      "at": 1792480275605
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-46",
+      "at": 1792480275608
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-47",
+      "at": 1792480275611
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-48",
+      "at": 1792480275614
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-49",
+      "at": 1792480275617
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-50",
+      "at": 1792480275620
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-51",
+      "at": 1792480275622
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-52",
+      "at": 1792480275625
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-53",
+      "at": 1792480275629
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-54",
+      "at": 1792480275632
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-55",
+      "at": 1792480275635
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-56",
+      "at": 1792480275637
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-57",
+      "at": 1792480275640
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-58",
+      "at": 1792480275643
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-59",
+      "at": 1792480275647
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-429-probe-60",
+      "at": 1792480275650
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-rate-limit-ui&page=1&pageSize=50",
+      "at": 1792480276211
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/notes/search?q=manual-search-needle&page=1&pageSize=50",
+      "at": 1792480338581
+    }
+  ],
+  "favorites": [
+    {
+      "url": "http://127.0.0.1:3459/api/favorites/note/ec9ad772-f2a2-48a8-b8c8-420f16c7e738",
+      "method": "GET",
+      "at": 1792480275656
+    }
+  ],
+  "files": [],
+  "external": []
+}
+---RESULT-JSON---
+{
+  "chromePid": 14432,
+  "results": [
+    {
+      "id": "CH-15-desktop",
+      "status": "PASS",
+      "detail": "{\"desktopOverflow\":{\"scrollWidth\":1351,\"clientWidth\":1351,\"innerWidth\":1366,\"bodyScrollWidth\":1351,\"offenders\":[]},\"desktopReach\":{\".view-switcher button\":{\"found\":true,\"width\":93,\"height\":38,\"left\":20,\"right\":113,\"within\":true},\"#note-search\":{\"found\":true,\"width\":289,\"height\":38,\"left\":20,\"right\":309,\"within\":true},\".new-note-button\":{\"found\":true,\"width\":289,\"height\":43,\"left\":20,\"right\":309,\"within\":true},\".note-list button\":{\"found\":true,\"width\":289,\"height\":89,\"left\":20,\"right\":309,\"within\":true},\".editor-panel\":{\"found\":true,\"width\":1021,\"height\":759,\"left\":330,\"right\":1351,\"within\":true},\"[aria-label=\\\"หัวข้อโน้ต\\\"]\":{\"found\":true,\"width\":857,\"height\":51,\"left\":412,\"right\":1269,\"within\":true}},\"desktopTrashOverflow\":{\"scrollWidth\":1366,\"clientWidth\":1366,\"innerWidth\":1366,\"bodyScrollWidth\":1366,\"offenders\":[]}}"
+    },
+    {
+      "id": "CH-15-desktop-dialog",
+      "status": "PASS",
+      "detail": "{\"desktopDialog\":{\"text\":\"ยืนยันการลบ ลบโน้ตนี้ถาวรหรือไม่? “Manual UI responsive trash note” จะถูกลบและไม่สามารถกู้คืนได้ การดำเนินการนี้ไม่สามารถย้อนกลับได้ ยกเลิก ยืนยันลบถาวร\",\"width\":440,\"right\":903,\"within\":true,\"buttons\":[\"ยกเลิก\",\"ยืนยันลบถาวร\"],\"buttonReach\":[true,true]},\"desktopAfterCancel\":{\"dialogGone\":true,\"trashTitles\":[\"Manual UI responsive trash note\"],\"bodyHasFixture\":true}}"
+    },
+    {
+      "id": "CH-15-mobile",
+      "status": "PASS",
+      "detail": "{\"mobileViewport\":{\"width\":390,\"height\":844},\"mobileOverflowNotes\":{\"scrollWidth\":390,\"clientWidth\":390,\"innerWidth\":390,\"bodyScrollWidth\":390,\"offenders\":[]},\"mobileReach\":{\".view-switcher button\":{\"found\":true,\"width\":116,\"height\":38,\"left\":16,\"right\":132,\"within\":true},\"#note-search\":{\"found\":true,\"width\":358,\"height\":38,\"left\":16,\"right\":374,\"within\":true},\".new-note-button\":{\"found\":true,\"width\":358,\"height\":43,\"left\":16,\"right\":374,\"within\":true},\".note-list button\":{\"found\":true,\"width\":358,\"height\":89,\"left\":16,\"right\":374,\"within\":true},\".editor-panel\":{\"found\":true,\"width\":390,\"height\":918,\"left\":0,\"right\":390,\"within\":true},\"[aria-label=\\\"หัวข้อโน้ต\\\"]\":{\"found\":true,\"width\":354,\"height\":33,\"left\":18,\"right\":372,\"within\":true},\".editor-panel button\":{\"found\":true,\"width\":118,\"height\":38,\"left\":18,\"right\":136,\"within\":true}},\"mobileOverflowSearch\":{\"scrollWidth\":390,\"clientWidth\":390,\"innerWidth\":390,\"bodyScrollWidth\":390,\"offenders\":[]},\"mobileOverflowTrash\":{\"scrollWidth\":390,\"clientWidth\":390,\"innerWidth\":390,\"bodyScrollWidth\":390,\"offenders\":[]}}"
+    },
+    {
+      "id": "CH-15-mobile-dialog",
+      "status": "PASS",
+      "detail": "{\"mobileDialog\":{\"text\":\"ยืนยันการลบ ลบโน้ตนี้ถาวรหรือไม่? “Manual UI responsive trash note” จะถูกลบและไม่สามารถกู้คืนได้ การดำเนินการนี้ไม่สามารถย้อนกลับได้ ยกเลิก ยืนยันลบถาวร\",\"right\":370,\"width\":350,\"within\":true,\"buttonReach\":[true,true]}}"
+    },
+    {
+      "id": "CH-15-console",
+      "status": "PASS",
+      "detail": "[]"
+    },
+    {
+      "id": "CH-14a",
+      "status": "PASS",
+      "detail": "{\"accepted\":60,\"lastStatus\":429,\"firstStatuses\":[200,200,200],\"last3\":[200,200,429]}"
+    },
+    {
+      "id": "CH-14b",
+      "status": "PASS",
+      "detail": "{\"message\":\"ค้นหาบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่ | ค้นหาบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่\",\"shellPresent\":true,\"loginFormPresent\":false,\"searchInputPresent\":true}"
+    },
+    {
+      "id": "CH-14c",
+      "status": "PASS",
+      "detail": "{\"listText\":[\"Manual UI test note A (edited)manual-search-needle เนื้อหาทดสอบ กา และคำอื่น ๆ แก้ไขเพิ่มเติมแก้ไข 20 ต.ค. 2569 14:09\"],\"errorText\":\"\"}"
+    },
+    {
+      "id": "CH-14-console",
+      "status": "PASS",
+      "detail": "[]"
+    },
+    {
+      "id": "S5-console",
+      "status": "PASS",
+      "detail": "no unexpected console errors, CSP violations or failed requests"
+    }
+  ]
+}

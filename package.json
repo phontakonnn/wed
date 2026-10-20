@@ -17,7 +17,11 @@
     "backup:verify": "npm --prefix apps/server run backup:verify --",
     "backup:restore": "npm --prefix apps/server run backup:restore --",
     "lint": "npm --prefix apps/web run lint",
-    "test": "npm --prefix apps/server run test"
+    "test": "npm --prefix apps/server run test",
+    "storage:check": "npm --prefix apps/server run storage:check --",
+    "storage:quarantine": "npm --prefix apps/server run storage:quarantine --",
+    "backup:preflight": "npm --prefix apps/server run backup:preflight --",
+    "backup:staging": "npm --prefix apps/server run backup:staging --"
   },
   "license": "MIT",
   "type": "module"

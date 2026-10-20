@@ -1,0 +1,126 @@
+﻿CH-01 observed: {"shellPresent":false,"cardVisible":true,"heading":"ยินดีต้อนรับกลับ","inputIds":["username","password"],"inputTypes":["text","password"],"submitText":"เข้าสู่ระบบ","bodyText":"P\nPERSONAL KNOWLEDGE HUB\nยินดีต้อนรับกลับ\n\nเข้าสู่ระบบเพื่อเปิดพื้นที่จัดเก็บความรู้ส่วนตัว\n\nชื่อผู้ใช้\nรหัสผ่าน\nเข้าสู่ระบบ\n\nบัญชีผู้ใช้จัดการโดยผู้ดูแลระบบ"}
+CH-01 PASS {"shellPresent":false,"cardVisible":true,"heading":"ยินดีต้อนรับกลับ","inputIds":["username","password"],"inputTypes":["text","password"],"submitText":"เข้าสู่ระบบ","bodyText":"P\nPERSONAL KNOWLEDGE HUB\nยินดีต้อนรับกลับ\n\nเข้าสู่ระบบเพื่อเปิดพื้นที่จัดเก็บความรู้ส่วนตัว\n\nชื่อผู้ใช้\nรหัสผ่าน\nเข้าสู่ระบบ\n\nบัญชีผู้ใช้จัดการโดยผู้ดูแลระบบ"}
+screenshot C:\Users\_phontakonnn\Documents\Wed_Phontakon\.tmp-acceptance-20261020\evidence\ch01-login-desktop.png
+CH-01-console PASS []
+CH-02-validation PASS {"userInvalid":true,"passInvalid":true,"formInvalid":true,"stillSignedOut":true,"submittedFlag":false}
+CH-02 bad login: {"alertText":"ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง","roleAlert":"alert","stillSignedOut":true,"passwordType":"password"}
+CH-02-bad-credentials PASS {"alertText":"ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง","roleAlert":"alert","stillSignedOut":true,"passwordType":"password"}
+CH-02-console PASS []
+CH-02 good login: {"account":"manual-ui-admin","viewTitle":"โน้ตของฉัน","pressed":["โน้ต"],"listTitles":["Manual UI test note A (edited)"],"emptyState":""}
+CH-02-login PASS {"account":"manual-ui-admin","viewTitle":"โน้ตของฉัน","pressed":["โน้ต"],"listTitles":["Manual UI test note A (edited)"],"emptyState":""}
+CH-02-login-console PASS []
+invalid cookie set: {"success":true} jar: ["pkh_session@127.0.0.1"]
+invalid session: {"loginView":true,"meStatus":401,"bodyText":"P\nPERSONAL KNOWLEDGE HUB\nยินดีต้อนรับกลับ\n\nเข้าสู่ระบบเพื่อเปิดพื้นที่จัดเก็บความรู้ส่วนตัว\n\nชื่อผู้ใช้\nรหัสผ่าน\nเข้าสู่ระบบ\n\nบัญชีผู้ใช้จัดการโดยผู้ดูแลระบบ"}
+AUTH-invalid-session PASS {"loginView":true,"meStatus":401,"bodyText":"P\nPERSONAL KNOWLEDGE HUB\nยินดีต้อนรับกลับ\n\nเข้าสู่ระบบเพื่อเปิดพื้นที่จัดเก็บความรู้ส่วนตัว\n\nชื่อผู้ใช้\nรหัสผ่าน\nเข้าสู่ระบบ\n\nบัญชีผู้ใช้จัดการโดยผู้ดูแลระบบ"}
+AUTH-invalid-session-console PASS []
+CH-16 logout: {"loginView":true,"shell":false,"meStatus":401}
+CH-16 PASS {"loginView":true,"shell":false,"meStatus":401}
+CH-16-console PASS []
+session restored for later scenarios: true
+---DIAG---
+{
+  "consoleErrors": [
+    {
+      "type": "log-error",
+      "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+      "url": "http://127.0.0.1:3459/api/auth/me"
+    },
+    {
+      "type": "log-error",
+      "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+      "url": "http://127.0.0.1:3459/api/auth/me"
+    }
+  ],
+  "consoleWarnings": [],
+  "exceptions": [],
+  "csp": [],
+  "httpErrors": [
+    {
+      "status": 401,
+      "url": "http://127.0.0.1:3459/api/auth/me",
+      "type": "Fetch"
+    },
+    {
+      "status": 401,
+      "url": "http://127.0.0.1:3459/api/auth/me",
+      "type": "Fetch"
+    }
+  ],
+  "loadingFailed": [],
+  "searches": [],
+  "favorites": [
+    {
+      "url": "http://127.0.0.1:3459/api/favorites/note/ec9ad772-f2a2-48a8-b8c8-420f16c7e738",
+      "method": "GET",
+      "at": 1792480579518
+    },
+    {
+      "url": "http://127.0.0.1:3459/api/favorites/note/ec9ad772-f2a2-48a8-b8c8-420f16c7e738",
+      "method": "GET",
+      "at": 1792480579606
+    }
+  ],
+  "files": [],
+  "external": []
+}
+---RESULT-JSON---
+{
+  "chromePid": 27076,
+  "results": [
+    {
+      "id": "CH-01",
+      "status": "PASS",
+      "detail": "{\"shellPresent\":false,\"cardVisible\":true,\"heading\":\"ยินดีต้อนรับกลับ\",\"inputIds\":[\"username\",\"password\"],\"inputTypes\":[\"text\",\"password\"],\"submitText\":\"เข้าสู่ระบบ\",\"bodyText\":\"P\\nPERSONAL KNOWLEDGE HUB\\nยินดีต้อนรับกลับ\\n\\nเข้าสู่ระบบเพื่อเปิดพื้นที่จัดเก็บความรู้ส่วนตัว\\n\\nชื่อผู้ใช้\\nรหัสผ่าน\\nเข้าสู่ระบบ\\n\\nบัญชีผู้ใช้จัดการโดยผู้ดูแลระบบ\"}"
+    },
+    {
+      "id": "CH-01-console",
+      "status": "PASS",
+      "detail": "[]"
+    },
+    {
+      "id": "CH-02-validation",
+      "status": "PASS",
+      "detail": "{\"userInvalid\":true,\"passInvalid\":true,\"formInvalid\":true,\"stillSignedOut\":true,\"submittedFlag\":false}"
+    },
+    {
+      "id": "CH-02-bad-credentials",
+      "status": "PASS",
+      "detail": "{\"alertText\":\"ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง\",\"roleAlert\":\"alert\",\"stillSignedOut\":true,\"passwordType\":\"password\"}"
+    },
+    {
+      "id": "CH-02-console",
+      "status": "PASS",
+      "detail": "[]"
+    },
+    {
+      "id": "CH-02-login",
+      "status": "PASS",
+      "detail": "{\"account\":\"manual-ui-admin\",\"viewTitle\":\"โน้ตของฉัน\",\"pressed\":[\"โน้ต\"],\"listTitles\":[\"Manual UI test note A (edited)\"],\"emptyState\":\"\"}"
+    },
+    {
+      "id": "CH-02-login-console",
+      "status": "PASS",
+      "detail": "[]"
+    },
+    {
+      "id": "AUTH-invalid-session",
+      "status": "PASS",
+      "detail": "{\"loginView\":true,\"meStatus\":401,\"bodyText\":\"P\\nPERSONAL KNOWLEDGE HUB\\nยินดีต้อนรับกลับ\\n\\nเข้าสู่ระบบเพื่อเปิดพื้นที่จัดเก็บความรู้ส่วนตัว\\n\\nชื่อผู้ใช้\\nรหัสผ่าน\\nเข้าสู่ระบบ\\n\\nบัญชีผู้ใช้จัดการโดยผู้ดูแลระบบ\"}"
+    },
+    {
+      "id": "AUTH-invalid-session-console",
+      "status": "PASS",
+      "detail": "[]"
+    },
+    {
+      "id": "CH-16",
+      "status": "PASS",
+      "detail": "{\"loginView\":true,\"shell\":false,\"meStatus\":401}"
+    },
+    {
+      "id": "CH-16-console",
+      "status": "PASS",
+      "detail": "[]"
+    }
+  ]
+}

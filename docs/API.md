@@ -11,8 +11,8 @@
 
 ### 1.1 CSRF / origin check
 
-Every request whose method is **not** `GET` must satisfy all three conditions, including the
-otherwise-public login route:
+Every request whose method is **not** `GET` **or `HEAD`** must satisfy all three conditions,
+including the otherwise-public login route:
 
 | Check | Required value |
 | --- | --- |
@@ -21,7 +21,9 @@ otherwise-public login route:
 | `X-PKH-Request` header | Literal `1` |
 
 Any failure returns **403** with `{ "error": "คำขอไม่ผ่านการตรวจสอบแหล่งที่มา" }`.
-`GET` requests are not origin-checked, but are still subject to authentication.
+`GET` and `HEAD` requests are not origin-checked, but are still subject to authentication. `HEAD`
+was exempted with the file-download route: it is a safe method that returns metadata only, and
+requiring a custom header made it unusable from a browser address bar or a download manager.
 
 ### 1.2 Authentication
 
@@ -67,6 +69,16 @@ attempts receive an exponential delay starting at 1 s and capped at 60 s, return
 `Retry-After` header in seconds. State is memory-only: it resets on restart and is not shared
 across processes.
 
+### 1.6 Security headers
+
+`@fastify/helmet` is registered globally. Responses include a self-only Content Security Policy
+(`default-src 'self'`, `script-src 'self'`, `style-src 'self'`), `frame-ancestors 'none'`,
+`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, and a
+deny-all `Permissions-Policy` (`camera`, `microphone`, `geolocation`, `payment`, `usb`). HSTS is
+intentionally disabled because the local Fastify listener uses HTTP loopback; if HTTPS termination
+is introduced later, its trust and HSTS policy require a separate review. API tests verify header
+values; browser compatibility has not been tested.
+
 ---
 
 ## 2. Endpoints
@@ -80,7 +92,9 @@ Liveness probe. Intentionally minimal; no version, path, or configuration disclo
 { "status": "ok", "db": "ready", "uptimeSeconds": 1234.5 }
 ```
 
-`db` is a static string; the handler does not execute a query against SQLite.
+The handler executes `SELECT 1` against SQLite before returning 200. A failed probe is logged
+internally and returns **503** with `{ "status": "unavailable", "db": "unavailable" }`; database
+errors and paths are not included in the response.
 
 ---
 
@@ -328,8 +342,7 @@ unknown fields are rejected. The same length limits and title trimming as create
 ### `DELETE /api/notes/:noteId`
 
 Soft-deletes an owned note by setting `deleted_at` and `updated_at`. The record is retained; it is
-removed from active lists and the Notes FTS index. This slice does not yet expose trash listing or
-restore.
+removed from active lists and the Notes FTS index.
 
 - **204** — no body.
 - **400** for a malformed UUID.
@@ -362,22 +375,111 @@ Authentication and CSRF checks apply.
 
 There is no automatic cleanup job. The UI's 30-day retention notice is informational only.
 
+## 4. Bookmarks
+
+Every Bookmarks endpoint requires an authenticated session and scopes all reads and writes to its
+owner. Other-owner and missing bookmark IDs both return **404**. All mutating requests require the
+global CSRF headers in §1.1. Metadata is entered by the user; the server never fetches bookmark
+URLs or follows redirects.
+
+### `GET /api/bookmarks?page=1&pageSize=50`
+
+Returns the current user's bookmarks, ordered by most recently updated first. `page` is 1–1,000,000;
+`pageSize` is 1–200. Both are optional; unknown query parameters and invalid ranges return **400**.
+The paginated response includes `bookmarks`, `page`, `pageSize`, and owner-scoped `total`.
+
+### `POST /api/bookmarks`
+
+Creates a bookmark. Body fields: required `title` (1–200 characters) and `url` (1–2,048
+characters), optional `description` (up to 5,000 characters). Unknown properties are rejected.
+Title and URL are trimmed. URL must parse as HTTP or HTTPS and must not contain username/password
+credentials; its stored value is normalized by the WHATWG URL parser.
+
+```json
+{ "title": "PKH", "url": "https://example.com/guide", "description": "Read later" }
+```
+
+Returns **201** with `{ "bookmark": { "id", "title", "url", "description", "createdAt", "updatedAt" } }`.
+
+### `GET /api/bookmarks/:bookmarkId`
+
+Returns an owned bookmark. IDs must match the UUID-like 36-character route validation pattern.
+Malformed IDs return **400**; missing and other-owner IDs return **404**.
+
+### `PATCH /api/bookmarks/:bookmarkId`
+
+Updates one or more of `title`, `url`, and `description`. At least one property is required;
+validation and URL rules match create. Returns **200** with `{ "bookmark": { ... } }`; returns
+**404** for missing or other-owner IDs.
+
+### `DELETE /api/bookmarks/:bookmarkId`
+
+Permanently deletes an owned bookmark and returns **204**. Missing or other-owner IDs return **404**.
+
+## 5. Categories, tags, and note relations
+
+Every route in this section requires an authenticated session. Reads and writes are scoped to that
+session owner; mutations also require the CSRF headers in §1.1. Names are trimmed, NFC-normalized,
+1–80 Unicode code points, and unique per owner without regard to ASCII case. Unknown body and query
+properties are rejected.
+
+### `GET /api/categories?page=1&pageSize=50` and `GET /api/tags?page=1&pageSize=50`
+
+Return an owner-scoped page (`categories` or `tags`) ordered by name, with `page`, `pageSize`, and
+`total`. The default page size is 50; the maximum is 200. Invalid pagination returns **400**.
+
+### `POST /api/categories` and `POST /api/tags`
+
+Create a category or tag with `{ "name": "งาน" }`. Returns **201** with `{ "category": { ... } }`
+or `{ "tag": { ... } }`. A duplicate name for the same owner returns **409**; invalid names return
+**400**.
+
+### `PATCH /api/categories/:itemId` and `PATCH /api/tags/:itemId`
+
+Rename an owned item with `{ "name": "งานด่วน" }`. Returns **200** with the singular item object.
+Malformed IDs or invalid names return **400**; a missing or other-owner item returns **404**; a
+duplicate name returns **409**. Renaming preserves note relationships.
+
+### `DELETE /api/categories/:itemId` and `DELETE /api/tags/:itemId`
+
+Delete an owned category/tag and its note relationships; returns **204**. Missing or other-owner
+IDs return **404**. This operation does not delete notes.
+
+### `GET /api/notes/:noteId/taxonomy`
+
+Returns `{ "categories": [...], "tags": [...] }` for an owned active note. Notes in Trash and notes
+owned by another user return **404**.
+
+### `PUT /api/notes/:noteId/taxonomy`
+
+Replace the note's relationships using arrays of owned IDs:
+
+```json
+{ "categoryIds": ["<uuid>"], "tagIds": ["<uuid>"] }
+```
+
+The note and every referenced category/tag must belong to the current owner. Each array allows at
+most 100 unique UUID-like IDs. Validation failures return **400**; a missing, trashed, or other-owner
+note returns **404**. The replacement is transactional: invalid references leave existing
+relationships unchanged. A successful replacement returns **204**. Soft deletion and restore retain
+relationships; permanent note deletion cascades them.
+
 ---
 
-## 4. Deliberately absent endpoints
+## 6. Deliberately absent endpoints
 
 | Route | Why |
 | --- | --- |
 | `POST /api/auth/register` | No public signup. Admin creation is CLI-only (`npm run bootstrap:admin`). |
 | Password reset / email flows | Not implemented; no mail transport. |
-| Bookmarks, categories, tags, files | Not implemented yet. |
+| Favorites, files | Not implemented yet. |
 
 Requesting `POST /api/auth/register` without a session returns **401**, not 404, because the
 default-deny hook runs before routing.
 
 ---
 
-## 5. Calling the API from a browser
+## 7. Calling the API from a browser
 
 ```js
 await fetch('/api/auth/login', {
@@ -401,7 +503,7 @@ In Vite development, `/api` is proxied to the loopback Fastify server. Start the
 the CSRF origin/host checks intentionally remain enabled. In production, Fastify serves the web
 build and API from the same origin.
 
-## 6. Environment variables
+## 8. Environment variables
 
 | Variable | Required | Effect |
 | --- | --- | --- |
@@ -409,10 +511,17 @@ build and API from the same origin.
 | `EXPECTED_ORIGIN` | no | Defaults to `http://127.0.0.1:3001`. Controls CSRF comparison and cookie `Secure`. |
 | `PORT` | no | Defaults to `3001`. |
 | `NODE_ENV` | no | `test` disables the logger. |
+| `BACKUP_ENCRYPTION_KEY` | no | Canonical Base64 for a 32-byte AES-256-GCM key. When configured, new backups and restore safety copies are encrypted; needed to verify/restore encrypted backups. |
+| `BACKUP_ENCRYPTION_REQUIRED` | no | Set to `true` to fail backup creation and restore if the key is missing or malformed; there is no plaintext fallback in required mode. |
 
 `DATA_DIR` is validated at startup: a missing or relative path aborts the process.
 
-## 7. Proposed file API (design only; not implemented)
+## 9. Proposed file API (design only; not implemented)
+
+> **Superseded for the MVP routes.** The streaming single-request upload, `GET`/`HEAD`/`DELETE`
+> file routes, Range handling and filename rules are implemented; see §11. The Tus resumable
+> upload routes (`/api/uploads/*`), 10 GiB limit, and PDF preview policy in this section remain
+> unimplemented design. Read §11 for the contract that actually exists.
 
 This section is a proposal based on §6 of `MASTER_PROMPT.md`; none of these routes, headers, or
 behaviors exist in the current server. It must not be treated as an implemented contract.
@@ -575,3 +684,391 @@ HEAD returns headers without body. The route must not leak partial file bytes be
   response. Do not create a completed metadata row or expose a partial object. A resumable PATCH
   failure leaves the durable offset unchanged; only cleanup code proven to own an inactive expired
   temporary file may remove it.
+
+## 10. Favorites (implemented)
+
+Favorites are owner-scoped and polymorphic over notes and bookmarks. The owner always comes from
+the session; no request body, query parameter, or path segment can select another owner.
+
+| Method and path | Behavior |
+| --- | --- |
+| `GET /api/favorites?page&pageSize` | Paginated list (default 50, maximum 200). Items are `{ itemType, itemId, title, subtitle, createdAt, updatedAt }`. `subtitle` is the note content or the bookmark URL. Only favorites whose target is still visible are returned: a note in the trash and a deleted bookmark are hidden. |
+| `GET /api/favorites/:itemType/:itemId` | `{ "favorited": true \| false }`. `itemType` must be `note` or `bookmark` (schema **400** otherwise). |
+| `PUT /api/favorites/:itemType/:itemId` | Idempotent add, **204**. **404** when the target does not exist, belongs to another user, or is a note already in the trash. |
+| `DELETE /api/favorites/:itemType/:itemId` | **204** when removed, **404** when no such favorite exists for this owner. |
+
+Lifecycle rules:
+
+- Soft-deleting a note keeps its favorite row, so restoring the note restores the favorite without
+  a second request. The list hides it while it is trashed.
+- Permanently deleting a note, deleting a bookmark, or deleting the user removes the favorite rows
+  through SQLite triggers and foreign keys.
+- Adding the same favorite twice does not create duplicates or change `createdAt`.
+
+## 11. Files (implemented)
+
+Files are stored on local disk under `DATA_DIR/objects`; metadata is in SQLite. See
+`ARCHITECTURE.md` for the storage layout and `SCHEMA.md` §9 for the table. File routes require
+`DATA_DIR`; without it they return **503**.
+
+### 11.1 `POST /api/files`
+
+Streaming single-request upload. The request body is the raw file (`Content-Type:
+application/octet-stream`); it is never buffered in memory or encoded as JSON/base64.
+
+| Header | Contract |
+| --- | --- |
+| `X-File-Name` | Filename percent-encoded exactly once. The server decodes once, normalizes to NFC, and validates. |
+| `Content-Length` | Required positive integer. Missing, zero, or non-integer values return **411**. |
+| `Content-Type` | Must be `application/octet-stream`; the declared media type is not trusted for storage. |
+
+Limits and preconditions:
+
+- `MAX_UPLOAD_BYTES` (default 1 GiB, `1073741824`) caps a single file. Larger declarations return
+  **413**.
+- At most 2 uploads may be in flight; a third returns **429**.
+- Free space must remain at least `max(MAX_UPLOAD_BYTES, 5% of the volume)` after the declared
+  size; otherwise **507**.
+- Filenames containing `/`, `\`, `:`, control characters, or other Windows-invalid characters are
+  rejected with **400**, as are `.`/`..`, trailing dot or space, names longer than 255 UTF-16 code
+  units, and reserved device basenames with or without an extension (`CON`, `CON.txt`, `NUL`,
+  `COM1`–`COM9`, `LPT1`–`LPT9`, `PRN`, `AUX`). Invalid names are rejected, never repaired.
+- Empty files and byte counts that differ from `Content-Length` return **400**.
+- The bytes are written to `DATA_DIR/tmp/<uuid>.part`, hashed with SHA-256 while streaming,
+  fsynced, then renamed to `DATA_DIR/objects/<first two id characters>/<uuid>`. The metadata row is
+  inserted only after the rename. A failed upload leaves no metadata row and no object.
+
+Success is **201** with:
+
+```json
+{ "file": { "id": "<uuid>", "displayName": "report.pdf", "sizeBytes": 1234,
+  "sha256": "<64 hex>", "mediaType": "application/pdf", "createdAt": 1760000000000,
+  "downloadUrl": "/api/files/<uuid>" } }
+```
+
+If the object rename succeeds but the metadata insert fails, the object is kept and logged as an
+orphan (never auto-deleted) and the response is a generic Thai **500**.
+
+### 11.2 `GET` and `HEAD /api/files/:fileId`
+
+Owner-scoped: a missing ID and another user's ID both return **404**. Bytes are only opened after
+that check. If the metadata row exists but the object file is missing, the response is a generic
+**500** (`ไม่สามารถเข้าถึงไฟล์ได้ในขณะนี้`) and the discrepancy is logged; no path is returned.
+
+Response headers:
+
+| Header | Value |
+| --- | --- |
+| `Content-Type` | Server-detected from magic bytes; never the upload's declared type |
+| `X-Content-Type-Options` | `nosniff` |
+| `Content-Disposition` | `inline` only for JPEG, PNG, GIF, WebP, AVIF, MP4, WebM, MP3, OGG, WAV; `attachment` for everything else, including HTML, SVG, PDF and unknown bytes |
+| `Accept-Ranges` | `bytes` |
+| `Cache-Control` | `private, no-store` |
+
+Range handling for a single range:
+
+- No `Range` → **200** with the full body.
+- `bytes=start-end`, `bytes=start-`, `bytes=-suffix` → **206** with `Content-Range` and only that
+  interval.
+- Start at or beyond the end, or a zero suffix → **416** with `Content-Range: bytes */<size>`.
+- Malformed values and multiple ranges (`bytes=0-1,3-4`) → **416** as well; ranges are never
+  silently collapsed.
+
+`HEAD` returns the same headers with no body. It is not origin/CSRF-checked (see §1.1) but still
+requires a session.
+
+### 11.3 `DELETE /api/files/:fileId`
+
+Deletes the metadata row first, then the object; **204** on success, **404** for a missing or
+other-owner ID. If the object was already absent, the row is still removed and the discrepancy is
+logged.
+
+### 11.4 `GET /api/files?page&pageSize`
+
+Paginated metadata list (default 50, maximum 200), newest first, each item including
+`downloadUrl`. Owner-scoped. No search, preview generation, or resumable-upload state exists.
+
+## 12. Life OS (implemented)
+
+All routes below require a session cookie and, for anything other than `GET`/`HEAD`, the same CSRF
+rules as §1.1 (`Origin` + `Host` + `X-PKH-Request: 1`). Every response is owner-scoped: a row that
+belongs to another account is reported as **404**, never **403**. Text fields are NFC-normalized and
+control-character-rejected before they reach SQLite; a rejected value returns **400**.
+
+### 12.1 People
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/people?page=1&pageSize=50&group=family&q=…` | Paginated list, ordered by relationship group then name. `pageSize` ≤ 100. `q` matches name, role, likes, allergies, gifts and memo with `nfc()` + `instr()`. |
+| `POST` | `/api/people` | **201** `{ person }`. Requires `name` (1–120) and `relationshipGroup` (`family` \| `partner` \| `friend`). |
+| `GET` | `/api/people/:personId` | `{ person }` or **404**. |
+| `PATCH` | `/api/people/:personId` | Partial update of any writable field; `{ person }` or **404**. |
+| `DELETE` | `/api/people/:personId` | **204**; `note_people` rows cascade and `reminders.linked_person_id` becomes `NULL`. |
+| `GET` | `/api/people/:personId/notes` | Notes linked through `note_people`, newest first. |
+
+Writable person fields: `name`, `relationshipGroup`, `roleLabel` (≤ 80), `avatarFileId`,
+`avatarPreset` (≤ 40), `birthdayOrAnniversary` (empty or `YYYY-MM-DD`), `phone` (≤ 40),
+`favoritesAndLikes`, `allergiesAndMedical`, `giftIdeasAndSizes` (each ≤ 4000), `memo` (≤ 8000).
+`avatarFileId` must be a `files` row owned by the same account, otherwise **400**; the
+`people_avatar_owner_*` triggers enforce the same rule at the storage layer.
+
+### 12.2 Reminders
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/reminders` | All reminders for the account, ordered by `target_date`. |
+| `GET` | `/api/reminders/upcoming?days=60` | Incomplete reminders whose `target_date` falls within `days` (default 60) of today; powers the bell badge. |
+| `POST` | `/api/reminders` | **201** `{ reminder }`. Requires `title` and an ISO `targetDate`. |
+| `PATCH` | `/api/reminders/:reminderId` | Partial update including `isCompleted`; `{ reminder }` or **404**. |
+| `DELETE` | `/api/reminders/:reminderId` | **204** or **404**. |
+
+`category` is one of `birthday`, `anniversary`, `health`, `backup`, `other`. `priority` is `low`,
+`normal` (default) or `high`. `notifyDaysBefore` is clamped to 0–365. `linkedPersonId` must be a
+person owned by the caller, otherwise **400**; an invalid or missing `targetDate` is **400**.
+
+### 12.3 Timeblocks
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/timeblocks?date=YYYY-MM-DD` | Blocks for one day, ordered by `time_range`. Defaults to today. |
+| `POST` | `/api/timeblocks` | **201** `{ timeblock }`; requires `timeRange`, `title` and `lifeArea`. |
+| `PATCH` | `/api/timeblocks/:blockId` | Partial update including `isDone`. |
+| `DELETE` | `/api/timeblocks/:blockId` | **204** or **404**. |
+
+`lifeArea` is `health`, `focus_work`, `family`, `growth` or `other`. `timeRange` is display text
+such as `06:30 - 07:30`; the server does not parse it and does not reject overlaps.
+
+### 12.4 Habits
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/habits` | All habits, oldest first. |
+| `POST` | `/api/habits` | **201** `{ habit }`; requires `title`, optional `dailyTarget` (1–1000) and `unit`. |
+| `PATCH` | `/api/habits/:habitId` | Partial update of `title`, `dailyTarget`, `unit`. |
+| `POST` | `/api/habits/:habitId/check` | Increments `current_count` by one, capped at `daily_target`, and updates `streak_days`. |
+| `DELETE` | `/api/habits/:habitId` | **204** or **404**. |
+
+The streak rule: checking on the next calendar day adds one, checking twice on the same day leaves
+it unchanged, and a gap resets it to 1. Comparison is done on ISO date strings, so the server does
+not apply a timezone.
+
+### 12.5 Command-palette search
+
+`GET /api/search?q=…&limit=8` returns `{ notes, people, reminders, query }`. `limit` is 1–20 per
+group. Notes are matched on title and content, people on name, role, likes, allergies, gifts and
+memo, and reminders on title and category — all through `nfc()` + `instr()` so Thai text, mixed
+scripts and NFD input behave the same as the notes search in §3. Soft-deleted notes are excluded.
+
+### 12.6 Taxonomy extension
+
+`GET /api/notes/:noteId/taxonomy` now also returns `people: [{ id, name, roleLabel }]`, and
+`PUT /api/notes/:noteId/taxonomy` accepts an optional `personIds` array that replaces the note's
+person links inside the same transaction as categories and tags. An unknown or other-owner person
+id returns **404** and leaves every relation unchanged.
+
+## 13. Work core (implemented)
+
+Inbox, tasks, projects and goals. Same session, CSRF and owner rules as §1.1 and §12: a row owned by
+another account is **404**, never **403**; text is NFC-normalized and control-character-rejected;
+dates are `YYYY-MM-DD` or **400**.
+
+### 13.1 Inbox
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/inbox?status=new\|triaged\|archived\|all&page&pageSize` | Defaults to `new`. Returns `{ items, total, newCount }`; `newCount` drives the sidebar badge. |
+| `POST` | `/api/inbox` | **201** `{ item }`. Requires `body` (1–4000). `kind` is inferred as `url` when the body is a bare http(s) URL, otherwise `text`. |
+| `PATCH` | `/api/inbox/:itemId` | Partial `body`, `kind`, `status`. |
+| `DELETE` | `/api/inbox/:itemId` | **204** or **404**. |
+| `POST` | `/api/inbox/:itemId/convert` | **201** `{ item, target, targetId }`; marks the item `triaged` in the same transaction. |
+
+`convert` body: `{ target: 'note'|'task'|'project'|'bookmark'|'reminder', title?, url?, targetDate? }`.
+
+- `note` → a note whose title is the first line and whose content is the full original body.
+- `task` → a `todo` task; `project` → an `active` project; `reminder` → a reminder (defaults to today
+  when `targetDate` is omitted).
+- `bookmark` requires a body or `url` starting with `http://`/`https://`, otherwise **400** and the
+  item stays `new`.
+- Converting an already converted item returns **409**; an archived item returns **409**. The inbox
+  row keeps the original text forever.
+
+### 13.2 Tasks
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/tasks?status=open\|todo\|doing\|waiting\|done\|cancelled\|all&due=today\|overdue\|week\|none&projectId&goalId&page&pageSize` | `status` defaults to `open` (todo/doing/waiting). Returns `{ tasks, total, today }`. |
+| `GET` | `/api/tasks/today` | `{ today, overdue, dueToday, upcoming }`; `upcoming` is the next 7 days, capped at 20. |
+| `POST` | `/api/tasks` | **201** `{ task }`. |
+| `GET` | `/api/tasks/:taskId` | `{ task, checklist }`. |
+| `PATCH` | `/api/tasks/:taskId` | `{ task, nextTask }`. |
+| `DELETE` | `/api/tasks/:taskId` | **204** or **404**. |
+| `POST` | `/api/tasks/:taskId/checklist` | **201** `{ item }`; `position` defaults to the next free slot. |
+| `PATCH` | `/api/tasks/:taskId/checklist/:itemId` | `{ item }`; accepts `title` and `isDone`. |
+| `DELETE` | `/api/tasks/:taskId/checklist/:itemId` | **204** or **404**. |
+
+Writable task fields: `title`, `detail`, `status`, `priority` (`low|normal|high|urgent`), `dueDate`,
+`startDate`, `projectId`, `goalId`, `personId`, `recurrence` (`none|daily|weekly|monthly|yearly`).
+A `projectId`/`goalId`/`personId` owned by another account is **400**.
+
+**Recurrence:** when a PATCH moves a task into `done` and it has a non-`none` recurrence with a due
+date, the server inserts the next occurrence (daily +1, weekly +7, monthly/yearly clamped to the
+month length) and returns it as `nextTask`. Re-saving an already-done task returns
+`nextTask: null`, so the operation is idempotent. `completedAt` is set on entry to `done` and cleared
+when the task leaves it.
+
+Checklist items are owner-scoped through their parent task; a foreign task id is **404**.
+Completing every checklist item does **not** change the parent task's status.
+
+### 13.3 Projects
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/projects?status=active\|planned\|paused\|done\|archived\|all&page&pageSize` | Defaults to `active`. Each row carries `taskTotal` and `taskDone`. |
+| `POST` | `/api/projects` | **201** `{ project }`; requires `name`. |
+| `GET` | `/api/projects/:projectId` | `{ project }` or **404**. |
+| `PATCH` | `/api/projects/:projectId` | `{ project }`; moving to `done` stamps `completedAt`, moving away clears it. |
+| `DELETE` | `/api/projects/:projectId` | **204**; its tasks survive with `project_id = NULL`. |
+| `GET` | `/api/projects/:projectId/tasks` | All tasks in the project, due-date order. |
+
+The UI percentage is `taskDone / taskTotal`; the server returns the raw counts and never a score.
+
+### 13.4 Goals
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/goals?status=active\|achieved\|dropped\|all` | Defaults to `active`; each row includes `progressPercent` and `activeProjects`. |
+| `POST` | `/api/goals` | **201** `{ goal }`; requires `title`. |
+| `PATCH` | `/api/goals/:goalId` | `{ goal }`; `currentValue` is how progress moves. |
+| `DELETE` | `/api/goals/:goalId` | **204** or **404**. |
+
+`progressPercent` is `null` unless `targetValue` is a number greater than zero — a goal without a
+measurable target never shows a percentage. When present it is clamped to 0–100.
+
+### 13.5 Unified search
+
+`GET /api/search` (documented in §12.5) now also returns `tasks`, `projects` and `goals`, matched on
+their title/name plus detail/description/outcome/metric with the same `nfc()` + `instr()` approach.
+All groups stay owner-scoped.
+
+## 14. Dashboard (implemented)
+
+`GET /api/dashboard` — one owner-scoped aggregate for the home view. No query parameters.
+
+```json
+{
+  "today": "2026-10-20",
+  "counts": {
+    "dueToday": 1, "overdue": 0, "openTasks": 3, "reminders": 0, "inbox": 2,
+    "projects": 1, "goals": 2, "habitsOutstanding": 1, "notes": 5,
+    "upcomingWindowEnd": "2026-10-27"
+  },
+  "tasks": { "dueToday": [ ... ], "overdue": [ ... ] },
+  "reminders": [ ... ],
+  "timeblocks": { "blocks": [ ... ], "done": 1, "total": 3 },
+  "projects": [ ... ],
+  "goals": [ ... ],
+  "habits": [ ... ],
+  "inbox": { "newCount": 2, "items": [ ... ] },
+  "notes": [ { "id": "...", "title": "...", "updatedAt": 0 } ]
+}
+```
+
+Rules the endpoint guarantees:
+
+- Every query is filtered by `owner_id` taken from the session; there is no client-supplied owner
+  parameter to spoof.
+- `tasks.dueToday` = `due_date = today` and not done/cancelled; `tasks.overdue` = `due_date < today`
+  and not done/cancelled. Both cap at 20 rows.
+- `timeblocks` counts only `block_date = today`.
+- `goals[].progressPercent` is `null` unless `target_value > 0`; no percentage is invented.
+- `projects[].taskTotal` / `taskDone` are raw `COUNT`s, so the UI can label the percentage honestly.
+- `habits` lists only habits that have not reached `daily_target` today or were not checked today.
+- `reminders` covers the next 60 days and excludes completed ones (cap 8).
+- `notes` is the five most recently updated, non-deleted notes.
+- An empty account returns the same shape with empty arrays and zero counts, so the UI never has to
+  distinguish "no data" from "broken response".
+
+## 15. Habit history (implemented)
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/habits/:habitId/check` | Increments today's log by one, capped at `daily_target`. Returns `{ habit, log }`. Idempotent once the target is reached. |
+| `PUT` | `/api/habits/:habitId/logs/:logDate` | Sets the exact count for one day (`{ count }`). `0` deletes the log. Used for corrections and for filling in a past day inside the tracking window. |
+| `GET` | `/api/habits/:habitId/history?from&to&days` | One habit: `{ habit, days, logs, summary }`. `days` defaults to 30, max 400. |
+| `GET` | `/api/habits/history?days=7` | Every habit's recent series in one request, so the UI never fires N queries. |
+
+Rules:
+
+- `count` must be an integer ≥ 0 and ≤ 100000. `0` removes the row rather than storing a zero.
+- A `logDate` after today returns **400**; a `logDate` before the habit's `trackingStartDate` returns
+  **400** as well.
+- `days[]` entries for dates before `trackingStartDate` carry `count: null` and `metTarget: null`.
+  They are **not** reported as zero, because the system did not observe those days.
+- `summary` contains `daysTracked`, `daysLogged`, `daysMetTarget`, `currentStreak`, `bestStreak`, and
+  `weekly` / `monthly` blocks computed from the same logs.
+- `habit.currentCount` and `habit.streakDays` are derived from the logs; `legacyCurrentCount` and
+  `legacyStreakDays` preserve the pre-migration counters.
+
+## 16. Reminder recurrence and snooze (implemented)
+
+`POST /api/reminders` and `PATCH /api/reminders/:reminderId` accept an optional
+`recurrence` (`none|daily|weekly|monthly|yearly`). A non-`none` value also stores
+`recurrenceAnchorDate` = the target date at creation.
+
+`PATCH` now returns `{ reminder, rolledTo }`:
+
+- Completing a **recurring** reminder advances `targetDate` to the next occurrence, keeps
+  `isCompleted` at 0, stamps `lastCompletedAt` and clears `snoozedUntil`. `rolledTo` is the new date;
+  no second row is created.
+- Completing a **one-off** reminder sets `isCompleted = 1` and `rolledTo: null`.
+
+`POST /api/reminders/:reminderId/snooze`
+
+```json
+{ "days": 1, "from": "2026-10-20" }
+```
+
+- `days` is 1–30; the UI offers +1 day, +3 days and +1 week.
+- `from` is the date the client believes is current. If it no longer matches the effective date the
+  request returns **409** with the current `reminder`, which is what makes a retry safe.
+- The response is `{ reminder, snoozedFrom, snoozedUntil }`.
+- Snoozing a completed reminder returns **409**.
+- The effective date is `snoozedUntil ?? targetDate` and is what `/api/reminders/upcoming` uses.
+
+## 17. Dashboard additions
+
+`GET /api/dashboard` now also returns, for each habit in `habits[]`:
+
+- `trackingStartDate`, `legacyCurrentCount`, `legacyStreakDays`
+- `weekLogged` and `weekMetTarget`, computed by one grouped query over `habit_logs` for the last
+  seven days.
+
+Each reminder now carries `recurrence`, `snoozedUntil` and `effectiveDate`, so the dashboard can show
+a snoozed reminder on its real date instead of its original one.
+
+## 18. Entity file links (implemented)
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/entities/:entityType/:entityId/files` | `{ files }` with `displayName`, `mediaType`, `sizeBytes`, `linkedAt`. |
+| `POST` | `/api/entities/:entityType/:entityId/files` | `{ fileId }` → **201** `{ files, created: true }`, or **200** `{ files, created: false }` when the link already exists (idempotent). |
+| `DELETE` | `/api/entities/:entityType/:entityId/files/:fileId` | **204**; removes the link only. |
+
+`entityType` is one of `note`, `task`, `project`, `person`, `bookmark`; anything else is **400**.
+A missing or other-owner entity/file is **404**. The response never contains `object_key`, the object
+path or `sha256`.
+
+## 19. Search filters (implemented)
+
+`GET /api/search` accepts three optional parameters in addition to `q` and `limit`:
+
+- `types` — comma-separated subset of `notes,tasks,projects,goals,people,reminders,bookmarks,files`.
+  An unknown value returns **400**.
+- `from` / `to` — ISO dates. A malformed date (including `2026-13-01`) returns **400**, and
+  `from > to` returns **400**.
+- Date filtering applies to notes (updated), tasks/projects/goals (due date), reminders (effective
+  date) and bookmarks/files (created). `people` has no date and is never date-filtered.
+- Files are matched on `display_name` and `media_type` only — **there is no content extraction**, and
+  the API must not be described as searching inside PDFs or images.
+- Library entries (`notes.kind = 'reference'`) are **not** implemented yet, so they are not a filter
+  value. Vault is out of scope until D-1 is decided.

@@ -1,0 +1,657 @@
+{
+  "base": "http://127.0.0.1:3463",
+  "chrome": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36",
+  "failures": [],
+  "passed": 26,
+  "total": 26,
+  "results": [
+    {
+      "id": "L-00-login-view",
+      "status": "PASS",
+      "detail": {
+        "bodyHasLogin": true
+      }
+    },
+    {
+      "id": "L-01-login",
+      "status": "PASS",
+      "detail": {
+        "shell": true,
+        "account": "lifeos-admin",
+        "profileName": "lifeos-admin",
+        "theme": "emerald",
+        "mode": "light"
+      }
+    },
+    {
+      "id": "L-02-shell-1920",
+      "status": "PASS",
+      "detail": {
+        "viewport": {
+          "w": 1920,
+          "h": 1080
+        },
+        "docScrollWidth": 1920,
+        "horizontalOverflow": false,
+        "sidebar": {
+          "w": 240,
+          "h": 1004,
+          "x": 0
+        },
+        "list": {
+          "w": 340,
+          "h": 1004,
+          "x": 240
+        },
+        "detail": {
+          "w": 1340,
+          "h": 1004,
+          "x": 580
+        },
+        "smallButtons": [],
+        "smallButtonCount": 0,
+        "tinyTextCount": 34,
+        "tinyText": [
+          {
+            "size": 11,
+            "cls": "",
+            "tag": "SMALL",
+            "sample": "Personal Knowledge H"
+          },
+          {
+            "size": 13,
+            "cls": "account-label",
+            "tag": "SPAN",
+            "sample": "lifeos-admin"
+          },
+          {
+            "size": 13,
+            "cls": "button button-quiet",
+            "tag": "BUTTON",
+            "sample": "ออกจากระบบ"
+          },
+          {
+            "size": 10,
+            "cls": "eyebrow",
+            "tag": "SPAN",
+            "sample": "พื้นที่ส่วนตัว"
+          },
+          {
+            "size": 11,
+            "cls": "",
+            "tag": "SMALL",
+            "sample": "วันนี้ขอโฟกัสสิ่งสำค"
+          },
+          {
+            "size": 11,
+            "cls": "profile-meta",
+            "tag": "SMALL",
+            "sample": "0/0 ช่วงวันนี้"
+          }
+        ],
+        "theme": "emerald",
+        "mode": "light"
+      }
+    },
+    {
+      "id": "L-03-person-create",
+      "status": "PASS",
+      "detail": {
+        "notice": "เพิ่มบุคคลแล้ว",
+        "listCount": 1,
+        "listText": "คคุณแม่สมศรีคุณแม่อีก 10 วัน0 โน้ต",
+        "title": "คุณแม่สมศรี",
+        "countdown": "2026-10-30 · อีก 10 วัน",
+        "avatar": "ค",
+        "linkedNotes": "โน้ตที่เชื่อมโยงยังไม่มีโน้ตที่เชื่อมโยงกับบุคคลนี้"
+      }
+    },
+    {
+      "id": "L-04-person-avatar-preset",
+      "status": "PASS",
+      "detail": {
+        "hero": "🌸",
+        "listFirst": "🌸",
+        "notice": "บันทึกข้อมูลบุคคลแล้ว"
+      }
+    },
+    {
+      "id": "L-05-reminder-for-person",
+      "status": "PASS",
+      "detail": {
+        "reminderForPerson": {
+          "notice": "เพิ่มแจ้งเตือนวันสำคัญแล้ว",
+          "badge": "1"
+        },
+        "bellState": {
+          "popover": true,
+          "items": [
+            "วันเกิด คุณแม่สมศรี2026-10-30 · คุณแม่สมศรี"
+          ]
+        }
+      }
+    },
+    {
+      "id": "L-06-schedule",
+      "status": "PASS",
+      "detail": {
+        "beforePlus": "0/8 แก้ว · ต่อเนื่อง 0 วัน",
+        "scheduleState": {
+          "reminderCount": 1,
+          "reminderText": "วันเกิด คุณแม่สมศรี2026-10-30 · วันเกิด · คุณแม่สมศรีลบ",
+          "blockCount": 1,
+          "blockDone": 1,
+          "blockText": "06:30 - 07:30 · วิ่งออกกำลังกายสุขภาพลบ",
+          "habitText": "2/8 แก้ว · ต่อเนื่อง 1 วัน",
+          "habitCount": 1,
+          "summary": "1"
+        }
+      }
+    },
+    {
+      "id": "L-07-habit-plus-one",
+      "status": "PASS",
+      "detail": {
+        "beforePlus": "0/8 แก้ว · ต่อเนื่อง 0 วัน",
+        "after": "2/8 แก้ว · ต่อเนื่อง 1 วัน",
+        "habitBefore": 0,
+        "habitAfter": 2
+      }
+    },
+    {
+      "id": "L-08-command-palette",
+      "status": "PASS",
+      "detail": {
+        "open": true,
+        "items": [
+          "บุคคลคุณแม่สมศรี · คุณแม่"
+        ],
+        "empty": false
+      }
+    },
+    {
+      "id": "L-09-command-navigate",
+      "status": "PASS",
+      "detail": {
+        "paletteClosed": true,
+        "view": "รายการบุคคลสำคัญ",
+        "title": "คุณแม่สมศรี"
+      }
+    },
+    {
+      "id": "L-10-themes",
+      "status": "PASS",
+      "detail": {
+        "distinctAccents": 5,
+        "themeObservations": [
+          {
+            "label": "Emerald Forest",
+            "theme": "emerald",
+            "stored": "emerald",
+            "accent": "#3f7658",
+            "accentSoft": "#edf4ee",
+            "bodyBg": "rgba(0, 0, 0, 0)",
+            "active": "Emerald Forest"
+          },
+          {
+            "label": "Royal Indigo",
+            "theme": "indigo",
+            "stored": "indigo",
+            "accent": "#4f5fa8",
+            "accentSoft": "#eef0fa",
+            "bodyBg": "rgba(0, 0, 0, 0)",
+            "active": "Royal Indigo"
+          },
+          {
+            "label": "Rose Quartz",
+            "theme": "rose",
+            "stored": "rose",
+            "accent": "#a85a72",
+            "accentSoft": "#faedf1",
+            "bodyBg": "rgba(0, 0, 0, 0)",
+            "active": "Rose Quartz"
+          },
+          {
+            "label": "Amber Sunset",
+            "theme": "amber",
+            "stored": "amber",
+            "accent": "#a8742c",
+            "accentSoft": "#fbf1e4",
+            "bodyBg": "rgba(0, 0, 0, 0)",
+            "active": "Amber Sunset"
+          },
+          {
+            "label": "Midnight Violet",
+            "theme": "violet",
+            "stored": "violet",
+            "accent": "#6b4f9e",
+            "accentSoft": "#f1edf9",
+            "bodyBg": "rgba(0, 0, 0, 0)",
+            "active": "Midnight Violet"
+          }
+        ]
+      }
+    },
+    {
+      "id": "L-11-dark-mode",
+      "status": "PASS",
+      "detail": {
+        "mode": "dark",
+        "stored": "dark",
+        "bodyBg": "rgb(15, 20, 16)",
+        "textColor": "rgb(231, 236, 230)",
+        "sidebarBg": "rgb(21, 27, 22)",
+        "darkLuminance": 51,
+        "textLuminance": 697
+      }
+    },
+    {
+      "id": "L-12-profile",
+      "status": "PASS",
+      "detail": {
+        "dialogClosed": true,
+        "name": "เจ้าของคลัง",
+        "status": "วันนี้โฟกัสงานเขียน",
+        "avatar": "🦊",
+        "progressWidth": "100%",
+        "meta": "1/1 ช่วงวันนี้"
+      }
+    },
+    {
+      "id": "L-13-note-person-chip",
+      "status": "PASS",
+      "detail": {
+        "chipPickerState": {
+          "open": true,
+          "text": "เลือกบุคคลที่เกี่ยวข้อง×คุณแม่สมศรี · คุณแม่"
+        },
+        "personChipClicked": true,
+        "noteState": {
+          "chips": [
+            "บุคคลคุณแม่สมศรี×"
+          ],
+          "title": "ของขวัญวันเกิดคุณแม่",
+          "listText": "ของขวัญวันเกิดคุณแม่ซื้อผ้าพันคอสีขาว ไซส์ M ก่อนวันที่ 30 ตุลาคมแก้ไข 20 ต.ค. 2569 17:14"
+        }
+      }
+    },
+    {
+      "id": "L-14-focus-mode",
+      "status": "PASS",
+      "detail": {
+        "focusClass": true,
+        "sidebarWidth": 0,
+        "sidebarDisplay": "none",
+        "detailWidth": 1920
+      }
+    },
+    {
+      "id": "L-15-responsive-1280",
+      "status": "PASS",
+      "detail": {
+        "viewport": {
+          "w": 1280,
+          "h": 900
+        },
+        "docScrollWidth": 1280,
+        "horizontalOverflow": false,
+        "sidebar": {
+          "w": 240,
+          "h": 824,
+          "x": 0
+        },
+        "list": {
+          "w": 340,
+          "h": 824,
+          "x": 240
+        },
+        "detail": {
+          "w": 700,
+          "h": 824,
+          "x": 580
+        },
+        "smallButtons": [],
+        "smallButtonCount": 0,
+        "tinyTextCount": 39,
+        "tinyText": [
+          {
+            "size": 11,
+            "cls": "",
+            "tag": "SMALL",
+            "sample": "Personal Knowledge H"
+          },
+          {
+            "size": 13,
+            "cls": "account-label",
+            "tag": "SPAN",
+            "sample": "lifeos-admin"
+          },
+          {
+            "size": 10,
+            "cls": "notification-badge",
+            "tag": "SPAN",
+            "sample": "1"
+          },
+          {
+            "size": 13,
+            "cls": "button button-quiet",
+            "tag": "BUTTON",
+            "sample": "ออกจากระบบ"
+          },
+          {
+            "size": 10,
+            "cls": "eyebrow",
+            "tag": "SPAN",
+            "sample": "พื้นที่ส่วนตัว"
+          },
+          {
+            "size": 11,
+            "cls": "",
+            "tag": "SMALL",
+            "sample": "วันนี้โฟกัสงานเขียน"
+          }
+        ],
+        "theme": "emerald",
+        "mode": "light"
+      }
+    },
+    {
+      "id": "L-16-responsive-1280-schedule",
+      "status": "PASS",
+      "detail": {
+        "viewport": {
+          "w": 1280,
+          "h": 900
+        },
+        "docScrollWidth": 1280,
+        "horizontalOverflow": false,
+        "sidebar": {
+          "w": 240,
+          "h": 824,
+          "x": 0
+        },
+        "list": {
+          "w": 340,
+          "h": 824,
+          "x": 240
+        },
+        "detail": {
+          "w": 700,
+          "h": 824,
+          "x": 580
+        },
+        "smallButtons": [],
+        "smallButtonCount": 0,
+        "tinyTextCount": 48,
+        "tinyText": [
+          {
+            "size": 11,
+            "cls": "",
+            "tag": "SMALL",
+            "sample": "Personal Knowledge H"
+          },
+          {
+            "size": 13,
+            "cls": "account-label",
+            "tag": "SPAN",
+            "sample": "lifeos-admin"
+          },
+          {
+            "size": 10,
+            "cls": "notification-badge",
+            "tag": "SPAN",
+            "sample": "1"
+          },
+          {
+            "size": 13,
+            "cls": "button button-quiet",
+            "tag": "BUTTON",
+            "sample": "ออกจากระบบ"
+          },
+          {
+            "size": 10,
+            "cls": "eyebrow",
+            "tag": "SPAN",
+            "sample": "พื้นที่ส่วนตัว"
+          },
+          {
+            "size": 11,
+            "cls": "",
+            "tag": "SMALL",
+            "sample": "วันนี้โฟกัสงานเขียน"
+          }
+        ],
+        "theme": "emerald",
+        "mode": "light"
+      }
+    },
+    {
+      "id": "L-17-responsive-768",
+      "status": "PASS",
+      "detail": {
+        "viewport": {
+          "w": 768,
+          "h": 1024
+        },
+        "docScrollWidth": 768,
+        "horizontalOverflow": false,
+        "sidebar": {
+          "w": 320,
+          "h": 1024,
+          "x": -320
+        },
+        "list": {
+          "w": 768,
+          "h": 958,
+          "x": 0
+        },
+        "detail": {
+          "w": 0,
+          "h": 0,
+          "x": 0
+        },
+        "smallButtons": [],
+        "smallButtonCount": 0,
+        "tinyTextCount": 28,
+        "tinyText": [
+          {
+            "size": 11,
+            "cls": "",
+            "tag": "SMALL",
+            "sample": "Personal Knowledge H"
+          },
+          {
+            "size": 13,
+            "cls": "account-label",
+            "tag": "SPAN",
+            "sample": "lifeos-admin"
+          },
+          {
+            "size": 10,
+            "cls": "notification-badge",
+            "tag": "SPAN",
+            "sample": "1"
+          },
+          {
+            "size": 13,
+            "cls": "button button-quiet",
+            "tag": "BUTTON",
+            "sample": "ออกจากระบบ"
+          },
+          {
+            "size": 10,
+            "cls": "eyebrow",
+            "tag": "SPAN",
+            "sample": "พื้นที่ส่วนตัว"
+          },
+          {
+            "size": 11,
+            "cls": "",
+            "tag": "SMALL",
+            "sample": "วันนี้โฟกัสงานเขียน"
+          }
+        ],
+        "theme": "emerald",
+        "mode": "light"
+      }
+    },
+    {
+      "id": "L-18-responsive-390",
+      "status": "PASS",
+      "detail": {
+        "viewport": {
+          "w": 390,
+          "h": 844
+        },
+        "docScrollWidth": 390,
+        "horizontalOverflow": false,
+        "sidebar": {
+          "w": 320,
+          "h": 844,
+          "x": -320
+        },
+        "list": {
+          "w": 390,
+          "h": 778,
+          "x": 0
+        },
+        "detail": {
+          "w": 0,
+          "h": 0,
+          "x": 0
+        },
+        "smallButtons": [],
+        "smallButtonCount": 0,
+        "tinyTextCount": 26,
+        "tinyText": [
+          {
+            "size": 10,
+            "cls": "notification-badge",
+            "tag": "SPAN",
+            "sample": "1"
+          },
+          {
+            "size": 13,
+            "cls": "button button-quiet",
+            "tag": "BUTTON",
+            "sample": "ออกจากระบบ"
+          },
+          {
+            "size": 10,
+            "cls": "eyebrow",
+            "tag": "SPAN",
+            "sample": "พื้นที่ส่วนตัว"
+          },
+          {
+            "size": 11,
+            "cls": "",
+            "tag": "SMALL",
+            "sample": "วันนี้โฟกัสงานเขียน"
+          },
+          {
+            "size": 11,
+            "cls": "profile-meta",
+            "tag": "SMALL",
+            "sample": "1/1 ช่วงวันนี้"
+          },
+          {
+            "size": 11,
+            "cls": "nav-count",
+            "tag": "SPAN",
+            "sample": "1"
+          }
+        ],
+        "theme": "emerald",
+        "mode": "light"
+      }
+    },
+    {
+      "id": "L-19-mobile-drawer",
+      "status": "PASS",
+      "detail": {
+        "open": true,
+        "x": 0,
+        "w": 320,
+        "backdrop": true,
+        "profileVisible": true
+      }
+    },
+    {
+      "id": "L-19b-mobile-list",
+      "status": "PASS",
+      "detail": {
+        "drawerClosed": true,
+        "listWidth": 390,
+        "cards": [
+          "🌸คุณแม่สมศรีคุณแม่อีก 10 วัน1 โน้ต"
+        ]
+      }
+    },
+    {
+      "id": "L-20-mobile-detail",
+      "status": "PASS",
+      "detail": {
+        "isOpen": true,
+        "x": 0,
+        "w": 390,
+        "h": 844,
+        "backVisible": true,
+        "title": "คุณแม่สมศรี",
+        "drawerClosed": true
+      }
+    },
+    {
+      "id": "L-21-mobile-back",
+      "status": "PASS",
+      "detail": {
+        "isOpen": false,
+        "x": 0
+      }
+    },
+    {
+      "id": "L-22-console",
+      "status": "PASS",
+      "detail": {
+        "consoleErrors": [
+          {
+            "type": "network",
+            "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+            "url": "http://127.0.0.1:3463/api/auth/me"
+          }
+        ],
+        "consoleWarnings": [],
+        "exceptions": [],
+        "httpErrors": []
+      }
+    },
+    {
+      "id": "L-23-headers-and-storage",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "csp": "default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'none';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self';upgrade-insecure-requests",
+        "referrerPolicy": "no-referrer",
+        "xFrameOptions": "DENY",
+        "xContentTypeOptions": "nosniff",
+        "permissionsPolicy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()",
+        "hasMetaCsp": false,
+        "dataTheme": "emerald",
+        "dataMode": "light",
+        "storedTheme": "emerald",
+        "storedMode": "light",
+        "storedProfile": "{\"name\":\"เจ้าของคลัง\",\"status\":\"วันนี้โฟกัสงานเขียน\",\"avatarPreset\":\"🦊\",\"avatarFileId\":null}"
+      }
+    },
+    {
+      "id": "L-24-reload-persistence",
+      "status": "PASS",
+      "detail": {
+        "theme": "emerald",
+        "mode": "light",
+        "name": "เจ้าของคลัง",
+        "people": 1,
+        "firstPerson": "🌸คุณแม่สมศรีคุณแม่อีก 10 วัน1 โน้ต"
+      }
+    }
+  ]
+}

@@ -34,7 +34,18 @@
   transitive packages has not been performed.
 - Server package manifest lists Fastify and other plugins, TypeScript, Vitest, and `tsx`. Full direct/transitive license and maintenance review remains incomplete.
 - Password hashing and session-token hashing use Node's built-in `crypto` APIs; no external cryptography package was added.
+- Backup encryption uses Node's built-in `crypto` AES-256-GCM APIs and streaming primitives; no
+  external encryption dependency was added.
 - Tailwind CSS is required by the target stack but is not currently listed in the web package manifest.
+
+### Security headers plugin
+- `@fastify/helmet` is already declared and locked at 13.2.0 (MIT, wrapping Helmet 8.3.0 in the
+  current lockfile) and is now registered globally by `apps/server/src/index.ts`.
+- Fastify 5 compatibility is within the plugin's documented `>=12.x` support range. No package
+  was installed or changed for this implementation.
+- The application config uses a self-only CSP, `nosniff`, frame denial, and a restrictive referrer
+  policy. HSTS remains disabled on the HTTP loopback listener; HTTPS termination requires a
+  separate deployment/security decision.
 
 ## Dependency approval gate
 Before adding/upgrading any dependency, provide package name/version, license, reason, Windows compatibility, native/prebuilt binary status, maintenance/source evidence, and size/runtime burden, then wait for the required explicit approval. The current work did not add or upgrade any dependency.

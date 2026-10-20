@@ -2,7 +2,7 @@ import { StringDecoder } from 'node:string_decoder';
 import { createInterface } from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
 import { bootstrapUser } from './auth.js';
-import { openDataDatabase } from './database.js';
+import { openDataDatabaseSafely } from './safe-open.js';
 
 function readHidden(prompt: string): Promise<string> {
   if (!stdin.isTTY || typeof stdin.setRawMode !== 'function') {
@@ -57,8 +57,11 @@ async function main() {
   const confirmation = await readHidden('Confirm password (hidden): ');
   if (password !== confirmation) throw new Error('Passwords do not match');
 
-  const database = openDataDatabase(dataDirectory);
+  const { database, preMigrationBackupPath } = await openDataDatabaseSafely(dataDirectory);
   try {
+    if (preMigrationBackupPath) {
+      stdout.write('A verified backup was created before applying pending database migrations.\n');
+    }
     await bootstrapUser(database, username, password);
     stdout.write('Administrator account created.\n');
   } finally {

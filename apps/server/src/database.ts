@@ -12,6 +12,11 @@ interface Migration {
   path: string;
 }
 
+export interface OpenDatabaseOptions {
+  migrate?: boolean;
+  enableWal?: boolean;
+}
+
 function discoverMigrations(directory: string): Migration[] {
   const migrations = readdirSync(directory)
     .map((file) => {
@@ -77,16 +82,16 @@ export function applyMigrations(database: Database.Database, directory = migrati
   }
 }
 
-export function openDatabase(filename: string): Database.Database {
+export function openDatabase(filename: string, options: OpenDatabaseOptions = {}): Database.Database {
   const database = new Database(filename);
   try {
     database.pragma('foreign_keys = ON');
     database.pragma('busy_timeout = 5000');
     database.function('nfc', { deterministic: true }, (value: string | null) => value?.normalize('NFC') ?? null);
-    if (filename !== ':memory:') {
+    if (filename !== ':memory:' && options.enableWal !== false) {
       database.pragma('journal_mode = WAL');
     }
-    applyMigrations(database);
+    if (options.migrate !== false) applyMigrations(database);
     return database;
   } catch (error) {
     database.close();
@@ -94,14 +99,35 @@ export function openDatabase(filename: string): Database.Database {
   }
 }
 
-export function openDataDatabase(dataDirectory: string): Database.Database {
+export function hasPendingMigrations(database: Database.Database, directory = migrationsDirectory): boolean {
+  const migrations = discoverMigrations(directory);
+  const appliedRows = database.prepare('SELECT version FROM schema_migrations ORDER BY version').all() as
+    Array<{ version: number }>;
+  for (let index = 0; index < appliedRows.length; index += 1) {
+    if (appliedRows[index].version !== index + 1) {
+      throw new Error(`Applied migration history is not sequential at version ${appliedRows[index].version}`);
+    }
+  }
+  const appliedVersions = new Set(appliedRows.map((row) => row.version));
+  const latestApplied = Math.max(0, ...appliedVersions);
+  const latestAvailable = migrations.at(-1)?.version ?? 0;
+  if (latestApplied > latestAvailable) {
+    throw new Error(`Database schema version ${latestApplied} is newer than the latest available migration ${latestAvailable}`);
+  }
+  return migrations.some((migration) => !appliedVersions.has(migration.version));
+}
+
+export function openDataDatabase(
+  dataDirectory: string,
+  options: OpenDatabaseOptions = {},
+): Database.Database {
   if (!isAbsolute(dataDirectory)) {
     throw new Error('DATA_DIR must be an absolute path');
   }
   const root = resolve(dataDirectory);
   const databaseDirectory = join(root, 'db');
   mkdirSync(databaseDirectory, { recursive: true });
-  return openDatabase(join(databaseDirectory, 'knowledge.sqlite3'));
+  return openDatabase(join(databaseDirectory, 'knowledge.sqlite3'), options);
 }
 
 export function inTransaction<T>(database: Database.Database, operation: () => T): T {
