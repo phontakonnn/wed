@@ -29,6 +29,8 @@ type App = ReturnType<typeof createApp>;
 
 const post = (app: App, url: string, cookie: string, payload: Record<string, unknown>) =>
   app.inject({ method: 'POST', url, headers: { ...csrf, cookie }, payload });
+const put = (app: App, url: string, cookie: string, payload: Record<string, unknown>) =>
+  app.inject({ method: 'PUT', url, headers: { ...csrf, cookie }, payload });
 const patch = (app: App, url: string, cookie: string, payload: Record<string, unknown>) =>
   app.inject({ method: 'PATCH', url, headers: { ...csrf, cookie }, payload });
 const get = (app: App, url: string, cookie: string) =>
@@ -176,4 +178,55 @@ describe('custom categories', () => {
     const getRes = await get(app, `/api/custom-categories/${catId}/items`, user.cookie);
     expect(getRes.statusCode).toBe(404);
   });
+
+  it('assigns and retrieves item custom category via atomic assignment endpoint', async () => {
+    const { app, database } = setup();
+    const user = createUser(database, 'david');
+
+    const catRes = await post(app, '/api/custom-categories', user.cookie, {
+      name: 'เรียนรู้ AI',
+      icon: '🤖',
+    });
+    const catId = catRes.json().category.id;
+
+    // Create note
+    const noteId = randomUUID();
+    database.prepare(`
+      INSERT INTO notes (id, owner_id, title, content, created_at, updated_at)
+      VALUES (?, ?, 'LangChain Guide', 'Prompting details', ?, ?)
+    `).run(noteId, user.id, Date.now(), Date.now());
+
+    // Initially category is null
+    const getInit = await get(app, `/api/custom-categories/items/note/${noteId}`, user.cookie);
+    expect(getInit.statusCode).toBe(200);
+    expect(getInit.json().categoryId).toBeNull();
+
+    // Assign to category
+    const putRes = await put(app, `/api/custom-categories/items/note/${noteId}`, user.cookie, {
+      categoryId: catId,
+    });
+    expect(putRes.statusCode).toBe(200);
+    expect(putRes.json().categoryId).toBe(catId);
+
+    // Verify assigned
+    const getAfter = await get(app, `/api/custom-categories/items/note/${noteId}`, user.cookie);
+    expect(getAfter.statusCode).toBe(200);
+    expect(getAfter.json().categoryId).toBe(catId);
+
+    // Verify it appears in category items
+    const catItems = await get(app, `/api/custom-categories/${catId}/items`, user.cookie);
+    expect(catItems.json().counts.notes).toBe(1);
+
+    // Clear category
+    const putClear = await put(app, `/api/custom-categories/items/note/${noteId}`, user.cookie, {
+      categoryId: null,
+    });
+    expect(putClear.statusCode).toBe(200);
+    expect(putClear.json().categoryId).toBeNull();
+
+    // Verify cleared
+    const getCleared = await get(app, `/api/custom-categories/items/note/${noteId}`, user.cookie);
+    expect(getCleared.json().categoryId).toBeNull();
+  });
 });
+

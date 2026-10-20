@@ -114,6 +114,8 @@ import {
   getCustomCategoryItems,
   linkItemToCustomCategory,
   unlinkItemFromCustomCategory,
+  getItemCustomCategory,
+  setItemCustomCategory,
   type CustomCategory,
   type CustomCategoryItemsResult,
 } from './api';
@@ -556,10 +558,29 @@ function App() {
   const [categoryModalBusy, setCategoryModalBusy] = useState(false);
   const [categoryModalError, setCategoryModalError] = useState('');
   const [quickAddCatOpen, setQuickAddCatOpen] = useState(false);
-  const [quickAddType, setQuickAddType] = useState<'note' | 'task' | 'bookmark'>('note');
+  const [quickAddType, setQuickAddType] = useState<'note' | 'task' | 'bookmark' | 'file' | 'vault' | 'library' | 'attach'>('note');
   const [quickAddTitle, setQuickAddTitle] = useState('');
   const [quickAddContentOrUrl, setQuickAddContentOrUrl] = useState('');
+  const [catUploadFile, setCatUploadFile] = useState<File | null>(null);
+  const [quickAddVaultCategory, setQuickAddVaultCategory] = useState<VaultCategory>(VAULT_CATEGORIES[0]);
+  const [quickAddVaultKey, setQuickAddVaultKey] = useState('');
+  const [quickAddVaultLocation, setQuickAddVaultLocation] = useState('');
+  const [quickAddVaultExpiry, setQuickAddVaultExpiry] = useState('');
+  const [quickAddVaultAmount, setQuickAddVaultAmount] = useState('');
+  const [quickAddLibraryCategory, setQuickAddLibraryCategory] = useState<LibraryCategory>(LIBRARY_CATEGORIES[0]);
+  const [quickAddLibraryStatus, setQuickAddLibraryStatus] = useState<LibraryStatus>(LIBRARY_STATUSES[0]);
+  const [quickAddLibrarySource, setQuickAddLibrarySource] = useState('');
+  const [attachSearchQuery, setAttachSearchQuery] = useState('');
+  const [attachTypeFilter, setAttachTypeFilter] = useState<'all' | 'note' | 'task' | 'bookmark' | 'file' | 'vault' | 'library'>('all');
+  const [attachBusyId, setAttachBusyId] = useState<string | null>(null);
   const [quickAddBusy, setQuickAddBusy] = useState(false);
+  const [mediaLightboxFile, setMediaLightboxFile] = useState<StoredFile | null>(null);
+  const [activeNoteCustomCatId, setActiveNoteCustomCatId] = useState<string | null>(null);
+  const [activeBookmarkCustomCatId, setActiveBookmarkCustomCatId] = useState<string | null>(null);
+  const [taskDraftCustomCatId, setTaskDraftCustomCatId] = useState<string>('');
+  const [vaultCustomCatId, setVaultCustomCatId] = useState<string>('');
+  const [libraryCustomCatId, setLibraryCustomCatId] = useState<string>('');
+  const [fileCustomCatId, setFileCustomCatId] = useState<string | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
   const [peopleBusy, setPeopleBusy] = useState(false);
   const [peopleGroup, setPeopleGroup] = useState<RelationshipGroup | ''>('');
@@ -822,6 +843,114 @@ function App() {
       active = false;
     };
   }, [authState, viewMode, selectedCustomCategoryId, refreshKey]);
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape' && mediaLightboxFile) {
+        setMediaLightboxFile(null);
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mediaLightboxFile]);
+
+  useEffect(() => {
+    if (!quickAddCatOpen || authState !== 'signed-in') return;
+    if (files.length === 0) listFiles(1, 100).then((r) => setFiles(r.files)).catch(() => {});
+    if (vaultItems.length === 0) listVaultItems().then((r) => setVaultItems(r.items)).catch(() => {});
+    if (libraryItems.length === 0) listLibraryItems().then((r) => setLibraryItems(r.items)).catch(() => {});
+    if (bookmarks.length === 0) listBookmarks(1, 100).then((r) => setBookmarks(r.bookmarks)).catch(() => {});
+  }, [quickAddCatOpen, authState]);
+
+  useEffect(() => {
+    if (!activeNote) {
+      setActiveNoteCustomCatId(null);
+      return;
+    }
+    let active = true;
+    getItemCustomCategory('note', activeNote.id)
+      .then((catId) => {
+        if (active) setActiveNoteCustomCatId(catId);
+      })
+      .catch(() => {
+        if (active) setActiveNoteCustomCatId(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [activeNote?.id]);
+
+  useEffect(() => {
+    if (!activeBookmark) {
+      setActiveBookmarkCustomCatId(null);
+      return;
+    }
+    let active = true;
+    getItemCustomCategory('bookmark', activeBookmark.id)
+      .then((catId) => {
+        if (active) setActiveBookmarkCustomCatId(catId);
+      })
+      .catch(() => {
+        if (active) setActiveBookmarkCustomCatId(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [activeBookmark?.id]);
+
+  useEffect(() => {
+    if (!activeVault) {
+      setVaultCustomCatId('');
+      return;
+    }
+    let active = true;
+    getItemCustomCategory('vault', activeVault.id)
+      .then((catId) => {
+        if (active) setVaultCustomCatId(catId || '');
+      })
+      .catch(() => {
+        if (active) setVaultCustomCatId('');
+      });
+    return () => {
+      active = false;
+    };
+  }, [activeVault?.id]);
+
+  useEffect(() => {
+    if (!activeLibrary) {
+      setLibraryCustomCatId('');
+      return;
+    }
+    let active = true;
+    getItemCustomCategory('library', activeLibrary.id)
+      .then((catId) => {
+        if (active) setLibraryCustomCatId(catId || '');
+      })
+      .catch(() => {
+        if (active) setLibraryCustomCatId('');
+      });
+    return () => {
+      active = false;
+    };
+  }, [activeLibrary?.id]);
+
+  useEffect(() => {
+    if (!activeFile) {
+      setFileCustomCatId(null);
+      return;
+    }
+    let active = true;
+    getItemCustomCategory('file', activeFile.id)
+      .then((catId) => {
+        if (active) setFileCustomCatId(catId);
+      })
+      .catch(() => {
+        if (active) setFileCustomCatId(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [activeFile?.id]);
 
   useEffect(() => {
     if (authState !== 'signed-in') return;
@@ -1555,21 +1684,59 @@ function App() {
 
   async function handleQuickAddIntoCategory(e: FormEvent) {
     e.preventDefault();
-    if (!selectedCustomCategoryId || !quickAddTitle.trim()) return;
+    if (!selectedCustomCategoryId) return;
     setQuickAddBusy(true);
     try {
       if (quickAddType === 'note') {
+        if (!quickAddTitle.trim()) return;
         const newNote = await saveNote(null, quickAddTitle.trim(), quickAddContentOrUrl.trim());
         await linkItemToCustomCategory(selectedCustomCategoryId, 'note', newNote.id);
       } else if (quickAddType === 'task') {
+        if (!quickAddTitle.trim()) return;
         const newTask = await createTask({ title: quickAddTitle.trim(), detail: quickAddContentOrUrl.trim() });
         await linkItemToCustomCategory(selectedCustomCategoryId, 'task', newTask.id);
       } else if (quickAddType === 'bookmark') {
+        if (!quickAddTitle.trim()) return;
         const newBm = await saveBookmark(null, quickAddTitle.trim(), quickAddContentOrUrl.trim() || 'https://', '');
         await linkItemToCustomCategory(selectedCustomCategoryId, 'bookmark', newBm.id);
+      } else if (quickAddType === 'file') {
+        if (!catUploadFile) {
+          setToasts((t) => [...t, { id: ++toastSeqRef.current, kind: 'error', message: 'กรุณาเลือกไฟล์ที่ต้องการอัปโหลด' }]);
+          return;
+        }
+        const uploaded = await uploadFile(catUploadFile);
+        await linkItemToCustomCategory(selectedCustomCategoryId, 'file', uploaded.id);
+        setCatUploadFile(null);
+      } else if (quickAddType === 'vault') {
+        if (!quickAddTitle.trim()) return;
+        const created = await createVaultItem({
+          title: quickAddTitle.trim(),
+          category: quickAddVaultCategory,
+          keyValue: quickAddVaultKey.trim(),
+          physicalLocation: quickAddVaultLocation.trim(),
+          renewalOrExpiryDate: quickAddVaultExpiry || null,
+          amountText: quickAddVaultAmount.trim(),
+          notes: quickAddContentOrUrl.trim(),
+        });
+        await linkItemToCustomCategory(selectedCustomCategoryId, 'vault', created.id);
+      } else if (quickAddType === 'library') {
+        if (!quickAddTitle.trim()) return;
+        const created = await createLibraryItem({
+          title: quickAddTitle.trim(),
+          category: quickAddLibraryCategory,
+          status: quickAddLibraryStatus,
+          sourceUrlOrAuthor: quickAddLibrarySource.trim(),
+          keyTakeaways: quickAddContentOrUrl.trim(),
+        });
+        await linkItemToCustomCategory(selectedCustomCategoryId, 'library', created.id);
       }
       setQuickAddTitle('');
       setQuickAddContentOrUrl('');
+      setQuickAddVaultKey('');
+      setQuickAddVaultLocation('');
+      setQuickAddVaultExpiry('');
+      setQuickAddVaultAmount('');
+      setQuickAddLibrarySource('');
       setQuickAddCatOpen(false);
       setToasts((t) => [...t, { id: ++toastSeqRef.current, kind: 'success', message: 'เพิ่มข้อมูลในหมวดหมู่แล้ว' }]);
       // refresh items
@@ -1579,6 +1746,21 @@ function App() {
       setToasts((t) => [...t, { id: ++toastSeqRef.current, kind: 'error', message: errorMessage(err) }]);
     } finally {
       setQuickAddBusy(false);
+    }
+  }
+
+  async function handleLinkExistingItem(itemType: 'note' | 'task' | 'bookmark' | 'file' | 'vault' | 'library', itemId: string) {
+    if (!selectedCustomCategoryId) return;
+    setAttachBusyId(`${itemType}:${itemId}`);
+    try {
+      await linkItemToCustomCategory(selectedCustomCategoryId, itemType, itemId);
+      setToasts((t) => [...t, { id: ++toastSeqRef.current, kind: 'success', message: 'ผูกข้อมูลเข้าหมวดนี้เรียบร้อย' }]);
+      const refreshed = await getCustomCategoryItems(selectedCustomCategoryId);
+      setCustomCategoryData(refreshed);
+    } catch (err) {
+      setToasts((t) => [...t, { id: ++toastSeqRef.current, kind: 'error', message: errorMessage(err) }]);
+    } finally {
+      setAttachBusyId(null);
     }
   }
 
@@ -2216,14 +2398,22 @@ function App() {
     setTasksError('');
     setTasksNotice('');
     try {
-      await createTask({
+      const createdTask = await createTask({
         title,
         dueDate: taskDraft.dueDate || undefined,
         priority: taskDraft.priority,
         projectId: taskDraft.projectId || null,
         recurrence: taskDraft.recurrence,
       });
+      if (taskDraftCustomCatId) {
+        try {
+          await setItemCustomCategory('task', createdTask.id, taskDraftCustomCatId);
+        } catch {
+          // ignore error
+        }
+      }
       setTaskDraft({ title: '', dueDate: '', priority: 'normal', projectId: '', recurrence: 'none' });
+      setTaskDraftCustomCatId('');
       setTasksNotice('เพิ่มงานแล้ว');
       pushToast('success', 'เพิ่มงานแล้ว');
       setRefreshKey((key) => key + 1);
@@ -2444,6 +2634,13 @@ function App() {
       const saved = activeVault
         ? await updateVaultItem(activeVault.id, payload)
         : await createVaultItem(payload);
+      if (vaultCustomCatId !== undefined) {
+        try {
+          await setItemCustomCategory('vault', saved.id, vaultCustomCatId || null);
+        } catch {
+          // ignore error
+        }
+      }
       setActiveVault(saved);
       setVaultDraft({
         title: saved.title,
@@ -2588,6 +2785,13 @@ function App() {
       const saved = activeLibrary
         ? await updateLibraryItem(activeLibrary.id, payload)
         : await createLibraryItem(payload);
+      if (libraryCustomCatId !== undefined) {
+        try {
+          await setItemCustomCategory('library', saved.id, libraryCustomCatId || null);
+        } catch {
+          // ignore error
+        }
+      }
       setActiveLibrary(saved);
       setLibraryDraft({
         title: saved.title,
@@ -2749,6 +2953,13 @@ function App() {
     try {
       const wasEditing = Boolean(activeNote);
       const savedNote = await saveNote(activeNote?.id ?? null, title, content);
+      if (activeNoteCustomCatId !== undefined) {
+        try {
+          await setItemCustomCategory('note', savedNote.id, activeNoteCustomCatId);
+        } catch {
+          // ignore error
+        }
+      }
       let relationSaveFailed = false;
       let relationSaveError: unknown;
       try {
@@ -2990,6 +3201,13 @@ function App() {
         bookmarkUrl,
         bookmarkDescription,
       );
+      if (activeBookmarkCustomCatId !== undefined) {
+        try {
+          await setItemCustomCategory('bookmark', saved.id, activeBookmarkCustomCatId);
+        } catch {
+          // ignore error
+        }
+      }
       isNewBookmarkRef.current = false;
       setActiveBookmark(saved);
       setBookmarks((current) => [
@@ -3604,7 +3822,7 @@ function App() {
           <button className="profile-card" type="button" onClick={() => setProfileOpen(true)}>
             <span className="avatar profile-avatar">
               {profile.avatarFileId ? (
-                <img src={`/api/files/${profile.avatarFileId}`} alt="" />
+                <img src={`/api/files/${profile.avatarFileId}`} alt="" loading="lazy" decoding="async" />
               ) : (
                 profile.avatarPreset || (profile.name || user?.username || 'P').slice(0, 1)
               )}
@@ -4258,6 +4476,27 @@ function App() {
                       </span>
                     </label>
                     <div className="work-actions">
+                      <select
+                        className="task-cat-select"
+                        style={{ fontSize: '11px', padding: '2px 4px', borderRadius: '4px', border: '1px solid var(--border)' }}
+                        aria-label="เปลี่ยนหมวดหมู่"
+                        onChange={async (e) => {
+                          const val = e.target.value || null;
+                          try {
+                            await setItemCustomCategory('task', task.id, val);
+                            pushToast('success', 'อัปเดตหมวดหมู่ของงานแล้ว');
+                            setRefreshKey((k) => k + 1);
+                          } catch (err) {
+                            pushToast('error', errorMessage(err));
+                          }
+                        }}
+                        defaultValue=""
+                      >
+                        <option value="">📁 ย้ายหมวด</option>
+                        {customCategories.map((c) => (
+                          <option value={c.id} key={c.id}>{c.parentId ? '↳ ' : ''}{c.icon} {c.name}</option>
+                        ))}
+                      </select>
                       <button className="text-button danger-text" type="button" disabled={tasksBusy} onClick={() => void removeTask(task)}>ลบ</button>
                     </div>
                     <EntityAttachments
@@ -4344,7 +4583,7 @@ function App() {
                     >
                       <span className="avatar person-avatar">
                         {person.avatarFileId ? (
-                          <img src={`/api/files/${person.avatarFileId}`} alt="" />
+                          <img src={`/api/files/${person.avatarFileId}`} alt="" loading="lazy" decoding="async" />
                         ) : (
                           person.avatarPreset || person.name.slice(0, 1)
                         )}
@@ -4516,6 +4755,16 @@ function App() {
                       <span>{formatBytes(file.sizeBytes)} · {file.mediaType}</span>
                     </button>
                     <div className="file-card-actions">
+                      <button
+                        className="button button-quiet"
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMediaLightboxFile(file);
+                        }}
+                      >
+                        👁️ ดูตัวอย่าง
+                      </button>
                       <a className="button button-quiet" href={file.downloadUrl} download={file.displayName}>
                         ดาวน์โหลด
                       </a>
@@ -4858,18 +5107,28 @@ function App() {
                               <img
                                 src={`/api/files/${file.id}`}
                                 alt={file.displayName}
-                                style={{ width: '100%', height: '110px', objectFit: 'cover', borderRadius: '4px', marginTop: '6px' }}
+                                loading="lazy"
+                                decoding="async"
+                                style={{ width: '100%', height: '110px', objectFit: 'cover', borderRadius: '4px', marginTop: '6px', cursor: 'pointer' }}
+                                onClick={() => setMediaLightboxFile(file)}
                               />
                             )}
-                            <strong style={{ display: 'block', fontSize: '14px', marginTop: '6px', wordBreak: 'break-all' }}>
+                            <strong
+                              style={{ display: 'block', fontSize: '14px', marginTop: '6px', wordBreak: 'break-all', cursor: 'pointer' }}
+                              onClick={() => setMediaLightboxFile(file)}
+                            >
                               {file.displayName}
                             </strong>
                           </div>
                           <div className="category-card-meta">
                             <span>{formatBytes(file.sizeBytes)}</span>
-                            <a href={`/api/files/${file.id}`} target="_blank" rel="noreferrer" className="text-button">
-                              เปิดดู/ดาวน์โหลด →
-                            </a>
+                            <button
+                              type="button"
+                              className="text-button"
+                              onClick={() => setMediaLightboxFile(file)}
+                            >
+                              เล่น/ดูตัวอย่าง →
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -5326,6 +5585,20 @@ function App() {
                 </select>
               </label>
               <label>
+                หมวดหมู่ของฉัน (Custom Space)
+                <select
+                  value={vaultCustomCatId}
+                  onChange={(event) => setVaultCustomCatId(event.target.value)}
+                >
+                  <option value="">-- ไม่ระบุหมวดหมู่ --</option>
+                  {customCategories.map((category) => (
+                    <option value={category.id} key={category.id}>
+                      {category.parentId ? '  ↳ ' : ''}{category.icon} {category.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
                 รหัส / เลขสำคัญ
                 <input
                   value={vaultDraft.keyValue}
@@ -5447,6 +5720,20 @@ function App() {
                 >
                   {LIBRARY_STATUSES.map((status) => (
                     <option value={status} key={status}>{status}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                หมวดหมู่ของฉัน (Custom Space)
+                <select
+                  value={libraryCustomCatId}
+                  onChange={(event) => setLibraryCustomCatId(event.target.value)}
+                >
+                  <option value="">-- ไม่ระบุหมวดหมู่ --</option>
+                  {customCategories.map((category) => (
+                    <option value={category.id} key={category.id}>
+                      {category.parentId ? '  ↳ ' : ''}{category.icon} {category.name}
+                    </option>
                   ))}
                 </select>
               </label>
@@ -5596,6 +5883,16 @@ function App() {
                 <option value="weekly">ทุกสัปดาห์</option>
                 <option value="monthly">ทุกเดือน</option>
                 <option value="yearly">ทุกปี</option>
+              </select>
+              <select
+                value={taskDraftCustomCatId}
+                onChange={(event) => setTaskDraftCustomCatId(event.target.value)}
+                aria-label="หมวดหมู่ของฉัน"
+              >
+                <option value="">📁 ไม่ผูกหมวดหมู่</option>
+                {customCategories.map((c) => (
+                  <option value={c.id} key={c.id}>{c.parentId ? '  ↳ ' : ''}{c.icon} {c.name}</option>
+                ))}
               </select>
               <button className="button button-primary" type="submit" disabled={tasksBusy}>เพิ่ม</button>
             </form>
@@ -5761,7 +6058,7 @@ function App() {
               <div className="person-hero">
                 <span className="avatar person-avatar large">
                   {personDraft.avatarFileId ? (
-                    <img src={`/api/files/${personDraft.avatarFileId}`} alt="" />
+                    <img src={`/api/files/${personDraft.avatarFileId}`} alt="" loading="lazy" decoding="async" />
                   ) : (
                     personDraft.avatarPreset || (personDraft.name || '?').slice(0, 1)
                   )}
@@ -6357,6 +6654,33 @@ function App() {
                     ＋ บุคคล
                   </button>
                 </div>
+                <div className="custom-category-select-wrap" style={{ margin: '6px 0', width: '100%' }}>
+                  <label className="custom-cat-label">
+                    <span>📁 หมวดหมู่ของฉัน:</span>
+                    <select
+                      value={activeNoteCustomCatId || ''}
+                      onChange={async (e) => {
+                        const newCatId = e.target.value || null;
+                        setActiveNoteCustomCatId(newCatId);
+                        if (activeNote) {
+                          try {
+                            await setItemCustomCategory('note', activeNote.id, newCatId);
+                            pushToast('success', 'อัปเดตหมวดหมู่ของโน้ตแล้ว');
+                          } catch (err) {
+                            pushToast('error', errorMessage(err));
+                          }
+                        }
+                      }}
+                    >
+                      <option value="">-- ไม่ระบุหมวดหมู่ (None) --</option>
+                      {customCategories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.parentId ? '  ↳ ' : ''}{c.icon} {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
                 {chipPicker && (
                   <div className="chip-popover">
                     <div className="chip-popover-head">
@@ -6513,6 +6837,33 @@ function App() {
                   เปิดลิงก์ในแท็บใหม่
                 </a>
               )}
+              <div className="custom-category-select-wrap">
+                <label className="custom-cat-label">
+                  <span>📁 หมวดหมู่ของฉัน:</span>
+                  <select
+                    value={activeBookmarkCustomCatId || ''}
+                    onChange={async (e) => {
+                      const newCatId = e.target.value || null;
+                      setActiveBookmarkCustomCatId(newCatId);
+                      if (activeBookmark) {
+                        try {
+                          await setItemCustomCategory('bookmark', activeBookmark.id, newCatId);
+                          pushToast('success', 'อัปเดตหมวดหมู่ของลิงก์แล้ว');
+                        } catch (err) {
+                          pushToast('error', errorMessage(err));
+                        }
+                      }
+                    }}
+                  >
+                    <option value="">-- ไม่ระบุหมวดหมู่ (None) --</option>
+                    {customCategories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.parentId ? '  ↳ ' : ''}{c.icon} {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
               <div className="editor-footer">
                 <span>ข้อมูลลิงก์กรอกและจัดเก็บในเครื่องนี้เท่านั้น</span>
                 <span>{bookmarkDescription.length.toLocaleString('th-TH')} / 5,000</span>
@@ -6592,6 +6943,13 @@ function App() {
               </div>
               {activeFile && (
                 <div className="editor-actions">
+                  <button
+                    className="button button-quiet"
+                    type="button"
+                    onClick={() => setMediaLightboxFile(activeFile)}
+                  >
+                    👁️ เล่น / ดูตัวอย่าง
+                  </button>
                   <a className="button button-primary" href={activeFile.downloadUrl} download={activeFile.displayName}>
                     ดาวน์โหลด
                   </a>
@@ -6624,6 +6982,33 @@ function App() {
                     <dd><code>{activeFile.sha256}</code></dd>
                   </div>
                 </dl>
+                <div className="custom-category-select-wrap">
+                  <label className="custom-cat-label">
+                    <span>📁 หมวดหมู่ของฉัน:</span>
+                    <select
+                      value={fileCustomCatId || ''}
+                      onChange={async (e) => {
+                        const newCatId = e.target.value || null;
+                        setFileCustomCatId(newCatId);
+                        if (activeFile) {
+                          try {
+                            await setItemCustomCategory('file', activeFile.id, newCatId);
+                            pushToast('success', 'อัปเดตหมวดหมู่ของไฟล์แล้ว');
+                          } catch (err) {
+                            pushToast('error', errorMessage(err));
+                          }
+                        }
+                      }}
+                    >
+                      <option value="">-- ไม่ระบุหมวดหมู่ --</option>
+                      {customCategories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.parentId ? '  ↳ ' : ''}{c.icon} {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
                 <p className="file-note">
                   ไฟล์ถูกเก็บในพื้นที่ส่วนตัวของคุณ ระบบตรวจชนิดไฟล์จากเนื้อหาและไม่แสดงไฟล์ที่อาจเป็นอันตรายแบบฝังในหน้าเว็บ
                 </p>
@@ -6769,7 +7154,7 @@ function App() {
               <div className="avatar-row">
                 <span className="avatar profile-avatar large">
                   {profile.avatarFileId ? (
-                    <img src={`/api/files/${profile.avatarFileId}`} alt="" />
+                    <img src={`/api/files/${profile.avatarFileId}`} alt="" loading="lazy" decoding="async" />
                   ) : (
                     profile.avatarPreset || (profile.name || user?.username || 'P').slice(0, 1)
                   )}
@@ -7277,7 +7662,7 @@ function App() {
         <div className="dialog-backdrop">
           <section
             className="dialog"
-            style={{ maxWidth: '480px' }}
+            style={{ maxWidth: '640px', width: '100%' }}
             role="dialog"
             aria-modal="true"
             aria-labelledby="quick-add-cat-title"
@@ -7297,102 +7682,485 @@ function App() {
                 ×
               </button>
             </div>
-            <form onSubmit={handleQuickAddIntoCategory} style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '10px' }}>
-              <label>
-                ประเภทข้อมูล
-                <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                  <button
-                    className={`button ${quickAddType === 'note' ? 'button-primary' : 'button-quiet'}`}
-                    type="button"
-                    onClick={() => setQuickAddType('note')}
-                  >
-                    📝 โน้ต
-                  </button>
-                  <button
-                    className={`button ${quickAddType === 'task' ? 'button-primary' : 'button-quiet'}`}
-                    type="button"
-                    onClick={() => setQuickAddType('task')}
-                  >
-                    ☑️ งาน
-                  </button>
-                  <button
-                    className={`button ${quickAddType === 'bookmark' ? 'button-primary' : 'button-quiet'}`}
-                    type="button"
-                    onClick={() => setQuickAddType('bookmark')}
-                  >
-                    ↗️ ลิงก์
+
+            {/* Type selector tabs */}
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', margin: '12px 0 16px' }}>
+              <button
+                className={`button ${quickAddType === 'note' ? 'button-primary' : 'button-quiet'}`}
+                type="button"
+                onClick={() => setQuickAddType('note')}
+              >
+                📝 โน้ต
+              </button>
+              <button
+                className={`button ${quickAddType === 'task' ? 'button-primary' : 'button-quiet'}`}
+                type="button"
+                onClick={() => setQuickAddType('task')}
+              >
+                ☑️ งาน
+              </button>
+              <button
+                className={`button ${quickAddType === 'bookmark' ? 'button-primary' : 'button-quiet'}`}
+                type="button"
+                onClick={() => setQuickAddType('bookmark')}
+              >
+                ↗️ ลิงก์
+              </button>
+              <button
+                className={`button ${quickAddType === 'file' ? 'button-primary' : 'button-quiet'}`}
+                type="button"
+                onClick={() => setQuickAddType('file')}
+              >
+                📁 อัปโหลดไฟล์
+              </button>
+              <button
+                className={`button ${quickAddType === 'vault' ? 'button-primary' : 'button-quiet'}`}
+                type="button"
+                onClick={() => setQuickAddType('vault')}
+              >
+                🔐 คลังสำคัญ
+              </button>
+              <button
+                className={`button ${quickAddType === 'library' ? 'button-primary' : 'button-quiet'}`}
+                type="button"
+                onClick={() => setQuickAddType('library')}
+              >
+                📚 คู่มือ
+              </button>
+              <button
+                className={`button ${quickAddType === 'attach' ? 'button-primary' : 'button-quiet'}`}
+                type="button"
+                onClick={() => setQuickAddType('attach')}
+              >
+                🔗 ข้อมูลเดิม
+              </button>
+            </div>
+
+            {/* Tab: Attach Existing Items */}
+            {quickAddType === 'attach' ? (
+              <div className="attach-existing-container">
+                <input
+                  type="search"
+                  placeholder="ค้นหาข้อมูลที่มีอยู่แล้ว..."
+                  value={attachSearchQuery}
+                  onChange={(e) => setAttachSearchQuery(e.target.value)}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--border)' }}
+                />
+                <div className="attach-existing-filters">
+                  {(['all', 'note', 'task', 'bookmark', 'file', 'vault', 'library'] as const).map((filter) => (
+                    <button
+                      key={filter}
+                      type="button"
+                      className={`button ${attachTypeFilter === filter ? 'button-primary' : 'button-quiet'}`}
+                      onClick={() => setAttachTypeFilter(filter)}
+                    >
+                      {filter === 'all' ? 'ทั้งหมด' : filter === 'note' ? '📝 โน้ต' : filter === 'task' ? '☑️ งาน' : filter === 'bookmark' ? '↗️ ลิงก์' : filter === 'file' ? '📁 ไฟล์' : filter === 'vault' ? '🔐 คลังสำคัญ' : '📚 คู่มือ'}
+                    </button>
+                  ))}
+                </div>
+                <div className="attach-existing-list">
+                  {(() => {
+                    const query = attachSearchQuery.trim().toLowerCase();
+                    const candidates: Array<{ itemType: 'note' | 'task' | 'bookmark' | 'file' | 'vault' | 'library'; id: string; title: string; subtitle: string }> = [];
+
+                    if (attachTypeFilter === 'all' || attachTypeFilter === 'note') {
+                      notes.forEach((n) => {
+                        if (!query || n.title.toLowerCase().includes(query) || n.content.toLowerCase().includes(query)) {
+                          candidates.push({ itemType: 'note', id: n.id, title: n.title, subtitle: 'โน้ต' });
+                        }
+                      });
+                    }
+                    if (attachTypeFilter === 'all' || attachTypeFilter === 'task') {
+                      tasks.forEach((t) => {
+                        if (!query || t.title.toLowerCase().includes(query) || (t.detail && t.detail.toLowerCase().includes(query))) {
+                          candidates.push({ itemType: 'task', id: t.id, title: t.title, subtitle: `งาน (${taskStatusLabel(t.status)})` });
+                        }
+                      });
+                    }
+                    if (attachTypeFilter === 'all' || attachTypeFilter === 'bookmark') {
+                      bookmarks.forEach((b) => {
+                        if (!query || b.title.toLowerCase().includes(query) || b.url.toLowerCase().includes(query)) {
+                          candidates.push({ itemType: 'bookmark', id: b.id, title: b.title, subtitle: b.url });
+                        }
+                      });
+                    }
+                    if (attachTypeFilter === 'all' || attachTypeFilter === 'file') {
+                      files.forEach((f) => {
+                        if (!query || f.displayName.toLowerCase().includes(query) || f.mediaType.toLowerCase().includes(query)) {
+                          candidates.push({ itemType: 'file', id: f.id, title: f.displayName, subtitle: `${formatBytes(f.sizeBytes)} · ${f.mediaType}` });
+                        }
+                      });
+                    }
+                    if (attachTypeFilter === 'all' || attachTypeFilter === 'vault') {
+                      vaultItems.forEach((v) => {
+                        if (!query || v.title.toLowerCase().includes(query) || v.keyValue.toLowerCase().includes(query)) {
+                          candidates.push({ itemType: 'vault', id: v.id, title: v.title, subtitle: `คลังสำคัญ: ${v.category}` });
+                        }
+                      });
+                    }
+                    if (attachTypeFilter === 'all' || attachTypeFilter === 'library') {
+                      libraryItems.forEach((l) => {
+                        if (!query || l.title.toLowerCase().includes(query) || (l.sourceUrlOrAuthor && l.sourceUrlOrAuthor.toLowerCase().includes(query))) {
+                          candidates.push({ itemType: 'library', id: l.id, title: l.title, subtitle: `ห้องสมุด: ${l.category}` });
+                        }
+                      });
+                    }
+
+                    if (candidates.length === 0) {
+                      return <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px 0' }}>ไม่พบข้อมูลที่ตรงกับคำค้นหา</p>;
+                    }
+
+                    const isLinked = (type: string, id: string) => {
+                      if (!customCategoryData) return false;
+                      if (type === 'note') return customCategoryData.notes.some((x) => x.id === id);
+                      if (type === 'task') return customCategoryData.tasks.some((x) => x.id === id);
+                      if (type === 'bookmark') return customCategoryData.bookmarks.some((x) => x.id === id);
+                      if (type === 'file') return customCategoryData.files.some((x) => x.id === id);
+                      if (type === 'vault') return customCategoryData.vault.some((x) => x.id === id);
+                      if (type === 'library') return customCategoryData.library.some((x) => x.id === id);
+                      return false;
+                    };
+
+                    return candidates.slice(0, 50).map((cand) => {
+                      const linked = isLinked(cand.itemType, cand.id);
+                      const key = `${cand.itemType}:${cand.id}`;
+                      const busy = attachBusyId === key;
+                      return (
+                        <div key={key} className="attach-item-row">
+                          <div className="attach-item-info">
+                            <strong>{cand.title}</strong>
+                            <span>{cand.subtitle}</span>
+                          </div>
+                          {linked ? (
+                            <span style={{ fontSize: '12px', color: 'var(--accent, #38a169)', fontWeight: 600 }}>ผูกอยู่แล้ว ✓</span>
+                          ) : (
+                            <button
+                              className="button button-quiet"
+                              type="button"
+                              disabled={busy}
+                              style={{ fontSize: '12px', padding: '4px 8px' }}
+                              onClick={() => void handleLinkExistingItem(cand.itemType, cand.id)}
+                            >
+                              {busy ? 'กำลังผูก…' : '＋ ผูกเข้าหมวดนี้'}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+                <div className="editor-actions" style={{ marginTop: '12px' }}>
+                  <button className="button button-quiet" type="button" onClick={() => setQuickAddCatOpen(false)}>
+                    ปิดหน้าต่าง
                   </button>
                 </div>
-              </label>
+              </div>
+            ) : (
+              <form onSubmit={handleQuickAddIntoCategory} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {/* Form fields based on quickAddType */}
+                {quickAddType === 'file' ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <label>
+                      เลือกไฟล์ (รูปภาพ, วิดีโอขนาดใหญ่ MP4/MOV/WebM, เสียง MP3/WAV, PDF, เอกสาร)
+                      <input
+                        required
+                        type="file"
+                        onChange={(e) => setCatUploadFile(e.target.files?.[0] || null)}
+                        style={{ marginTop: '6px' }}
+                      />
+                    </label>
+                    {catUploadFile && (
+                      <div style={{ padding: '8px 12px', background: 'var(--surface-hover)', borderRadius: '6px', fontSize: '13px' }}>
+                        <div><strong>ชื่อไฟล์:</strong> {catUploadFile.name}</div>
+                        <div><strong>ขนาด:</strong> {formatBytes(catUploadFile.size)}</div>
+                        <div><strong>ชนิดไฟล์:</strong> {catUploadFile.type || 'ไม่ระบุ'}</div>
+                      </div>
+                    )}
+                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
+                      ⚡ ไฟล์ขนาดใหญ่จะถูกบันทึกตรงลงดิสก์และสตรีมมิ่งผ่าน HTTP Range Requests รองรับการเปิดดูและกรอวิดีโอ (Seek) ได้ทันทีโดยไม่เปลืองหน่วยความจำ
+                    </p>
+                  </div>
+                ) : quickAddType === 'vault' ? (
+                  <>
+                    <label>
+                      ชื่อรายการทรัพย์สิน / เอกสารสำคัญ
+                      <input
+                        required
+                        type="text"
+                        value={quickAddTitle}
+                        onChange={(e) => setQuickAddTitle(e.target.value)}
+                        placeholder="เช่น กรมธรรม์ประกันสุขภาพ, โฉนดที่ดิน, สัญญาเช่า"
+                        autoFocus
+                      />
+                    </label>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                      <label>
+                        หมวดหมู่คลัง
+                        <select
+                          value={quickAddVaultCategory}
+                          onChange={(e) => setQuickAddVaultCategory(e.target.value as VaultCategory)}
+                        >
+                          {VAULT_CATEGORIES.map((cat) => (
+                            <option key={cat} value={cat}>{cat}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        รหัส / เลขสำคัญ
+                        <input
+                          type="text"
+                          value={quickAddVaultKey}
+                          onChange={(e) => setQuickAddVaultKey(e.target.value)}
+                          placeholder="เลขกรมธรรม์, Serial..."
+                        />
+                      </label>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                      <label>
+                        สถานที่เก็บตัวจริง
+                        <input
+                          type="text"
+                          value={quickAddVaultLocation}
+                          onChange={(e) => setQuickAddVaultLocation(e.target.value)}
+                          placeholder="เช่น ตู้เซฟห้องนอน..."
+                        />
+                      </label>
+                      <label>
+                        วันหมดอายุ / ต่ออายุ
+                        <input
+                          type="date"
+                          value={quickAddVaultExpiry}
+                          onChange={(e) => setQuickAddVaultExpiry(e.target.value)}
+                        />
+                      </label>
+                    </div>
+                    <label>
+                      ยอดเงิน / ค่าใช้จ่าย (ถ้ามี)
+                      <input
+                        type="text"
+                        value={quickAddVaultAmount}
+                        onChange={(e) => setQuickAddVaultAmount(e.target.value)}
+                        placeholder="เช่น 15,000 บาท/ปี"
+                      />
+                    </label>
+                    <label>
+                      บันทึกเพิ่มเติม
+                      <textarea
+                        rows={2}
+                        value={quickAddContentOrUrl}
+                        onChange={(e) => setQuickAddContentOrUrl(e.target.value)}
+                        placeholder="เงื่อนไขหรือรายละเอียดเพิ่มเติม..."
+                      />
+                    </label>
+                  </>
+                ) : quickAddType === 'library' ? (
+                  <>
+                    <label>
+                      ชื่อเรื่อง / ชื่อคู่มือ
+                      <input
+                        required
+                        type="text"
+                        value={quickAddTitle}
+                        onChange={(e) => setQuickAddTitle(e.target.value)}
+                        placeholder="เช่น คู่มือการใช้งานระบบ, สรุปหนังสือ Deep Work"
+                        autoFocus
+                      />
+                    </label>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                      <label>
+                        หมวดหมู่ห้องสมุด
+                        <select
+                          value={quickAddLibraryCategory}
+                          onChange={(e) => setQuickAddLibraryCategory(e.target.value as LibraryCategory)}
+                        >
+                          {LIBRARY_CATEGORIES.map((cat) => (
+                            <option key={cat} value={cat}>{cat}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        สถานะ
+                        <select
+                          value={quickAddLibraryStatus}
+                          onChange={(e) => setQuickAddLibraryStatus(e.target.value as LibraryStatus)}
+                        >
+                          {LIBRARY_STATUSES.map((st) => (
+                            <option key={st} value={st}>{st}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    <label>
+                      แหล่งที่มา / ผู้แต่ง
+                      <input
+                        type="text"
+                        value={quickAddLibrarySource}
+                        onChange={(e) => setQuickAddLibrarySource(e.target.value)}
+                        placeholder="ลิงก์ URL หรือชื่อผู้เขียน..."
+                      />
+                    </label>
+                    <label>
+                      แก่นสำคัญ / สาระที่ต้องจำ (Key Takeaways)
+                      <textarea
+                        rows={3}
+                        value={quickAddContentOrUrl}
+                        onChange={(e) => setQuickAddContentOrUrl(e.target.value)}
+                        placeholder="สิ่งที่ได้เรียนรู้หรือขั้นตอนสำคัญ..."
+                      />
+                    </label>
+                  </>
+                ) : (
+                  <>
+                    <label>
+                      {quickAddType === 'note' ? 'หัวข้อโน้ต' : quickAddType === 'task' ? 'ชื่องาน' : 'ชื่อลิงก์ / เว็บไซต์'}
+                      <input
+                        required
+                        type="text"
+                        value={quickAddTitle}
+                        onChange={(e) => setQuickAddTitle(e.target.value)}
+                        placeholder={quickAddType === 'note' ? 'หัวข้อโน้ต...' : quickAddType === 'task' ? 'สิ่งที่ต้องทำ...' : 'ชื่อเว็บไซต์...'}
+                        autoFocus
+                      />
+                    </label>
 
-              <label>
-                {quickAddType === 'note' ? 'หัวข้อโน้ต' : quickAddType === 'task' ? 'ชื่องาน' : 'ชื่อลิงก์ / เว็บไซต์'}
-                <input
-                  required
-                  type="text"
-                  value={quickAddTitle}
-                  onChange={(e) => setQuickAddTitle(e.target.value)}
-                  placeholder={quickAddType === 'note' ? 'หัวข้อโน้ต...' : quickAddType === 'task' ? 'สิ่งที่ต้องทำ...' : 'ชื่อเว็บไซต์...'}
-                  autoFocus
-                />
-              </label>
+                    {quickAddType === 'note' && (
+                      <label>
+                        เนื้อหาโน้ต
+                        <textarea
+                          rows={4}
+                          value={quickAddContentOrUrl}
+                          onChange={(e) => setQuickAddContentOrUrl(e.target.value)}
+                          placeholder="เขียนเนื้อหาหรือรายละเอียด..."
+                        />
+                      </label>
+                    )}
 
-              {quickAddType === 'note' && (
-                <label>
-                  เนื้อหาโน้ต
-                  <textarea
-                    rows={4}
-                    value={quickAddContentOrUrl}
-                    onChange={(e) => setQuickAddContentOrUrl(e.target.value)}
-                    placeholder="เขียนเนื้อหาหรือรายละเอียด..."
-                  />
-                </label>
-              )}
+                    {quickAddType === 'task' && (
+                      <label>
+                        รายละเอียดงาน (เพิ่มเติม)
+                        <textarea
+                          rows={3}
+                          value={quickAddContentOrUrl}
+                          onChange={(e) => setQuickAddContentOrUrl(e.target.value)}
+                          placeholder="รายละเอียดเพิ่มเติมของงานนี้..."
+                        />
+                      </label>
+                    )}
 
-              {quickAddType === 'task' && (
-                <label>
-                  รายละเอียดงาน (เพิ่มเติม)
-                  <textarea
-                    rows={3}
-                    value={quickAddContentOrUrl}
-                    onChange={(e) => setQuickAddContentOrUrl(e.target.value)}
-                    placeholder="รายละเอียดเพิ่มเติมของงานนี้..."
-                  />
-                </label>
-              )}
+                    {quickAddType === 'bookmark' && (
+                      <label>
+                        URL ลิงก์
+                        <input
+                          required
+                          type="url"
+                          value={quickAddContentOrUrl}
+                          onChange={(e) => setQuickAddContentOrUrl(e.target.value)}
+                          placeholder="https://example.com"
+                        />
+                      </label>
+                    )}
+                  </>
+                )}
 
-              {quickAddType === 'bookmark' && (
-                <label>
-                  URL ลิงก์
-                  <input
-                    required
-                    type="url"
-                    value={quickAddContentOrUrl}
-                    onChange={(e) => setQuickAddContentOrUrl(e.target.value)}
-                    placeholder="https://example.com"
-                  />
-                </label>
-              )}
+                <div className="editor-actions" style={{ marginTop: '8px' }}>
+                  <button
+                    className="button button-quiet"
+                    type="button"
+                    disabled={quickAddBusy}
+                    onClick={() => setQuickAddCatOpen(false)}
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    className="button button-primary"
+                    type="submit"
+                    disabled={quickAddBusy}
+                  >
+                    {quickAddBusy ? 'กำลังบันทึก…' : 'เพิ่มลงในหมวดหมู่'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </section>
+        </div>
+      )}
 
-              <div className="editor-actions" style={{ marginTop: '8px' }}>
-                <button
+      {/* Media Lightbox Player Modal */}
+      {mediaLightboxFile && (
+        <div className="media-lightbox-backdrop" onClick={() => setMediaLightboxFile(null)}>
+          <div className="media-lightbox-content" onClick={(e) => e.stopPropagation()}>
+            <div className="media-lightbox-header">
+              <div className="media-lightbox-title">
+                <span style={{ fontSize: '20px' }}>{fileIcon(mediaLightboxFile.mediaType, mediaLightboxFile.displayName)}</span>
+                <strong>{mediaLightboxFile.displayName}</strong>
+                <span className="media-lightbox-meta">({formatBytes(mediaLightboxFile.sizeBytes)})</span>
+              </div>
+              <div className="media-lightbox-actions">
+                <a
                   className="button button-quiet"
-                  type="button"
-                  disabled={quickAddBusy}
-                  onClick={() => setQuickAddCatOpen(false)}
+                  href={mediaLightboxFile.downloadUrl}
+                  download={mediaLightboxFile.displayName}
                 >
-                  ยกเลิก
-                </button>
+                  ⬇️ ดาวน์โหลด
+                </a>
                 <button
-                  className="button button-primary"
-                  type="submit"
-                  disabled={quickAddBusy}
+                  className="media-lightbox-close"
+                  type="button"
+                  aria-label="ปิด (Escape)"
+                  onClick={() => setMediaLightboxFile(null)}
                 >
-                  {quickAddBusy ? 'กำลังบันทึก…' : 'เพิ่มลงในหมวดหมู่'}
+                  ✕
                 </button>
               </div>
-            </form>
-          </section>
+            </div>
+            <div className="media-lightbox-body">
+              {mediaLightboxFile.mediaType.startsWith('image/') ? (
+                <img
+                  src={mediaLightboxFile.downloadUrl}
+                  alt={mediaLightboxFile.displayName}
+                  className="lightbox-img"
+                  loading="lazy"
+                  decoding="async"
+                />
+              ) : mediaLightboxFile.mediaType.startsWith('video/') ||
+                mediaLightboxFile.displayName.endsWith('.mp4') ||
+                mediaLightboxFile.displayName.endsWith('.webm') ||
+                mediaLightboxFile.displayName.endsWith('.mov') ? (
+                <video
+                  src={mediaLightboxFile.downloadUrl}
+                  controls
+                  autoPlay
+                  playsInline
+                  className="lightbox-video"
+                >
+                  เบราว์เซอร์ไม่รองรับการเล่นวิดีโอ
+                </video>
+              ) : mediaLightboxFile.mediaType.startsWith('audio/') ||
+                mediaLightboxFile.displayName.endsWith('.mp3') ||
+                mediaLightboxFile.displayName.endsWith('.wav') ||
+                mediaLightboxFile.displayName.endsWith('.m4a') ? (
+                <div className="lightbox-audio-wrapper">
+                  <span style={{ fontSize: '48px' }}>🎵</span>
+                  <strong style={{ fontSize: '16px' }}>{mediaLightboxFile.displayName}</strong>
+                  <audio src={mediaLightboxFile.downloadUrl} controls autoPlay className="lightbox-audio" />
+                </div>
+              ) : mediaLightboxFile.mediaType === 'application/pdf' || mediaLightboxFile.displayName.endsWith('.pdf') ? (
+                <iframe
+                  src={mediaLightboxFile.downloadUrl}
+                  title={mediaLightboxFile.displayName}
+                  className="lightbox-pdf"
+                />
+              ) : (
+                <div className="lightbox-fallback">
+                  <span style={{ fontSize: '48px' }}>📄</span>
+                  <p>ไฟล์นี้ไม่รองรับการเล่นสดบนเว็บ ({mediaLightboxFile.mediaType})</p>
+                  <a className="button button-primary" href={mediaLightboxFile.downloadUrl} download={mediaLightboxFile.displayName}>
+                    ดาวน์โหลดไฟล์ลงเครื่อง
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </main>

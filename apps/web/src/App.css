@@ -4017,3 +4017,245 @@ a.button {
   border-color: #fff;
   box-shadow: 0 0 0 2px var(--accent);
 }
+
+/* ==========================================================================
+   Media Lightbox Modal & Large Media Streaming Player
+   ========================================================================== */
+.media-lightbox-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background-color: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.media-lightbox-content {
+  background: var(--surface, #1e222b);
+  color: var(--text-main, #f0f3f6);
+  border-radius: 12px;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
+  max-width: 92vw;
+  max-height: 92vh;
+  width: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border, #333a48);
+}
+
+.media-lightbox-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border, #333a48);
+  background: var(--surface-raised, #252a36);
+}
+
+.media-lightbox-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.media-lightbox-title strong {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 15px;
+}
+
+.media-lightbox-meta {
+  color: var(--text-muted, #94a3b8);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.media-lightbox-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.media-lightbox-close {
+  background: transparent;
+  border: none;
+  font-size: 20px;
+  color: var(--text-muted, #94a3b8);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.media-lightbox-close:hover {
+  background: var(--surface-hover, #333a48);
+  color: var(--text-main, #fff);
+}
+
+.media-lightbox-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  overflow: auto;
+  max-height: calc(92vh - 65px);
+  background: #0d1117;
+}
+
+.lightbox-img {
+  max-width: 100%;
+  max-height: calc(85vh - 70px);
+  object-fit: contain;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.lightbox-video {
+  max-width: 100%;
+  max-height: calc(85vh - 70px);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  background: #000;
+  outline: none;
+}
+
+.lightbox-audio-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 32px 24px;
+  gap: 16px;
+  width: 100%;
+  max-width: 480px;
+}
+
+.lightbox-audio {
+  width: 100%;
+  outline: none;
+}
+
+.lightbox-pdf {
+  width: 82vw;
+  height: 80vh;
+  border: none;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.lightbox-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 36px 20px;
+  text-align: center;
+}
+
+/* ==========================================================================
+   Category Selector in Editors & Attach Existing UI
+   ========================================================================== */
+.custom-category-select-wrap {
+  margin: 10px 0;
+  padding: 8px 12px;
+  background: var(--surface-hover, rgba(255, 255, 255, 0.04));
+  border-radius: 8px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+}
+
+.custom-cat-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-main, inherit);
+  cursor: pointer;
+}
+
+.custom-cat-label select {
+  flex: 1;
+  max-width: 320px;
+  padding: 4px 8px;
+  font-size: 13px;
+  border-radius: 6px;
+  border: 1px solid var(--border, #444);
+  background: var(--surface, #1e222b);
+  color: var(--text-main, inherit);
+}
+
+.attach-existing-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 400px;
+}
+
+.attach-existing-filters {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.attach-existing-filters button {
+  font-size: 12px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+
+.attach-existing-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  max-height: 280px;
+  padding-right: 4px;
+}
+
+.attach-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  background: var(--surface-hover, rgba(255, 255, 255, 0.02));
+  transition: background 0.15s;
+}
+
+.attach-item-row:hover {
+  background: var(--surface-raised, rgba(255, 255, 255, 0.06));
+}
+
+.attach-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.attach-item-info strong {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.attach-item-info span {
+  font-size: 11px;
+  color: var(--text-muted, #94a3b8);
+}
