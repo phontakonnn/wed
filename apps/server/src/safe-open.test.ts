@@ -64,7 +64,7 @@ describe('safe database startup', () => {
       .toEqual([
         { version: 1 }, { version: 2 }, { version: 3 }, { version: 4 },
         { version: 5 }, { version: 6 }, { version: 7 }, { version: 8 }, { version: 9 },
-        { version: 10 }, { version: 11 },
+        { version: 10 }, { version: 11 }, { version: 12 }, { version: 13 },
       ]);
     expect(result.database.prepare('SELECT content FROM notes WHERE id = ?').get('prior-note'))
       .toEqual({ content: 'Preserve this record' });
@@ -134,7 +134,7 @@ describe('safe database startup', () => {
     expect(verification.manifest?.schemaVersions).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
 
     expect(result.database.prepare('SELECT MAX(version) AS version FROM schema_migrations').get())
-      .toEqual({ version: 11 });
+      .toEqual({ version: 13 });
     // Existing rows survive untouched.
     expect(result.database.prepare('SELECT title, content FROM notes WHERE id = ?').get('v8-note'))
       .toEqual({ title: 'โน้ตก่อนอัปเกรด', content: 'ต้องอยู่ต่อหลัง migration' });
@@ -198,5 +198,76 @@ describe('safe database startup', () => {
     } finally {
       unchanged.close();
     }
+  });
+
+  // Migration 012 rebuilds `entity_files` to widen its CHECK constraint. A rebuild that copies
+  // nothing would silently drop every existing attachment, so this proves the rows survive.
+  it('keeps existing file links when a populated schema-11 directory upgrades to 12', async () => {
+    const dataDirectory = mkdtempSync(join(tmpdir(), 'pkh-safe-open-v11-'));
+    directories.push(dataDirectory);
+    const databaseDirectory = join(dataDirectory, 'db');
+    const oldMigrationsDirectory = join(dataDirectory, 'v11-migrations');
+    mkdirSync(databaseDirectory);
+    mkdirSync(oldMigrationsDirectory);
+    for (const migration of [
+      '001_initial.sql', '002_notes.sql', '003_notes_search.sql', '004_bookmarks.sql',
+      '005_categories_tags.sql', '006_favorites.sql', '007_files.sql',
+      '008_life_os_people_and_schedule.sql', '009_work_core.sql',
+      '010_habit_logs_and_reminder_recurrence.sql', '011_entity_files.sql',
+    ]) {
+      copyFileSync(new URL(`../migrations/${migration}`, import.meta.url), join(oldMigrationsDirectory, migration));
+    }
+
+    const prior = new Database(join(databaseDirectory, 'knowledge.sqlite3'));
+    prior.pragma('foreign_keys = ON');
+    prior.function('nfc', { deterministic: true }, (value: string | null) => value?.normalize('NFC') ?? null);
+    applyMigrations(prior, oldMigrationsDirectory);
+    const now = Date.now();
+    prior.prepare('INSERT INTO users (id, username, password_hash, created_at) VALUES (?, ?, ?, ?)')
+      .run('v11-owner', 'v11-owner', 'test-hash', now);
+    prior.prepare('INSERT INTO notes (id, owner_id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run('v11-note', 'v11-owner', 'โน้ตก่อนอัปเกรด', 'ต้องอยู่ต่อ', now, now);
+    prior.prepare(`
+      INSERT INTO files (id, owner_id, display_name, size_bytes, sha256, media_type, object_key, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run('v11-file', 'v11-owner', 'policy.pdf', 10, 'b'.repeat(64), 'application/pdf', 'v11-file', now);
+    // The pre-migration backup verifies the object snapshot, so the bytes must exist too.
+    mkdirSync(join(dataDirectory, 'objects', 'v1'), { recursive: true });
+    writeFileSync(join(dataDirectory, 'objects', 'v1', 'v11-file'), 'pdf-bytes!');
+    prior.prepare(`
+      INSERT INTO entity_files (id, owner_id, entity_type, entity_id, file_id, created_at)
+      VALUES (?, ?, 'note', ?, ?, ?)
+    `).run('v11-link', 'v11-owner', 'v11-note', 'v11-file', now);
+    prior.close();
+
+    const result = await openDataDatabaseSafely(dataDirectory);
+    databases.push(result.database);
+
+    expect(result.preMigrationBackupPath).not.toBeNull();
+    if (!result.preMigrationBackupPath) throw new Error('Expected a pre-migration backup');
+    const verification = await verifyBackup(result.preMigrationBackupPath);
+    expect(verification.ok).toBe(true);
+    expect(verification.manifest?.schemaVersions).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+
+    expect(result.database.prepare('SELECT MAX(version) AS version FROM schema_migrations').get())
+      .toEqual({ version: 13 });
+    expect(result.database.prepare('SELECT entity_type, entity_id, file_id FROM entity_files').all())
+      .toEqual([{ entity_type: 'note', entity_id: 'v11-note', file_id: 'v11-file' }]);
+
+    // The widened CHECK now accepts the two new entity types, and the trigger still validates ids.
+    expect(result.database.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('vault_items', 'library_items') ORDER BY name").all())
+      .toEqual([{ name: 'library_items' }, { name: 'vault_items' }]);
+    expect(result.database.prepare('SELECT COUNT(*) AS count FROM vault_items').get()).toEqual({ count: 0 });
+    result.database.prepare(`
+      INSERT INTO vault_items (id, owner_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)
+    `).run('v12-vault', 'v11-owner', 'กรมธรรม์', now, now);
+    expect(() => result.database.prepare(`
+      INSERT INTO entity_files (id, owner_id, entity_type, entity_id, file_id, created_at)
+      VALUES (?, ?, 'vault', ?, ?, ?)
+    `).run('v12-link', 'v11-owner', 'v12-vault', 'v11-file', now)).not.toThrow();
+    expect(() => result.database.prepare(`
+      INSERT INTO entity_files (id, owner_id, entity_type, entity_id, file_id, created_at)
+      VALUES (?, ?, 'vault', ?, ?, ?)
+    `).run('v12-bad-link', 'v11-owner', 'missing-vault', 'v11-file', now)).toThrow(/owner mismatch/);
   });
 });

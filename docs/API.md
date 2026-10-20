@@ -1062,8 +1062,9 @@ path or `sha256`.
 
 `GET /api/search` accepts three optional parameters in addition to `q` and `limit`:
 
-- `types` — comma-separated subset of `notes,tasks,projects,goals,people,reminders,bookmarks,files`.
-  An unknown value returns **400**.
+- `types` — comma-separated subset of
+  `notes,tasks,projects,goals,people,reminders,bookmarks,files,vault,library` (see §20 for the two
+  buckets added in Batch 5A). An unknown value returns **400**.
 - `from` / `to` — ISO dates. A malformed date (including `2026-13-01`) returns **400**, and
   `from > to` returns **400**.
 - Date filtering applies to notes (updated), tasks/projects/goals (due date), reminders (effective
@@ -1071,4 +1072,59 @@ path or `sha256`.
 - Files are matched on `display_name` and `media_type` only — **there is no content extraction**, and
   the API must not be described as searching inside PDFs or images.
 - Library entries (`notes.kind = 'reference'`) are **not** implemented yet, so they are not a filter
-  value. Vault is out of scope until D-1 is decided.
+  value. The `library` bucket below is the separate Knowledge Library table, not `notes.kind`.
+  Vault metadata search is implemented (Batch 5A); encrypted secret storage is still blocked on D-1.
+
+## 20. Personal Vault and Knowledge Library (implemented, Batch 5A)
+
+### `/api/vault`
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/api/vault?category=&q=&page=&pageSize=` | `{ items, page, pageSize, total }`. `category` is one of the three vault categories or `all` (default). `q` matches title, key value, physical location, amount text and notes. |
+| `GET` | `/api/vault/:itemId` | `{ item }` or **404**. |
+| `POST` | `/api/vault` | **201** `{ item }`. `title` required. |
+| `PUT` | `/api/vault/:itemId` | `{ item }`; updates only the fields sent. |
+| `DELETE` | `/api/vault/:itemId` | **204**; also removes that item's file links (the file itself stays). |
+
+Fields: `title`, `category`, `keyValue`, `physicalLocation`, `renewalOrExpiryDate`, `amountText`,
+`notes`, `isFavorite`, `createdAt`, `updatedAt`.
+
+### `/api/library`
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/api/library?category=&status=&q=&page=&pageSize=` | `{ items, page, pageSize, total }`; `category`/`status` accept `all`. `q` matches title, key takeaways, content and source/author. |
+| `GET` | `/api/library/:itemId` | `{ item }` or **404**. |
+| `POST` | `/api/library` | **201** `{ item }`. `title` required. |
+| `PUT` | `/api/library/:itemId` | `{ item }`; updates only the fields sent. |
+| `DELETE` | `/api/library/:itemId` | **204**; also removes that item's file links. |
+
+Fields: `title`, `category`, `status`, `sourceUrlOrAuthor`, `keyTakeaways`, `content`, `isFavorite`,
+`createdAt`, `updatedAt`.
+
+### Behaviour that matters
+
+- **`PUT` is a partial update, not a replace.** Absent field = keep the stored value; `""` or `null`
+  on `renewalOrExpiryDate` clears the date. A body with no recognised field is **400**, so an empty
+  form submission cannot silently do nothing while reporting success.
+- `isFavorite` is a JSON boolean in and out; SQLite stores 0/1 and the API never leaks the integer.
+- An unknown `category` / `status` is **400** (schema enum). A blank `title` is **400**.
+  `renewalOrExpiryDate: "2026-13-01"` is **400** — the JSON-schema pattern only checks the shape, so
+  `isIsoDate()` rejects impossible calendar dates.
+- Every route is owner-scoped; another account's id returns **404**, never 403, so ids are not
+  confirmed across accounts.
+- `entityType` for attachments now also accepts `vault` and `library` (seven types total).
+
+### Search
+
+`types` accepts `notes,tasks,projects,goals,people,reminders,bookmarks,files,vault,library` (ten
+buckets). Date semantics for the new buckets:
+
+- `vault` → `renewal_or_expiry_date`. Vault rows with **no** renewal date are excluded as soon as
+  `from` or `to` is present, exactly like tasks without a due date.
+- `library` → `updated_at`.
+
+Both predicates are applied inside the SQL `WHERE` before `LIMIT`, so a narrow range is never starved
+by newer rows outside it. Vault search matches title, key value, physical location, amount text and
+notes; it does **not** decrypt anything.

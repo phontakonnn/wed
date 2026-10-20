@@ -118,6 +118,37 @@ export function registerDashboardRoutes(app: FastifyInstance, database: SqliteDa
       LIMIT 5
     `).all(ownerId);
 
+    // Vault items that need attention inside the next 60 days, including anything already overdue.
+    const vaultExpiring = database.prepare(`
+      SELECT id, title, category, renewal_or_expiry_date AS renewalOrExpiryDate,
+        amount_text AS amountText, physical_location AS physicalLocation
+      FROM vault_items
+      WHERE owner_id = ? AND renewal_or_expiry_date IS NOT NULL
+        AND renewal_or_expiry_date <= ?
+      ORDER BY renewal_or_expiry_date, title
+      LIMIT 6
+    `).all(ownerId, shiftIso(today, 60));
+
+    // "In use" SOPs only: a manual being studied or already finished is not a daily reference.
+    const libraryActive = database.prepare(`
+      SELECT id, title, category, status, key_takeaways AS keyTakeaways
+      FROM library_items
+      WHERE owner_id = ? AND status = 'ใช้งานประจำ'
+      ORDER BY is_favorite DESC, updated_at DESC
+      LIMIT 5
+    `).all(ownerId);
+
+    const countRows = (table: string, extra = '') =>
+      (database.prepare(`SELECT COUNT(*) AS total FROM ${table} WHERE owner_id = ?${extra}`)
+        .get(ownerId) as { total: number }).total;
+
+    const totals = {
+      notes: countRows('notes', ' AND deleted_at IS NULL'),
+      tasks: openTaskTotal,
+      vault: countRows('vault_items'),
+      library: countRows('library_items'),
+    };
+
     const counts = {
       dueToday: dueToday.length,
       overdue: overdue.length,
@@ -128,12 +159,14 @@ export function registerDashboardRoutes(app: FastifyInstance, database: SqliteDa
       goals: goals.length,
       habitsOutstanding: habits.length,
       notes: notes.length,
+      vaultExpiring: vaultExpiring.length,
       upcomingWindowEnd: weekAhead,
     };
 
     return {
       today,
       counts,
+      totals,
       tasks: { dueToday, overdue },
       reminders,
       timeblocks: { blocks, done: blocksDone, total: blocks.length },
@@ -142,6 +175,8 @@ export function registerDashboardRoutes(app: FastifyInstance, database: SqliteDa
       habits,
       inbox: { newCount: inboxNewCount, items: inboxItems },
       notes,
+      vault: { expiring: vaultExpiring },
+      library: { active: libraryActive },
     };
   });
 }

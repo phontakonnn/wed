@@ -91,7 +91,7 @@ describe('backup', () => {
     expect(manifest.formatVersion).toBe(1);
     expect(manifest.sizeBytes).toBe(statSync(backup.path).size);
     expect(manifest.sha256).toBe(createHash('sha256').update(readFileSync(backup.path)).digest('hex'));
-    expect(manifest.schemaVersions).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    expect(manifest.schemaVersions).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
     expect(manifest.integrityCheck).toBe('ok');
 
     const verification = await verifyBackup(backup.path);
@@ -186,7 +186,7 @@ describe('restore', () => {
 
     const result = await restoreBackup({ backupPath: backup.path, dataDirectory });
 
-    expect(result.schemaVersions).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    expect(result.schemaVersions).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
     expect(readUsernames(result.databasePath)).toEqual(['alice']);
     expect(result.safetyCopyPath).not.toBeNull();
     expect(existsSync(result.safetyCopyPath as string)).toBe(true);

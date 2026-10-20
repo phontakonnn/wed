@@ -1,0 +1,41 @@
+﻿BK-09 scheduled backup: registration + one real triggered run
+Captured: 2026-10-21T01:24:15.7342792+07:00
+
+TaskName      : PKH Backup
+State         : Ready
+RunAs         : _phontakonnn
+LogonType     : Interactive
+RunLevel      : Limited
+Action        : cmd.exe /c "C:\Users\_phontakonnn\Documents\Wed_Phontakon\scripts\backup-daily.cmd"
+WorkingDir    : C:\Users\_phontakonnn\Documents\Wed_Phontakon
+Trigger       : daily at 2026-10-21T02:00:00+07:00
+LastRunTime   : 10/21/2026 01:23:23
+LastTaskResult: 0
+NextRunTime   : 10/21/2026 02:00:00
+MissedRuns    : 0
+
+--- backup.log excerpt (last run) ---
+> tsx src/backup-cli.ts create --verify
+
+Backup created: D:\PKH-Backups-Acceptance\knowledge-20261020T182343834Z-4a860cfa.sqlite3
+  size       : 460.0 KiB
+  sha256     : 12414d6942aec2f77b610c13197cfecd69879569bf7b24ad5d4a8ef06baaaec3
+  schema     : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+  integrity  : ok
+  files      : 1 object(s), 50 B
+  object dir : D:\PKH-Backups-Acceptance\knowledge-20261020T182343834Z-4a860cfa.sqlite3.objects
+  obj crypto : AES-256-GCM
+  verified   : yes
+[Wed 10/21/2026  1:23:43.97] backup end rc=0 
+
+--- backup:list ---
+Backups in D:\PKH-Backups-Acceptance
+  knowledge-20261020T182343834Z-4a860cfa.sqlite3   460.0 KiB  2026-10-20T18:23:43.834Z  manifest ok  1 file(s)
+  knowledge-20261020T182050022Z-98468d86.sqlite3   460.0 KiB  2026-10-20T18:20:50.022Z  manifest ok  1 file(s)
+  knowledge-20261020T181805564Z-d80ad904.sqlite3   460.0 KiB  2026-10-20T18:18:05.564Z  manifest ok  1 file(s)
+
+Task definition export: pkh-task-export.xml (same folder)
+
+Scope note: this is ONE triggered run with exit code 0 and a verified backup. BK-09 requires
+three consecutive unattended daily runs; the task is now scheduled for 02:00 daily, so the
+remaining evidence must be collected on 2026-10-22, 2026-10-23 and 2026-10-24.

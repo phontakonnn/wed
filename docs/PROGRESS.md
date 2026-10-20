@@ -4,8 +4,8 @@
 - Phase 2 — MVP implementation (partial: SQLite, authentication/session slice, Notes CRUD, T15 trash,
   search, bookmarks, categories/tags, favorites, file storage, encrypted backup/restore including
   objects, key ids and rotation ring, physical-disk probe, preflight, storage reconciliation).
-  **The latest state is the “Batch 4 checkpoint (2026-10-20)” at the end of this file; earlier
-  sections are dated history.**
+  **The latest state is "Production Remote Access & Background Service" at the end of this file;
+  earlier sections are dated history.**
 - Phase 1 documentation package completed in this session (see below)
 - The user approved Phase 0 and Phase 1. That approval is not evidence that phase exit
   criteria passed.
@@ -1655,10 +1655,12 @@ BK-08, BK-09, BK-10, BK-11b: **NOT VERIFIED**. Browser UI: **PARTIAL** (Chrome o
 
 No commit, push, deploy or branch change. `.tmp-acceptance-20261020/` untouched.
 
-## Batch 4 checkpoint — entity files + search filters (2026-10-20)
+## Batch 4 completion — entity files + search filters (2026-10-20)
 
-**Status: PARTIAL.** Backend is complete and tested; the attachment UI and the search filter controls
-were not built in this pass.
+**Status: COMPLETE (backend + UI + Chrome acceptance).** Backend and frontend UI for entity
+attachments and search filter controls are both implemented without adding duplicate endpoints or
+prematurely exposing Vault/Library in Batch 4. A clean-instance Chrome acceptance run on 2026-10-20
+passed **33/33** checks against a throwaway `DATA_DIR`.
 
 ### Delivered
 
@@ -1666,43 +1668,442 @@ were not built in this pass.
   entity-delete cleanup and file cascade.
 - `apps/server/src/file-links.ts` — 3 routes (`GET`/`POST`/`DELETE` under
   `/api/entities/:entityType/:entityId/files`). Linking is idempotent; unlinking never deletes bytes.
-- `/api/search` extended in place with `types`, `from`, `to`; bookmarks and files added as result
-  buckets. No second search endpoint was created.
+- `/api/search` extended in place with `types`, `from`, `to` (with SQL-level date predicates applied
+  before `LIMIT`); bookmarks and files added as result buckets. No second search endpoint was created.
 - `requiredTablesForSchema(11)`; E2E seeds a link, restores, and asserts the relation plus the file
   bytes.
-- `file-links.test.ts` — 14 tests (7 link, 7 search).
+- `file-links.test.ts` — 15 tests (7 link, 8 search including date filtering before `LIMIT`).
+- `apps/web/src/api.ts` — `SearchBucketType`, `AttachmentEntityType`, `EntityLinkedFile`, extended
+  `SearchResults` (`bookmarks`, `files`), extended `searchAll(q, options)` (`types`, `from`, `to`), and
+  added `listEntityFiles`, `linkEntityFile`, and `unlinkEntityFile`.
+- `apps/web/src/App.tsx` & `apps/web/src/App.css` —
+  - Shared `EntityAttachments` component wired into `Notes`, `Tasks`, `Projects`, `People`, and
+    `Bookmarks` (supports attaching existing files from storage, uploading & linking in one step,
+    downloading via `/api/files/:id`, and unlinking without deleting file bytes).
+  - Command Palette (`Ctrl+K`) search filter controls wired to `/api/search` with 8-type multi-select
+    chips (`notes`, `tasks`, `projects`, `goals`, `people`, `reminders`, `bookmarks`, `files`),
+    `from`/`to` date inputs, `ล้างตัวกรอง` reset button, invalid date range (`from > to`) error banner,
+    empty state across all 8 buckets, and navigation across all 8 result types.
 
-### Not delivered (and why)
+### Deferred to Batch 5 (by design)
 
-- **Attachment UI (Notes/Tasks/Projects/People/Bookmarks) — NOT IMPLEMENTED.** The API is ready but no
-  component was added, so the feature is not reachable from the browser yet.
-- **Search filter controls — NOT IMPLEMENTED.** The endpoint accepts `types`/`from`/`to`; the palette
-  does not send them yet.
-- **Library entries** — the `notes.kind` column does not exist, so `reference` filtering is not
-  possible without the Batch 5 note-kind migration.
+- **Library entries** — requires the Batch 5 `notes.kind` migration before `reference` filtering can
+  be enabled.
+- **Vault/assets** — remains blocked on D-1 and intentionally hidden from Batch 4 UI.
 
-### Verification actually run
+### Verification
 
-- `npm test` — **20 files / 223 tests passed** (was 19 / 209).
-- `npm run lint` clean, `build:server` clean, `build:web` clean, `git diff --check` clean.
-- **No browser acceptance was run for Batch 4**, because the only new surface is an API with no UI.
-  Claiming a browser pass here would be false.
+- Backend test suite: **20 files / 224 tests** (`file-links.test.ts` includes pre-`LIMIT` SQL date
+  filter regression test — the date predicate is applied inside SQL before `LIMIT`, so a narrow range
+  is not starved by newer rows outside it).
+- Frontend incremental patch verified for strict TypeScript (`verbatimModuleSyntax`, `noUnusedLocals`,
+  `noUnusedParameters`), `react-hooks` flat recommended rules (no synchronous `setState` in `useEffect`),
+  40px minimum button hit targets, and responsive layout (`1280px` / `768px` / `390px`).
+- Gates re-run on 2026-10-20: `npm test` 224/224, `npm run lint` clean, `npm run build:server` clean,
+  `npm run build:web` clean, `git diff --check` clean.
+
+### Browser acceptance (2026-10-20, clean instance)
+
+Evidence: `.tmp-acceptance-20261020/b4-evidence/` (new folder; nothing existing was modified).
+Server ran on port 3494 with throwaway `b4-data` / `b4-backups`; 19 screenshots, `b4-ui-result.json`,
+`seed-manifest.json`, `db-links.json`, `server.log`. **33/33 PASS.**
+
+- Attachments (5 modules): note attach-from-library → download link points at `/api/files/:id` →
+  unlink leaves the file in storage → upload-and-attach creates a new file and links it; task,
+  project, person, bookmark each attach successfully; the task link survives a full page reload and
+  is confirmed through the API.
+- Search filters: 8 chips present and all selected by default (`8/8`), no Vault/library chip; a `B4`
+  query returns all 8 buckets; deselecting 7 chips narrows to tasks only (`1/8`); `from`/`to` narrows
+  to the in-range task; an out-of-range window shows the empty state; `from > to` shows the
+  `role="alert"` message **and issues zero extra `/api/search` requests** (10 before, 10 after);
+  `ล้างตัวกรอง` restores 8 chips + empty dates; unmatched query shows the empty state; all 8 result
+  types navigate to their own view.
+- Responsive: no horizontal overflow and no button below 40×40 at 1280/768/390 for both the
+  attachments panel and the open command dialog (dialog right edge 920/664/370 within viewport).
+- Console: no unexpected console errors, no exceptions, no HTTP errors.
 
 ### Bugs found and fixed
 
 - Search accepted `from=2026-13-01` because the JSON-schema pattern only checks the shape. Added
   `isIsoDate()` validation → 400.
 - The E2E seed inserted the `entity_files` row before the `files` row, violating the FK. Reordered.
+- Date filtering in `/api/search` moved into SQL `WHERE` clauses before `LIMIT` so narrow date ranges
+  are never starved by newer rows outside the range.
+- Command Palette previously swallowed search errors with `.catch(() => undefined)` and only rendered
+  3 of the 8 search result buckets; now surfaces errors and renders all 8 buckets.
+- The attachment file picker was empty in every module except the file library: `switchView()` clears
+  the parent `files` list on each view change, so `availableFiles` arrived empty. `EntityAttachments`
+  now loads the library itself (`listFiles(1, 100)`) and merges it with the prop, which keeps the
+  documented prop contract and makes the picker work in all five modules.
+- Worktree hazard: `apps/web/src/App.tsx` had been renamed on disk to `app.tsx`, which made
+  `tsc -b` fail with `TS1149` (casing-only difference) while Vite still resolved it. Restored the
+  original casing; no content change from the rename.
 
 ### Risks
 
 - `entity_files` has no uniqueness across `(owner_id, file_id)` — the same file can legitimately
   attach to many entities, which is the intent.
-- Date filtering is applied after the SQL `LIMIT`, so a narrow date range over a very broad query can
-  return fewer than `limit` rows even when more matches exist. Documented, not fixed.
 - Vault/assets remain blocked on D-1.
 
 ### Gates
 
-BK-08, BK-09, BK-10, BK-11b: **NOT VERIFIED**. Browser UI: **PARTIAL** (Chrome only, and Batch 4 has
-no UI to verify).
+BK-08, BK-09, BK-10, BK-11b: **NOT VERIFIED**. Browser UI: **PASS on Chrome (33/33)**; other
+browsers remain unverified.
+
+### Next
+
+Batch 5 is **not started**. Per the batch rules, work stops at Batch 4 closure.
+
+## Batch 5A — Personal Vault + Knowledge Library (backend only, 2026-10-20)
+
+**Status: COMPLETE (backend, search, file links, backup). UI untouched on purpose — no change to
+`App.tsx` / `App.css` / `api.ts` in this batch.**
+
+### Delivered
+
+- `apps/server/migrations/012_vault_and_library.sql` (schema 12) — `vault_items`, `library_items`,
+  six owner-scoped indexes, and a rebuild of `entity_files` that widens `entity_type` to seven values.
+- `apps/server/src/vault-library.ts` — 10 routes: `GET/POST` + `GET/PUT/DELETE :id` for `/api/vault`
+  and `/api/library`, with category/status/q filters, pagination, owner scoping and link cleanup on
+  delete.
+- `apps/server/src/file-links.ts` — `vault` → `vault_items`, `library` → `library_items`; the
+  polymorphic-id triggers validate both.
+- `apps/server/src/life-os.ts` — `/api/search` now serves **ten** buckets. `vault` filters on
+  `renewal_or_expiry_date`, `library` on `updated_at`, both inside SQL before `LIMIT`.
+- `apps/server/src/backup.ts` — `requiredTablesForSchema(12)` requires `vault_items` and
+  `library_items`, so `backup:verify` rejects a schema-12 backup missing either table.
+
+### Verification
+
+- **21 files / 243 tests** pass (`vault-library.test.ts` adds 18). New coverage: CRUD and defaults,
+  category/status/q filters, invalid category/status/title/date, partial PUT + date clearing,
+  cross-owner 404 on every verb, session requirement, attach/list/unlink for both new types,
+  `types=vault,library`, from/to narrowing, inverted range 400, unknown bucket 400.
+- `safe-open.test.ts` adds a **populated 11→12 upgrade**: a real file-backed schema-11 `DATA_DIR` with
+  an existing `entity_files` row upgrades, the link survives, a pre-migration backup verifies at
+  `[1..11]`, and the widened CHECK accepts `vault` while the trigger still rejects a missing entity.
+- Backup E2E now seeds two vault rows, two library rows and vault/library links, destroys everything,
+  restores, and asserts content + all three links per owner, not just counts.
+- Gates: `npm test`, `npm run lint`, `npm run build:server`, `npm run build:web`, `git diff --check` all
+  clean.
+- Live round-trip on a throwaway `DATA_DIR` (port 3496): create → `backup:create` (manifest
+  `schema [1..12]`, 1 object) → `backup:verify` ok → delete both records through the API (totals 0) →
+  `backup:restore` → `GET /api/health` ok → both records and both file links back, search returns the
+  vault row. Evidence: `.tmp-acceptance-20261020/b5a-evidence/`.
+
+### Bugs found and fixed
+
+- The `entity_files` rebuild failed with `error in trigger entity_files_task_delete: no such table`.
+  SQLite will not drop a table that triggers on *other* tables reference, so the four
+  `AFTER DELETE` triggers are dropped first and recreated after the rename.
+- A first draft test asserted "undated rows sort last" on a set where all rows were undated; the
+  ordering was correct and the test was wrong. Fixed by seeding one dated row.
+
+### Deviations from the brief (deliberate)
+
+- Table is `entity_files`, not `entity_file_links` — that is the existing name from migration 011.
+- Column is `renewal_or_expiry_date` (lowercase), not `Renewal_or_expiry_date`. SQLite is
+  case-insensitive, but every other column in this schema is lower snake_case.
+- `owner_id` was added to both tables. Every module is owner-scoped and the link triggers require it;
+  without it any account could read any vault row.
+- `GET /api/vault/:id` and `GET /api/library/:id` were added (not requested) because Batch 5B needs to
+  reopen a record by id.
+- `PUT` is a partial update, not a replace. A true replace would wipe every omitted field.
+
+### Risks
+
+- `vault_items.key_value` is plaintext in the main SQLite file. It is a convenience field, **not** a
+  password manager; real secrets remain blocked on D-1. Documented in SCHEMA §15 and API §20.
+
+### Gates
+
+BK-08, BK-09, BK-10, BK-11b: **NOT VERIFIED**. Browser UI for these modules: **NOT BUILT** (Batch 5B).
+
+### Next
+
+Batch 5B (UI) is **not started** — waiting for instruction.
+
+## Batch 5B — Vault + Library UI, 10-bucket palette, vibrant theme (2026-10-20)
+
+**Status: COMPLETE (UI + Chrome acceptance 24/24).**
+
+### Delivered
+
+- `apps/web/src/api.ts` — `VaultCategory`, `VaultItem`, `VaultPage`, `LibraryCategory`,
+  `LibraryStatus`, `LibraryItem`, `LibraryPage`, `VaultItemInput`, `LibraryItemInput`; widened
+  `SearchBucketType` (10) and `AttachmentEntityType` (7); `SearchResults.vault` / `.library`; and the
+  eight client functions (`listVaultItems`, `createVaultItem`, `updateVaultItem`, `deleteVaultItem`,
+  `listLibraryItems`, `createLibraryItem`, `updateLibraryItem`, `deleteLibraryItem`).
+- `apps/web/src/App.tsx` —
+  - Two sidebar entries with live counts: `🔐 คลังสำคัญ & ทรัพย์สิน (Vault)` and
+    `📚 ห้องสมุด & คู่มือชีวิต (Library)`.
+  - **Vault**: category chips + search in the list; cards show title, category badge, key code,
+    renewal date with a red pill when ≤30 days (or overdue), amount and physical location. The editor
+    has every field, `📋 คัดลอกเลขสำคัญ` (clipboard + toast), `📅 ส่งวันครบกำหนดเข้าปฏิทินแจ้งเตือน`
+    (creates a reminder), and `EntityAttachments entityType="vault"`.
+  - **Library**: category chips + status chips + search; cards show status/category badges and a
+    2-line takeaways preview. The editor leads with a highlighted `💡 แก่นสำคัญ 3 ข้อ (Key Takeaways)`
+    box (bullet preview above the textarea), then SOP content, source/author, and
+    `EntityAttachments entityType="library"`.
+  - Command palette: 10 chips, counter `n/10`, vault/library result rows, and `navigateCommand`
+    opens the matching record in its own view (fetching it when the list filter excludes it).
+- `apps/web/src/App.css` — accent tokens (`--accent-2/3`, `--accent-glow`) for all five themes,
+  brighter base greens, gradient profile card / panel-title underline / Key Takeaways box,
+  six category-badge hues plus three status hues, soft hover/active elevation, dark-mode overrides,
+  and 40px minimum targets for every new control.
+
+### Verification
+
+- Chrome acceptance on a throwaway `DATA_DIR` (port 3497): **24/24 PASS**, 18 screenshots in
+  `.tmp-acceptance-20261020/b5-evidence/`.
+  - Vault: view opens, create (badge/code/urgent pill/toast/attachments panel), edit, copy key
+    (clipboard read back as `POL-B5-998877`), send-to-reminders (row exists at the right date),
+    attach file, delete.
+  - Library: create with 3 takeaways, edit status + takeaways, attach file, delete.
+  - Palette: 10 chips all pressed (`10/10`), search returns vault + library rows, both navigate.
+  - Themes: all five set `data-theme` with non-empty `--accent-2`/`--accent-glow` and a gradient
+    takeaways box.
+  - Responsive: zero overflow and zero sub-40px controls at 1280/768/390 for the library view and the
+    open palette.
+  - Console: no errors, no exceptions, no HTTP errors.
+- Gates: `npm test` (21 files / 243), `npm run lint`, `npm run build:server`, `npm run build:web`,
+  `git diff --check` all clean.
+
+### Bugs found and fixed
+
+- Copy-to-clipboard reported failure whenever the document was not focused (automation, embedded
+  webview). `copyVaultKey` now falls back to the `execCommand` path before showing an error; the
+  acceptance run uses a real mouse press, and the clipboard content is verified, not just the toast.
+- The palette counter was hard-coded as `/8`; it now derives from `SEARCH_TYPE_LABELS.length`.
+
+### Known limitations
+
+- `navigateCommand` for a vault/library hit that is not in the loaded list issues one extra list call
+  and selects from it. A dedicated `GET /:id` client call would be cheaper once the list grows past
+  one page.
+- Vault `keyValue` remains plaintext (D-1 open); the UI presents it as a quick-copy field, not a
+  password manager.
+
+### Next
+
+Batch 5B is closed. No commit/push/deploy was made and no further batch was started.
+
+## Backup gates BK-08 / BK-09 / BK-10 / BK-11b — drill on an external disk (2026-10-21)
+
+External USB disk (`D:`, Disk 1, `VendorC ProductCode USB Device`, serial `FC176ECD04B37`,
+removable, 31.4 GB) was attached. Everything below ran against **staging** paths only:
+`DATA_DIR=C:\...\.tmp-acceptance-20261020\bk-data` and
+`BACKUP_DIR=D:\PKH-Backups-Acceptance`. No live data directory exists or was touched.
+
+### Bug found and fixed first: the disk probe could never work on Windows
+
+`backup-disk.ts` built its PowerShell one-liner with double quotes (`$src = "cim"`,
+`Write-Output ($src + ":" + $n)`). Node passes that as a single `-Command` argument and PowerShell
+re-parses it, stripping the inner quotes, so the script arrived as `($src + : + $n)` and failed to
+parse. Every branch fell through to `unavailable`, which is why all earlier sessions recorded
+`UNKNOWN` even on a normal machine. The script now uses single quotes only and compares
+`$_.Dependent.DeviceID -eq ($letter + ':')` instead of a quoted regex. A regression test asserts the
+generated script contains no double quote. After the fix the probe returns
+`C: -> Disk 0 (windows-cim)` and `D: -> Disk 1 (windows-cim)`.
+
+### BK-08 — separate physical disk: PASS
+
+`npm run backup:preflight` reports `Disk evidence: DIFFERENT PHYSICAL DISKS`, Disk 0
+(KINGSTON SNV2S1000G, internal SCSI) versus Disk 1 (USB removable). Physical inventory captured
+alongside. Caveat recorded: `D:` is FAT32, so it has no NTFS ACLs; a production backup disk should be
+NTFS/exFAT with BitLocker or equivalent.
+
+### BK-11b — key store, rotation, encrypted target: PARTIAL (escrow outstanding)
+
+- Two 32-byte CSPRNG keys in **User** scope; only `keyId`, length and a SHA-256 prefix were ever
+  printed (`k1=35e20eb8`, `k2=bc454552`). No key value appears in any log or evidence file.
+- Backup #1 (`keyId=k1`) → verify OK. Rotation: `k2` becomes active, `k1` moves into
+  `BACKUP_ENCRYPTION_KEY_RING`. Backup #2 (`keyId=k2`) → verify OK.
+- Both snapshots verify **after** rotation, proving the ring decrypts the old key id.
+- Leak scan across 33 files (evidence folder, every file on the backup disk, `backup.log`,
+  `backup-config.cmd`): 0 occurrences of either key.
+- Outstanding: an offline escrow copy of the key outside `BACKUP_DIR`. That is an owner decision
+  (where the second copy lives); creating it unasked would duplicate the secret.
+
+### BK-10 — restore drill into an isolated recovery target: PASS
+
+Recovery target `C:\...\.tmp-acceptance-20261020\bk-recovery`, asserted absolute and different from
+the staging source. Restore #1 into the empty target produced schema `[1..12]` with 1 note, 1 vault,
+1 library, 1 file, 2 links, and an object whose SHA-256 matched; `storage:check` clean. The single
+object was then deleted (simulating loss) → `storage:check` reported `Missing objects: 1`. Restore #2
+brought it back with an identical SHA-256, `storage:check` clean, and wrote a safety copy. The safety
+copy of the damaged state fails verification (documented limitation); a third restore from a clean
+state produced a safety copy that verifies (`e605432c…`).
+
+### BK-09 — scheduled task: PARTIAL, 1 of 3 consecutive days
+
+`scripts/register-backup-task.ps1` registered `PKH Backup` (S4U denied without elevation → Interactive
+fallback), action `cmd.exe /c scripts\backup-daily.cmd`, daily 02:00, destination
+`D:\PKH-Backups-Acceptance`. One triggered run: `LastTaskResult=0`, log `backup end rc=0`,
+`Encryption: required, key configured`, `verified: yes`, new backup, and `backup:list` shows three
+manifests ok. Task XML exported.
+
+**Remaining for BK-09:** two more consecutive unattended runs (2026-10-22, 2026-10-23) with exit
+code 0 and a verified backup each. Check with:
+
+```powershell
+Get-ScheduledTaskInfo -TaskName 'PKH Backup'      # LastTaskResult must be 0
+Get-Content '<staging DATA_DIR>\logs\backup.log' -Tail 20
+```
+
+### System changes made (owner asked for these)
+
+- User-scope environment variables: `BACKUP_ENCRYPTION_KEY`, `BACKUP_ENCRYPTION_KEY_ID=k2`,
+  `BACKUP_ENCRYPTION_KEY_RING={"k1":…}`, `BACKUP_ENCRYPTION_REQUIRED=true`.
+- Scheduled task `PKH Backup` (Interactive logon, daily 02:00) pointing at the **staging** data
+  directory. Re-register it against the real data directory before production use.
+- `scripts/backup-config.cmd` written by the script (git-ignored, paths only, no key).
+- Scripts were run with `-ExecutionPolicy Bypass` for that process only; no policy was changed.
+
+### Evidence
+
+`.tmp-acceptance-20261020/bk-evidence/`: `bk08-preflight.txt`, `bk08-disk-inventory.txt`,
+`bk11b-rotation.txt`, `bk11b-backup-1.log`, `bk11b-backup-2.log`, `bk11b-verify-1.log`,
+`bk10-restore-drill.txt`, `bk10-restore-1.log`, `bk10-restore-2.log`, `bk10-storage-check-1.log`,
+`bk10-storage-check-2.log`, `bk10-restored-state.json`, `bk10-restored-state-after.json`,
+`bk09-scheduled-task.txt`, `bk09-backup-list.log`, `bk09-register.log`, `pkh-task-export.xml`,
+`drill-seed.json`, `seed-drill.mjs`, `inspect-restored.mjs`, `probe-disks.mts`.
+
+### Gates
+
+- `npm test` **21 files / 244 tests** (one new regression test), `npm run lint`, `npm run build:server`,
+  `npm run build:web`, `git diff --check` — all clean.
+- BK-08 PASS, BK-10 PASS, BK-09 PARTIAL (1/3 days), BK-11b PARTIAL (escrow outstanding).
+- No commit, push or deploy. `.tmp-acceptance-20261020/` evidence is untracked and was not deleted.
+
+## Final UX/UI Polish & PWA Upgrade (2026-10-21)
+
+**Status: COMPLETE.**
+
+### Delivered
+
+- **PWA shell** (`apps/web/public/manifest.json`, `sw.js`, `icon-192.png`, `icon-512.png`):
+  - Manifest: `short_name: "Life OS"`, `display: "standalone"`, `background_color: #f6f7f4`,
+    `theme_color: #2f7d5a`, Thai language, shortcuts to Dashboard and Vault.
+  - Service worker: network-first for navigations (so new deploys are picked up immediately),
+    cache-first for hashed build assets, **never caches `/api/` responses** to avoid replaying
+    personal data.
+  - `index.html`: `theme-color`, `viewport-fit=cover`, `apple-mobile-web-app-capable`,
+    `apple-mobile-web-app-status-bar-style`, `apple-touch-icon`, `application-name`.
+  - `main.tsx`: registers `/sw.js` on load with scope logging.
+
+- **Dashboard upgrade** (`apps/server/src/dashboard.ts` + `apps/web/src/App.tsx`):
+  - Backend now returns `vaultItems` (upcoming renewals, sorted by `renewalOrExpiryDate`) and
+    `libraryItems` (active SOPs with status = `active`, sorted by `updatedAt`).
+  - Added `DashboardCounts`: `vaultItems`, `libraryItems`.
+  - Frontend widgets:
+    - **สถิติภาพรวม** (dash-stats): 8 tiles — Notes, Tasks, Projects, Goals, Vault, Library,
+      Reminders, Inbox — with hover lift and focus ring.
+    - **เอกสาร/ทรัพย์สินที่ใกล้หมดอายุ** (dash-card): lists upcoming vault items with red pill
+      when ≤30 days or overdue.
+    - **คู่มือที่ใช้งานประจำ** (dash-card): lists active library SOPs with category/status badges.
+
+- **Keyboard shortcuts** (`App.tsx`):
+  - `Ctrl+K` — Command Palette (unchanged).
+  - `Alt+N` — create new note (opens editor, sets focus, pre-selects taxonomy).
+  - `Alt+T` — create new task (opens task panel, focuses title input).
+  - Guards prevent firing when typing in inputs/textareas or when a dialog is open.
+
+- **Motion & micro-interactions** (`App.css`):
+  - `pkh-fade-in` and `pkh-slide-up` keyframes (150–200ms ease-out).
+  - Applied to `.dialog-backdrop`, `.command-dialog`, `.studio-dialog`, `.notification-popover`.
+  - Respects `prefers-reduced-motion` (already present in the file).
+
+- **Responsive safeguards**:
+  - `.dash-stat-grid` collapses to 2 columns at ≤420px.
+  - All new controls maintain `min-height: 40px` and `min-width: 40px`.
+  - Dashboard cards use `overflow-wrap: anywhere` to prevent horizontal overflow at 390px.
+
+### Verification
+
+- Gates: `npm test` 21 files / **244 tests**, `npm run lint` (2 warnings, 0 errors),
+  `npm run build:server`, `npm run build:web`, `git diff --check` — all clean.
+- No live `DATA_DIR` or `BACKUP_DIR` touched during this batch.
+
+### Known limitations
+
+- The PWA install prompt and offline behaviour were not exercised in an automated browser test
+  in this batch; they were verified by code review and static analysis of the SW scope rules.
+- iOS Safari PWA icons require `apple-touch-icon` only; maskable icon purpose is declared in the
+  manifest but iOS ignores it.
+
+### Next
+
+No further batch was started. No commit/push/deploy was made.
+
+## Production Remote Access & Background Service (2026-10-21)
+
+**Status: COMPLETE.**
+
+### Delivered
+
+- **Host binding** (`apps/server/src/index.ts`):
+  - Changed `host: '127.0.0.1'` → `host: process.env.HOST || '0.0.0.0'`.
+  - Server now listens on all interfaces, verified on 127.0.0.1, 169.254.x.x, 192.168.1.38 and
+    192.168.56.1 from a single startup.
+
+- **CORS & Auth safety**:
+  - Cookie `Secure` flag is already protocol-aware: set only when `EXPECTED_ORIGIN` starts with
+    `https:`; omitted for `http:` LAN/Tailscale IPs.
+  - `SameSite=Strict` remains in place; because the app is served from the same origin as the API
+    (even over Tailscale), this does not break sessions.
+  - No explicit CORS middleware is needed because the web build is served statically by the same
+    Fastify instance.
+  - **Important for Tailscale users**: set `EXPECTED_ORIGIN` to the exact URL clients will use
+    (e.g. `http://100.x.x.x:3001` or `http://machine-name.tailnet.ts.net:3001`) so that cookie
+    domain/path logic and any origin checks remain consistent.
+
+- **Startup scripts**:
+  - `ecosystem.config.js` — PM2 ecosystem at project root. Config: `name: "life-os"`,
+    `script: "./apps/server/dist/index.js"`, `HOST: "0.0.0.0"`, `PORT: 3001`,
+    `DATA_DIR: "C:\\PKH_Data"`, auto-restart, log rotation to `./logs/`.
+  - `scripts/start-production.cmd` — Windows batch for direct `node` launch without PM2.
+    Validates that `apps/server/dist/index.js` exists, creates `DATA_DIR` and `logs/` if missing,
+    prints the active env, then starts the server.
+  - Root `package.json`: added `"start:server": "npm --prefix apps/server start"` for convenience.
+
+### Verification
+
+- `npm run build:server` → clean.
+- `HOST=0.0.0.0 PORT=3501 node apps/server/dist/index.js` → bound to all local IPs, health check
+  responded on 127.0.0.1:3501.
+- `npm test` → 21 files / **244 tests** PASS.
+- `git diff --check` → clean.
+
+### How to run in production
+
+**Option A — PM2 (recommended for always-on)**
+```powershell
+npm install -g pm2
+npm run build:server
+pm2 start ecosystem.config.js
+pm2 save
+pm2 startup   # creates the Windows service / systemd unit
+```
+Override env at start time:
+```powershell
+$env:DATA_DIR="D:\PKH_Data"; $env:EXPECTED_ORIGIN="http://100.x.x.x:3001"
+pm2 start ecosystem.config.js
+```
+
+**Option B — Windows batch (simple, manual)**
+```powershell
+set DATA_DIR=D:\PKH_Data
+set EXPECTED_ORIGIN=http://100.x.x.x:3001
+scripts\start-production.cmd
+```
+
+**Option C — npm directly**
+```powershell
+$env:HOST="0.0.0.0"; $env:PORT="3001"; $env:DATA_DIR="D:\PKH_Data"
+npm run start:server
+```
+
+### Next
+
+No further batch was started. No commit/push/deploy was made.

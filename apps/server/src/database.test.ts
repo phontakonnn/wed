@@ -32,7 +32,7 @@ describe('SQLite setup', () => {
       .toEqual([
         { version: 1 }, { version: 2 }, { version: 3 }, { version: 4 },
         { version: 5 }, { version: 6 }, { version: 7 }, { version: 8 }, { version: 9 },
-        { version: 10 }, { version: 11 },
+        { version: 10 }, { version: 11 }, { version: 12 }, { version: 13 },
       ]);
     expect(database.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'sessions'").get()).toEqual({ name: 'sessions' });
     expect(database.prepare("SELECT name FROM sqlite_master WHERE name = 'notes_fts'").get())
@@ -259,12 +259,15 @@ describe('SQLite setup', () => {
       '009_work_core.sql',
       '010_habit_logs_and_reminder_recurrence.sql',
       '011_entity_files.sql',
+      '012_vault_and_library.sql',
+      '013_custom_categories.sql',
     ];
     for (const file of files) {
       copyFileSync(new URL(`../migrations/${file}`, import.meta.url), join(currentMigrations, file));
       if (file !== '006_favorites.sql' && file !== '007_files.sql'
         && file !== '008_life_os_people_and_schedule.sql' && file !== '009_work_core.sql'
-        && file !== '010_habit_logs_and_reminder_recurrence.sql' && file !== '011_entity_files.sql') {
+        && file !== '010_habit_logs_and_reminder_recurrence.sql' && file !== '011_entity_files.sql'
+        && file !== '012_vault_and_library.sql' && file !== '013_custom_categories.sql') {
         copyFileSync(new URL(`../migrations/${file}`, import.meta.url), join(priorMigrations, file));
       }
     }
@@ -289,7 +292,7 @@ describe('SQLite setup', () => {
       .toEqual([
         { version: 1 }, { version: 2 }, { version: 3 }, { version: 4 },
         { version: 5 }, { version: 6 }, { version: 7 }, { version: 8 }, { version: 9 },
-        { version: 10 }, { version: 11 },
+        { version: 10 }, { version: 11 }, { version: 12 }, { version: 13 },
       ]);
     expect(database.prepare('SELECT title, content FROM notes WHERE id = ?').get('migration-note'))
       .toEqual({ title: 'Keep', content: 'Existing content' });
@@ -304,7 +307,7 @@ describe('SQLite setup', () => {
     database.prepare('DELETE FROM bookmarks WHERE id = ?').run('migration-bookmark');
     database.prepare('INSERT INTO files (id, owner_id, display_name, size_bytes, sha256, media_type, object_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1)')
       .run('file-1', 'migration-owner', 'a.png', 10, 'a'.repeat(64), 'image/png', 'file-1');
-    expect(database.prepare("PRAGMA foreign_key_list('files')").all()).toHaveLength(1);
+    expect(database.prepare("PRAGMA foreign_key_list('files')").all()).toHaveLength(2);
     expect(() => database.prepare(
       'INSERT INTO files (id, owner_id, display_name, size_bytes, sha256, media_type, object_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1)',
     ).run('file-2', 'missing-owner', 'b.png', 10, 'b'.repeat(64), 'image/png', 'file-2')).toThrow();

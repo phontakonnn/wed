@@ -1,0 +1,47 @@
+{
+  "dataDir": "C:/Users/_phontakonnn/Documents/Wed_Phontakon/.tmp-acceptance-20261020/bk-recovery",
+  "schemaVersion": 12,
+  "counts": {
+    "users": 1,
+    "notes": 1,
+    "vault": 1,
+    "library": 1,
+    "files": 1,
+    "entityFiles": 2,
+    "reminders": 0
+  },
+  "vaultTitles": [
+    {
+      "title": "กรมธรรม์สำหรับ drill",
+      "key_value": "BK-DRILL-0001"
+    }
+  ],
+  "libraryTitles": [
+    {
+      "title": "SOP สำหรับ drill",
+      "status": "ใช้งานประจำ"
+    }
+  ],
+  "links": [
+    {
+      "entity_type": "library",
+      "entity_id": "8edf2508-878b-4dfe-8041-7096eba657fe",
+      "file_id": "a87319d9-c5b9-4847-bf47-f5faa5c56793"
+    },
+    {
+      "entity_type": "vault",
+      "entity_id": "a4d17031-bbb0-48cf-b078-2a70b7e4103a",
+      "file_id": "a87319d9-c5b9-4847-bf47-f5faa5c56793"
+    }
+  ],
+  "objects": [
+    {
+      "id": "a87319d9-c5b9-4847-bf47-f5faa5c56793",
+      "name": "bk-drill-attachment.txt",
+      "sizeBytes": 50,
+      "expectedSha256": "c9227e82041968314118564ed18db73c1d4b424b079b43e657f6ceba19fed3bc",
+      "objectExists": true,
+      "sha256Matches": true
+    }
+  ]
+}

@@ -115,19 +115,24 @@ export async function mapPathToPhysicalDisk(
   // Two read-only strategies: the Storage cmdlets, then the WMI association map for hosts where
   // Get-Partition/Get-Volume cannot see the volume. The letter is validated above, so it is safe
   // to interpolate.
+  // The whole script travels as one `-Command` argument. On Windows, Node quotes that argument and
+  // PowerShell re-parses it, which strips embedded double quotes: `Write-Output ($src + ":" + $n)`
+  // arrives as `($src + : + $n)` and the script fails to parse, so the fallback silently returned
+  // nothing. This script therefore uses single quotes only and compares the association through the
+  // typed `DeviceID` property instead of a quoted regex. `backup-disk.test.ts` guards that rule.
   const script = [
     "$ErrorActionPreference = 'Stop'",
     `$letter = '${letter}'`,
     '$n = $null',
     '$src = $null',
-    'try { $n = (Get-Partition -DriveLetter $letter -ErrorAction Stop | Select-Object -First 1 -ExpandProperty DiskNumber); $src = "partition" } catch { $n = $null }',
+    "try { $n = (Get-Partition -DriveLetter $letter -ErrorAction Stop | Select-Object -First 1 -ExpandProperty DiskNumber); $src = 'partition' } catch { $n = $null }",
     'if ($null -eq $n) {',
     '  try {',
-    '    $m = Get-CimInstance Win32_LogicalDiskToPartition -ErrorAction Stop | Where-Object { $_.Dependent -match (\'DeviceID\s*=\s*"\' + $letter + \':"\') } | Select-Object -First 1',
-    '    if ($m) { $text = [string]$m.Antecedent; if ($text -match \'Disk #(\d+)\') { $n = [int]$matches[1]; $src = "cim" } }',
+    "    $m = Get-CimInstance Win32_LogicalDiskToPartition -ErrorAction Stop | Where-Object { $_.Dependent.DeviceID -eq ($letter + ':') } | Select-Object -First 1",
+    "    if ($m) { $text = [string]$m.Antecedent; if ($text -match 'Disk #(\\d+)') { $n = [int]$matches[1]; $src = 'cim' } }",
     '  } catch { $n = $null }',
     '}',
-    'if ($null -ne $n) { Write-Output ($src + ":" + $n) }',
+    "if ($null -ne $n) { Write-Output ($src + ':' + $n) }",
   ].join('; ');
   try {
     const output = await (options.runPowerShell ?? defaultRunner)(script);

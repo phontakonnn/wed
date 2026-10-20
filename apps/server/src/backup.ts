@@ -76,6 +76,9 @@ function requiredTablesForSchema(schemaVersions: number[]): string[] {
   if (schemaVersions.includes(11)) {
     required.push('entity_files');
   }
+  if (schemaVersions.includes(12)) {
+    required.push('vault_items', 'library_items');
+  }
   return required;
 }
 

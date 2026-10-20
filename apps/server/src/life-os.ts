@@ -803,7 +803,10 @@ export function registerLifeOsRoutes(app: FastifyInstance, database: SqliteDatab
       if (!query) return reply.code(400).send({ error: 'คำค้นไม่ถูกต้อง' });
       const limit = request.query.limit ?? 8;
 
-      const allowed = ['notes', 'tasks', 'projects', 'goals', 'people', 'reminders', 'bookmarks', 'files'];
+      const allowed = [
+        'notes', 'tasks', 'projects', 'goals', 'people', 'reminders', 'bookmarks', 'files',
+        'vault', 'library',
+      ];
       const requested = request.query.types
         ? request.query.types.split(',').map((entry) => entry.trim()).filter(Boolean)
         : allowed;
@@ -850,6 +853,10 @@ export function registerLifeOsRoutes(app: FastifyInstance, database: SqliteDatab
       const reminderDates = isoFilter('COALESCE(r.snoozed_until, r.target_date)');
       const bookmarkDates = msFilter('created_at');
       const fileDates = msFilter('created_at');
+      // Vault rows without a renewal date are excluded once a range is given, exactly like tasks
+      // and projects without a due date: an undated record cannot be inside a date range.
+      const vaultDates = isoFilter('renewal_or_expiry_date');
+      const libraryDates = msFilter('updated_at');
 
       const notes = wanted.has('notes')
         ? database.prepare(`
@@ -965,7 +972,45 @@ export function registerLifeOsRoutes(app: FastifyInstance, database: SqliteDatab
           `).all(ownerId, query, query, ...fileDates.params, limit)
         : [];
 
-      return { notes, people, reminders, tasks, projects, goals, bookmarks, files, query };
+      // Vault search covers the label, the stored code, where the original is kept, the amount text
+      // and the notes. It does not decrypt anything: `key_value` is stored as entered.
+      const vault = wanted.has('vault')
+        ? database.prepare(`
+            SELECT id, title, category, key_value AS keyValue,
+              renewal_or_expiry_date AS renewalOrExpiryDate, amount_text AS amountText,
+              physical_location AS physicalLocation
+            FROM vault_items
+            WHERE owner_id = ?
+              AND (instr(nfc(lower(title)), nfc(lower(?))) > 0
+                OR instr(nfc(lower(key_value)), nfc(lower(?))) > 0
+                OR instr(nfc(lower(physical_location)), nfc(lower(?))) > 0
+                OR instr(nfc(lower(amount_text)), nfc(lower(?))) > 0
+                OR instr(nfc(lower(notes)), nfc(lower(?))) > 0)
+              ${vaultDates.sql}
+            ORDER BY (renewal_or_expiry_date IS NULL), renewal_or_expiry_date, updated_at DESC
+            LIMIT ?
+          `).all(ownerId, query, query, query, query, query, ...vaultDates.params, limit)
+        : [];
+
+      const library = wanted.has('library')
+        ? database.prepare(`
+            SELECT id, title, category, status, source_url_or_author AS sourceUrlOrAuthor,
+              key_takeaways AS keyTakeaways
+            FROM library_items
+            WHERE owner_id = ?
+              AND (instr(nfc(lower(title)), nfc(lower(?))) > 0
+                OR instr(nfc(lower(key_takeaways)), nfc(lower(?))) > 0
+                OR instr(nfc(lower(content)), nfc(lower(?))) > 0
+                OR instr(nfc(lower(source_url_or_author)), nfc(lower(?))) > 0)
+              ${libraryDates.sql}
+            ORDER BY is_favorite DESC, updated_at DESC
+            LIMIT ?
+          `).all(ownerId, query, query, query, query, ...libraryDates.params, limit)
+        : [];
+
+      return {
+        notes, people, reminders, tasks, projects, goals, bookmarks, files, vault, library, query,
+      };
     },
   );
 }

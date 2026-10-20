@@ -1,0 +1,487 @@
+{
+  "generatedAt": "2026-10-20T16:03:18.029Z",
+  "base": "http://127.0.0.1:3494",
+  "passed": 33,
+  "total": 33,
+  "failures": [],
+  "results": [
+    {
+      "id": "B4-00-login",
+      "status": "PASS",
+      "detail": {
+        "view": "dashboard"
+      }
+    },
+    {
+      "id": "B4-A1-note-panel-empty",
+      "status": "PASS",
+      "detail": {
+        "count": 0,
+        "names": [],
+        "hrefs": [],
+        "options": [
+          "เลือกไฟล์จากคลัง…",
+          "b4-gamma.txt (37 B)",
+          "b4-beta.txt (36 B)",
+          "b4-alpha.txt (37 B)"
+        ],
+        "empty": true,
+        "error": "",
+        "notice": "",
+        "heading": "ไฟล์แนบ (0)"
+      }
+    },
+    {
+      "id": "B4-A2-note-link-existing",
+      "status": "PASS",
+      "detail": {
+        "count": 1,
+        "names": [
+          "b4-alpha.txt"
+        ],
+        "hrefs": [
+          "/api/files/f1763d82-dc7e-4b10-b709-da20af92cb98"
+        ],
+        "options": [
+          "เลือกไฟล์จากคลัง…",
+          "b4-gamma.txt (37 B)",
+          "b4-beta.txt (36 B)"
+        ],
+        "empty": false,
+        "error": "",
+        "notice": "แนบไฟล์แล้ว",
+        "heading": "ไฟล์แนบ (1)"
+      }
+    },
+    {
+      "id": "B4-A3-note-unlink-keeps-file",
+      "status": "PASS",
+      "detail": {
+        "panel": {
+          "count": 0,
+          "names": [],
+          "hrefs": [],
+          "options": [
+            "เลือกไฟล์จากคลัง…",
+            "b4-gamma.txt (37 B)",
+            "b4-beta.txt (36 B)",
+            "b4-alpha.txt (37 B)"
+          ],
+          "empty": true,
+          "error": "",
+          "notice": "เอาไฟล์แนบออกแล้ว (ไฟล์ในคลังยังอยู่ครบ)",
+          "heading": "ไฟล์แนบ (0)"
+        },
+        "libraryHasFile": true
+      }
+    },
+    {
+      "id": "B4-A4-note-upload-and-link",
+      "status": "PASS",
+      "detail": {
+        "panel": {
+          "count": 1,
+          "names": [
+            "b4-uploaded.txt"
+          ],
+          "hrefs": [
+            "/api/files/e82be506-ffed-4883-8c08-024aa89cb230"
+          ],
+          "options": [
+            "เลือกไฟล์จากคลัง…",
+            "b4-gamma.txt (37 B)",
+            "b4-beta.txt (36 B)",
+            "b4-alpha.txt (37 B)"
+          ],
+          "empty": false,
+          "error": "",
+          "notice": "อัปโหลดและแนบไฟล์แล้ว",
+          "heading": "ไฟล์แนบ (1)"
+        },
+        "uploaded": {
+          "id": "e82be506-ffed-4883-8c08-024aa89cb230",
+          "name": "b4-uploaded.txt"
+        }
+      }
+    },
+    {
+      "id": "B4-A5-task-link",
+      "status": "PASS",
+      "detail": {
+        "scoped": true,
+        "panel": {
+          "count": 1,
+          "names": [
+            "b4-beta.txt"
+          ],
+          "hrefs": [
+            "/api/files/3bda98d8-702d-48c9-87b9-2f1e8430765e"
+          ],
+          "options": [
+            "เลือกไฟล์จากคลัง…",
+            "b4-uploaded.txt (35 B)",
+            "b4-gamma.txt (37 B)",
+            "b4-alpha.txt (37 B)"
+          ],
+          "empty": false,
+          "error": "",
+          "notice": "แนบไฟล์แล้ว",
+          "heading": "ไฟล์แนบ (1)"
+        }
+      }
+    },
+    {
+      "id": "B4-A6-project-link",
+      "status": "PASS",
+      "detail": {
+        "count": 1,
+        "names": [
+          "b4-gamma.txt"
+        ],
+        "hrefs": [
+          "/api/files/0c5596b0-d8f7-4018-a382-40069433986b"
+        ],
+        "options": [
+          "เลือกไฟล์จากคลัง…",
+          "b4-uploaded.txt (35 B)",
+          "b4-beta.txt (36 B)",
+          "b4-alpha.txt (37 B)"
+        ],
+        "empty": false,
+        "error": "",
+        "notice": "แนบไฟล์แล้ว",
+        "heading": "ไฟล์แนบ (1)"
+      }
+    },
+    {
+      "id": "B4-A7-person-link",
+      "status": "PASS",
+      "detail": {
+        "count": 1,
+        "names": [
+          "b4-alpha.txt"
+        ],
+        "hrefs": [
+          "/api/files/f1763d82-dc7e-4b10-b709-da20af92cb98"
+        ],
+        "options": [
+          "เลือกไฟล์จากคลัง…",
+          "b4-uploaded.txt (35 B)",
+          "b4-gamma.txt (37 B)",
+          "b4-beta.txt (36 B)"
+        ],
+        "empty": false,
+        "error": "",
+        "notice": "แนบไฟล์แล้ว",
+        "heading": "ไฟล์แนบ (1)"
+      }
+    },
+    {
+      "id": "B4-A8-bookmark-link",
+      "status": "PASS",
+      "detail": {
+        "count": 1,
+        "names": [
+          "b4-uploaded.txt"
+        ],
+        "hrefs": [
+          "/api/files/e82be506-ffed-4883-8c08-024aa89cb230"
+        ],
+        "options": [
+          "เลือกไฟล์จากคลัง…",
+          "b4-gamma.txt (37 B)",
+          "b4-beta.txt (36 B)",
+          "b4-alpha.txt (37 B)"
+        ],
+        "empty": false,
+        "error": "",
+        "notice": "แนบไฟล์แล้ว",
+        "heading": "ไฟล์แนบ (1)"
+      }
+    },
+    {
+      "id": "B4-A9-persist-after-reload",
+      "status": "PASS",
+      "detail": [
+        "b4-beta.txt"
+      ]
+    },
+    {
+      "id": "B4-S1-eight-chips-default-on",
+      "status": "PASS",
+      "detail": [
+        {
+          "label": "โน้ต",
+          "pressed": true
+        },
+        {
+          "label": "งาน",
+          "pressed": true
+        },
+        {
+          "label": "โปรเจกต์",
+          "pressed": true
+        },
+        {
+          "label": "เป้าหมาย",
+          "pressed": true
+        },
+        {
+          "label": "บุคคล",
+          "pressed": true
+        },
+        {
+          "label": "แจ้งเตือน",
+          "pressed": true
+        },
+        {
+          "label": "บุ๊กมาร์ก",
+          "pressed": true
+        },
+        {
+          "label": "ไฟล์",
+          "pressed": true
+        }
+      ]
+    },
+    {
+      "id": "B4-S2-all-eight-buckets",
+      "status": "PASS",
+      "detail": {
+        "kinds": [
+          "โน้ต",
+          "งาน",
+          "โปรเจกต์",
+          "เป้าหมาย",
+          "บุคคล",
+          "แจ้งเตือน",
+          "บุ๊กมาร์ก",
+          "ไฟล์"
+        ],
+        "total": 13
+      }
+    },
+    {
+      "id": "B4-S3-types-filter-tasks-only",
+      "status": "PASS",
+      "detail": {
+        "kinds": [
+          "งาน"
+        ],
+        "count": "ประเภทข้อมูล (1/8)",
+        "items": [
+          "งานB4 งานด่วนสัปดาห์นี้ · 2026-10-23",
+          "งานB4 งานไกลเดือนหน้า · 2026-11-29"
+        ]
+      }
+    },
+    {
+      "id": "B4-S4-date-range-narrows",
+      "status": "PASS",
+      "detail": {
+        "from": "2026-10-20",
+        "to": "2026-10-23",
+        "items": [
+          "งานB4 งานด่วนสัปดาห์นี้ · 2026-10-23"
+        ]
+      }
+    },
+    {
+      "id": "B4-S5-date-range-empty-state",
+      "status": "PASS",
+      "detail": {
+        "from": "2026-10-26",
+        "to": "2026-10-29",
+        "empty": true,
+        "items": []
+      }
+    },
+    {
+      "id": "B4-S6-invalid-range-blocks-request",
+      "status": "PASS",
+      "detail": {
+        "alert": "ช่วงวันที่ไม่ถูกต้อง: วันที่เริ่มต้องไม่หลังวันที่สิ้นสุด",
+        "searchRequestsBefore": 10,
+        "searchRequestsAfter": 10
+      }
+    },
+    {
+      "id": "B4-S7-clear-filter-restores-defaults",
+      "status": "PASS",
+      "detail": {
+        "from": "",
+        "to": "",
+        "pressed": 8,
+        "alert": ""
+      }
+    },
+    {
+      "id": "B4-S8-empty-state",
+      "status": "PASS",
+      "detail": {
+        "empty": true
+      }
+    },
+    {
+      "id": "B4-S9.1-navigate-โน้ต",
+      "status": "PASS",
+      "detail": {
+        "clicked": true,
+        "active": "✎โน้ตของฉัน2",
+        "dialogOpen": false,
+        "expectedView": "โน้ตของฉัน"
+      }
+    },
+    {
+      "id": "B4-S9.2-navigate-งาน",
+      "status": "PASS",
+      "detail": {
+        "clicked": true,
+        "active": "☑งานที่ต้องทำ2",
+        "dialogOpen": false,
+        "expectedView": "งานที่ต้องทำ"
+      }
+    },
+    {
+      "id": "B4-S9.3-navigate-โปรเจกต์",
+      "status": "PASS",
+      "detail": {
+        "clicked": true,
+        "active": "▣โปรเจกต์2",
+        "dialogOpen": false,
+        "expectedView": "โปรเจกต์"
+      }
+    },
+    {
+      "id": "B4-S9.4-navigate-เป้าหมาย",
+      "status": "PASS",
+      "detail": {
+        "clicked": true,
+        "active": "◎เป้าหมาย2",
+        "dialogOpen": false,
+        "expectedView": "เป้าหมาย"
+      }
+    },
+    {
+      "id": "B4-S9.5-navigate-บุคคล",
+      "status": "PASS",
+      "detail": {
+        "clicked": true,
+        "active": "♥บุคคลสำคัญ1",
+        "dialogOpen": false,
+        "expectedView": "บุคคลสำคัญ"
+      }
+    },
+    {
+      "id": "B4-S9.6-navigate-แจ้งเตือน",
+      "status": "PASS",
+      "detail": {
+        "clicked": true,
+        "active": "▦ปฏิทิน & ตารางชีวิต1",
+        "dialogOpen": false,
+        "expectedView": "ปฏิทิน & ตารางชีวิต"
+      }
+    },
+    {
+      "id": "B4-S9.7-navigate-บุ๊กมาร์ก",
+      "status": "PASS",
+      "detail": {
+        "clicked": true,
+        "active": "↗บุ๊กมาร์ก1",
+        "dialogOpen": false,
+        "expectedView": "บุ๊กมาร์ก"
+      }
+    },
+    {
+      "id": "B4-S9.8-navigate-ไฟล์",
+      "status": "PASS",
+      "detail": {
+        "clicked": true,
+        "active": "▤คลังไฟล์4",
+        "dialogOpen": false,
+        "expectedView": "คลังไฟล์"
+      }
+    },
+    {
+      "id": "B4-R1-1280-attachments",
+      "status": "PASS",
+      "detail": {
+        "overflow": false,
+        "scrollWidth": 1280,
+        "innerWidth": 1280,
+        "smallButtons": [],
+        "panelOverflow": false
+      }
+    },
+    {
+      "id": "B4-R1-768-attachments",
+      "status": "PASS",
+      "detail": {
+        "overflow": false,
+        "scrollWidth": 768,
+        "innerWidth": 768,
+        "smallButtons": [],
+        "panelOverflow": false
+      }
+    },
+    {
+      "id": "B4-R1-390-attachments",
+      "status": "PASS",
+      "detail": {
+        "overflow": false,
+        "scrollWidth": 390,
+        "innerWidth": 390,
+        "smallButtons": [],
+        "panelOverflow": false
+      }
+    },
+    {
+      "id": "B4-R2-1280-command",
+      "status": "PASS",
+      "detail": {
+        "overflow": false,
+        "dialogOverflowX": false,
+        "dialogRight": 920,
+        "innerWidth": 1280,
+        "smallButtons": [],
+        "chips": 8,
+        "results": 13
+      }
+    },
+    {
+      "id": "B4-R2-768-command",
+      "status": "PASS",
+      "detail": {
+        "overflow": false,
+        "dialogOverflowX": false,
+        "dialogRight": 664,
+        "innerWidth": 768,
+        "smallButtons": [],
+        "chips": 8,
+        "results": 13
+      }
+    },
+    {
+      "id": "B4-R2-390-command",
+      "status": "PASS",
+      "detail": {
+        "overflow": false,
+        "dialogOverflowX": false,
+        "dialogRight": 370,
+        "innerWidth": 390,
+        "smallButtons": [],
+        "chips": 8,
+        "results": 13
+      }
+    },
+    {
+      "id": "B4-C1-console-clean",
+      "status": "PASS",
+      "detail": {
+        "realErrors": [],
+        "exceptions": [],
+        "httpErrors": []
+      }
+    }
+  ]
+}

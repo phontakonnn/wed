@@ -1,0 +1,47 @@
+﻿
+> wed-phontakon@1.0.0 backup:preflight
+> npm --prefix apps/server run backup:preflight --
+
+
+> server@0.0.0 backup:preflight
+> tsx src/backup-cli.ts preflight
+
+DATA_DIR   : C:\Users\_phontakonnn\Documents\Wed_Phontakon\.tmp-acceptance-20261020\bk-data
+BACKUP_DIR : D:\PKH-Backups-Acceptance
+Same dir   : no
+Nested     : no
+Same volume: no
+Data bytes : 460.0 KiB
+Required   : 16.54 MiB
+Free space : 29982.91 MiB
+Encryption : optional, key missing
+  warning: Encryption is not required; plaintext backups (including object snapshots) are possible
+Physical disk separation: NOT VERIFIED
+DATA_DIR disk  : C: -> Disk 0 (windows-cim)
+BACKUP_DIR disk: D: -> Disk 1 (windows-cim)
+Disk evidence  : DIFFERENT PHYSICAL DISKS
+  evidence: C:\Users\_phontakonnn\Documents\Wed_Phontakon\.tmp-acceptance-20261020\bk-data -> C: (Disk 0); D:\PKH-Backups-Acceptance -> D: (Disk 1)
+
+
+=== Physical inspection (read-only, same session) ===
+Captured: 2026-10-21T01:15:31.0219255+07:00
+
+Index Model                          SerialNumber                             InterfaceType MediaType                      Size Partitions
+----- -----                          ------------                             ------------- ---------                      ---- ----------
+    0 KINGSTON SNV2S1000G            0000_0000_0000_0000_0026_B738_1FBA_D255. SCSI          Fixed hard disk media 1000202273280          3
+    1 VendorC ProductCode USB Device FC176ECD04B37                            USB           Removable Media         31453470720          1
+
+
+
+C: -> Disk #0, Partition #1
+D: -> Disk #1, Partition #0
+
+DeviceID DriveType VolumeName FileSystem         Size    FreeSpace
+-------- --------- ---------- ----------         ----    ---------
+C:               3            NTFS       996875579392 791235182592
+D:               2 D          FAT32       31439421440  31439355904
+
+
+
+Conclusion: DATA_DIR on Disk 0 (internal KINGSTON NVMe, SCSI); BACKUP_DIR on Disk 1 (USB removable, serial FC176ECD04B37). Different physical devices.
+Note: D: is FAT32 (no NTFS ACLs). Acceptable for this drill; a production backup disk should be NTFS/exFAT with BitLocker or equivalent.

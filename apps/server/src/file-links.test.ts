@@ -255,7 +255,7 @@ describe('universal search filters', () => {
     const { app, database } = setup();
     const user = createUser(database, 'alice');
 
-    expect((await search(app, user.cookie, `q=test&types=vault`)).statusCode).toBe(400);
+    expect((await search(app, user.cookie, `q=test&types=assets`)).statusCode).toBe(400);
     expect((await search(app, user.cookie, `q=test&from=2026-13-01`)).statusCode).toBe(400);
     const inverted = await search(app, user.cookie, 'q=test&from=2026-12-01&to=2026-01-01');
     expect(inverted.statusCode).toBe(400);

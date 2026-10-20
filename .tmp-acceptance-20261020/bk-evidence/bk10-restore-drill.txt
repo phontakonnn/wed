@@ -1,0 +1,71 @@
+BK-10 recovery-target restore drill
+Captured: 2026-10-21 (local)
+Operator: agent session, staging only. The live DATA_DIR was never used as a target.
+
+Source snapshot : D:\PKH-Backups-Acceptance\knowledge-20261020T182050022Z-98468d86.sqlite3
+                  (schema [1..12], encrypted objects AES-256-GCM, keyId=k2)
+Recovery target : C:\Users\_phontakonnn\Documents\Wed_Phontakon\.tmp-acceptance-20261020\bk-recovery
+Staging source  : C:\Users\_phontakonnn\Documents\Wed_Phontakon\.tmp-acceptance-20261020\bk-data
+Backup disk     : D: (Disk 1, USB removable) — separate physical disk, see bk08-preflight.txt
+
+Step 1 — path assertions (read-only)
+  liveData    = ...\bk-data
+  recovery    = ...\bk-recovery
+  isolated    = True   (recovery is not inside liveData and is not equal to it)
+  both paths absolute, both on C: but in different trees; the snapshot lives on D:
+
+Step 2 — restore #1 into the empty recovery target
+  npm run backup:restore -- <snapshot> --yes
+  result      : Database restored, schema [1..12], files: 1 object(s) restored
+  safety copy : none (no previous database existed)   <- expected for a fresh target
+  log         : bk10-restore-1.log
+
+Step 3 — content verification of the restored target (read-only)
+  schemaVersion : 12
+  counts        : users=1 notes=1 vault=1 library=1 files=1 entity_files=2 reminders=0
+  vault row     : "กรมธรรม์สำหรับ drill" / BK-DRILL-0001
+  library row   : "SOP สำหรับ drill" / ใช้งานประจำ
+  links         : vault -> file, library -> file (both present)
+  object        : bk-drill-attachment.txt, 50 bytes,
+                  sha256 c9227e82041968314118564ed18db73c1d4b424b079b43e657f6ceba19fed3bc
+                  objectExists=true, sha256Matches=true
+  file          : bk10-restored-state.json
+
+Step 4 — storage reconciliation on the recovered target
+  npm run storage:check
+  Metadata rows 1, Object files 1, Hashes checked yes, Missing 0, Orphan 0,
+  Size/Hash mismatches 0, Result: clean
+  log: bk10-storage-check-1.log
+
+Step 5 — simulated object loss
+  Deleted exactly one object file (objects\a8\a87319d9-...-f5faa5c56793). No bulk deletion.
+  npm run storage:check -> Metadata rows 1, Object files 0, Missing objects 1, Result: PROBLEMS FOUND
+  (this is the state a disk failure would leave behind)
+
+Step 6 — restore #2 over the damaged target
+  npm run backup:restore -- <snapshot> --yes
+  result      : files: 1 object(s) restored
+  objects prev: ...\bk-recovery\objects.rollback-20261020T182205877Z
+  safety copy : ...\db\knowledge.sqlite3.pre-restore-20261020T182205877Z
+  log         : bk10-restore-2.log
+
+Step 7 — post-restore verification
+  objectExists=true, sha256Matches=true (same c9227e82...fed3bc)
+  npm run storage:check -> Missing 0, Orphan 0, mismatches 0, Result: clean
+  file: bk10-restored-state-after.json, log: bk10-storage-check-2.log
+
+Step 8 — safety copy behaviour (both directions)
+  a) Safety copy of the DAMAGED pre-restore state:
+     backup:verify -> "Backup database references 1 file(s) but the backup has no object snapshot"
+     i.e. it is captured, but it is not a usable CLI rollback for that inconsistent state.
+     This is the limitation already recorded in ACCEPTANCE BK-10.
+  b) Third restore from the now-clean state produced a safety copy that verifies:
+     knowledge.sqlite3.pre-restore-20261020T182239242Z
+     -> "Backup verified", schema [1..12], sha256 e605432ca7fc2b10b9d4b0bd4c11312a7890c6ca3023cacb4c93bce023f8a006
+        objects: 1 file(s), AES-256-GCM
+     So a clean pre-restore state yields a verified rollback point.
+
+Verdict: BK-10 drill executed end to end against a real encrypted snapshot from a separate physical
+disk, into an isolated recovery target, with object-level SHA-256 equality, storage reconciliation
+clean before and after a simulated loss, and a safety copy that verifies when the pre-restore state
+is consistent.

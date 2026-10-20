@@ -28,6 +28,8 @@ import { registerWorkRoutes } from './work.js';
 import { registerDashboardRoutes } from './dashboard.js';
 import { registerHabitLogRoutes } from './habit-logs.js';
 import { registerEntityFileRoutes } from './file-links.js';
+import { registerVaultRoutes } from './vault-library.js';
+import { registerCustomCategoryRoutes } from './custom-categories.js';
 import { openDataDatabaseSafely } from './safe-open.js';
 
 declare module 'fastify' {
@@ -1476,6 +1478,8 @@ export function createApp(
   registerDashboardRoutes(app, database);
   registerHabitLogRoutes(app, database);
   registerEntityFileRoutes(app, database);
+  registerVaultRoutes(app, database);
+  registerCustomCategoryRoutes(app, database);
 
   return app;
 }
@@ -1497,7 +1501,7 @@ export async function startServer() {
     database.close();
   });
   try {
-    await server.listen({ port: Number(process.env.PORT || 3001), host: '127.0.0.1' });
+    await server.listen({ port: Number(process.env.PORT || 3001), host: process.env.HOST || '0.0.0.0' });
   } catch (error) {
     await server.close();
     throw error;

@@ -4,13 +4,18 @@ import type { SqliteDatabase } from './database.js';
 
 const UUID_PATTERN = '^[0-9a-fA-F-]{36}$';
 
-/** Entity types that may carry file attachments. `asset`/`vault` stay out until D-1 is decided. */
+/**
+ * Entity types that may carry file attachments. `asset` stays out until D-1 is decided; `vault`
+ * here means a Personal Vault record (metadata + linked documents), not encrypted secret storage.
+ */
 const ENTITY_TABLES = {
   note: 'notes',
   task: 'tasks',
   project: 'projects',
   person: 'people',
   bookmark: 'bookmarks',
+  vault: 'vault_items',
+  library: 'library_items',
 } as const;
 
 type EntityType = keyof typeof ENTITY_TABLES;

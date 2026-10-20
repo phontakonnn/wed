@@ -1,0 +1,30 @@
+{
+  "vaultTotal": 1,
+  "vault": {
+    "id": "516462a4-a18f-4420-a1b3-c92668c6cce0",
+    "title": "กรมธรรม์รถยนต์",
+    "category": "เอกสาร & ประกัน",
+    "keyValue": "POL-2026-000123",
+    "physicalLocation": "ลิ้นชักชั้น 2",
+    "renewalOrExpiryDate": "2027-03-15",
+    "amountText": "18,500 บาท/ปี",
+    "notes": "",
+    "isFavorite": true,
+    "createdAt": 1792518392992,
+    "updatedAt": 1792518392992
+  },
+  "vaultFiles": [
+    "b5a-policy.txt"
+  ],
+  "libraryTotal": 1,
+  "library": {
+    "title": "SOP เปิดร้าน",
+    "status": "ใช้งานประจำ",
+    "takeaways": "เปิดไฟ ตรวจสต็อก เปิดลิ้นชัก"
+  },
+  "libraryFiles": [
+    "b5a-policy.txt"
+  ],
+  "searchVault": 1,
+  "searchLibrary": 0
+}

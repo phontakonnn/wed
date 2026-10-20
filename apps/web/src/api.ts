@@ -133,10 +133,130 @@ export interface Habit {
   updatedAt: number;
 }
 
+export type SearchBucketType =
+  | 'notes'
+  | 'tasks'
+  | 'projects'
+  | 'goals'
+  | 'people'
+  | 'reminders'
+  | 'bookmarks'
+  | 'files'
+  | 'vault'
+  | 'library';
+
+export type AttachmentEntityType =
+  | 'note'
+  | 'task'
+  | 'project'
+  | 'person'
+  | 'bookmark'
+  | 'vault'
+  | 'library';
+
+export interface EntityLinkedFile {
+  linkId: string;
+  entityType: AttachmentEntityType;
+  entityId: string;
+  linkedAt: number;
+  id: string;
+  displayName: string;
+  sizeBytes: number;
+  mediaType: string;
+  sha256: string;
+  createdAt: number;
+}
+
+export type VaultCategory = 'เอกสาร & ประกัน' | 'ทรัพย์สิน & บ้าน' | 'รอบบิลรายเดือน';
+
+export interface VaultItem {
+  id: string;
+  title: string;
+  category: VaultCategory;
+  keyValue: string;
+  physicalLocation: string;
+  renewalOrExpiryDate: string | null;
+  amountText: string;
+  notes: string;
+  isFavorite: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface VaultPage {
+  items: VaultItem[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
+export type LibraryCategory = 'คู่มือชีวิต & SOP' | 'หนังสือ & คอร์สเรียน' | 'โพยคำสั่ง & สูตร';
+export type LibraryStatus = 'ใช้งานประจำ' | 'กำลังศึกษา' | 'สรุปจบแล้ว';
+
+export interface LibraryItem {
+  id: string;
+  title: string;
+  category: LibraryCategory;
+  status: LibraryStatus;
+  sourceUrlOrAuthor: string;
+  keyTakeaways: string;
+  content: string;
+  isFavorite: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface LibraryPage {
+  items: LibraryItem[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
+export interface VaultItemInput {
+  title: string;
+  category?: VaultCategory;
+  keyValue?: string;
+  physicalLocation?: string;
+  renewalOrExpiryDate?: string | null;
+  amountText?: string;
+  notes?: string;
+  isFavorite?: boolean;
+}
+
+export interface LibraryItemInput {
+  title: string;
+  category?: LibraryCategory;
+  status?: LibraryStatus;
+  sourceUrlOrAuthor?: string;
+  keyTakeaways?: string;
+  content?: string;
+  isFavorite?: boolean;
+}
+
 export interface SearchResults {
   tasks?: Array<{ id: string; title: string; status: string; priority: string; dueDate: string | null }>;
   projects?: Array<{ id: string; name: string; status: string; dueDate: string | null }>;
   goals?: Array<{ id: string; title: string; status: string; metric: string; targetValue: number | null; currentValue: number }>;
+  bookmarks?: Array<{ id: string; title: string; url: string; description: string; createdAt: number }>;
+  files?: Array<{ id: string; displayName: string; sizeBytes: number; mediaType: string; createdAt: number }>;
+  vault?: Array<{
+    id: string;
+    title: string;
+    category: VaultCategory;
+    keyValue: string;
+    renewalOrExpiryDate: string | null;
+    amountText: string;
+    physicalLocation: string;
+  }>;
+  library?: Array<{
+    id: string;
+    title: string;
+    category: LibraryCategory;
+    status: LibraryStatus;
+    sourceUrlOrAuthor: string;
+    keyTakeaways: string;
+  }>;
   notes: Note[];
   people: Person[];
   reminders: Reminder[];
@@ -526,8 +646,33 @@ export async function deleteHabit(habitId: string): Promise<void> {
   await request(`/api/habits/${encodeURIComponent(habitId)}`, { method: 'DELETE' });
 }
 
-export async function searchAll(q: string, limit = 8): Promise<SearchResults> {
-  const query = new URLSearchParams({ q, limit: String(limit) });
+export interface SearchAllOptions {
+  limit?: number;
+  types?: SearchBucketType[];
+  from?: string;
+  to?: string;
+}
+
+export async function searchAll(
+  q: string,
+  optionsOrLimit: number | SearchAllOptions = 8,
+): Promise<SearchResults> {
+  const options: SearchAllOptions = typeof optionsOrLimit === 'number'
+    ? { limit: optionsOrLimit }
+    : optionsOrLimit;
+  const query = new URLSearchParams({
+    q,
+    limit: String(options.limit ?? 8),
+  });
+  if (options.types && options.types.length > 0) {
+    query.set('types', options.types.join(','));
+  }
+  if (options.from) {
+    query.set('from', options.from);
+  }
+  if (options.to) {
+    query.set('to', options.to);
+  }
   const result = await request<SearchResults>(`/api/search?${query}`);
   if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
   return result;
@@ -905,7 +1050,32 @@ export interface DashboardCounts {
   goals: number;
   habitsOutstanding: number;
   notes: number;
+  vaultExpiring: number;
   upcomingWindowEnd: string;
+}
+
+export interface DashboardTotals {
+  notes: number;
+  tasks: number;
+  vault: number;
+  library: number;
+}
+
+export interface DashboardVaultItem {
+  id: string;
+  title: string;
+  category: VaultCategory;
+  renewalOrExpiryDate: string;
+  amountText: string;
+  physicalLocation: string;
+}
+
+export interface DashboardLibraryItem {
+  id: string;
+  title: string;
+  category: LibraryCategory;
+  status: LibraryStatus;
+  keyTakeaways: string;
 }
 
 export interface DashboardHabit extends Habit {
@@ -916,6 +1086,7 @@ export interface DashboardHabit extends Habit {
 export interface DashboardData {
   today: string;
   counts: DashboardCounts;
+  totals: DashboardTotals;
   tasks: { dueToday: Task[]; overdue: Task[] };
   reminders: Reminder[];
   timeblocks: { blocks: Timeblock[]; done: number; total: number };
@@ -924,6 +1095,8 @@ export interface DashboardData {
   habits: DashboardHabit[];
   inbox: { newCount: number; items: InboxItem[] };
   notes: Array<{ id: string; title: string; updatedAt: number }>;
+  vault: { expiring: DashboardVaultItem[] };
+  library: { active: DashboardLibraryItem[] };
 }
 
 export async function getDashboard(): Promise<DashboardData> {
@@ -972,4 +1145,257 @@ export async function snoozeReminder(
   );
   if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
   return result;
+}
+
+// --------------------------------------------------------------- entity files
+
+export async function listEntityFiles(
+  entityType: AttachmentEntityType,
+  entityId: string,
+): Promise<EntityLinkedFile[]> {
+  const result = await request<{ files: EntityLinkedFile[] }>(
+    `/api/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}/files`,
+  );
+  if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
+  return result.files;
+}
+
+export async function linkEntityFile(
+  entityType: AttachmentEntityType,
+  entityId: string,
+  fileId: string,
+): Promise<{ files: EntityLinkedFile[]; created: boolean }> {
+  const result = await request<{ files: EntityLinkedFile[]; created: boolean }>(
+    `/api/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}/files`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ fileId }),
+    },
+  );
+  if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
+  return result;
+}
+
+export async function unlinkEntityFile(
+  entityType: AttachmentEntityType,
+  entityId: string,
+  fileId: string,
+): Promise<void> {
+  await request(
+    `/api/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}/files/${encodeURIComponent(fileId)}`,
+    { method: 'DELETE' },
+  );
+}
+// ------------------------------------------------------- vault & library
+
+export async function listVaultItems(
+  params: { category?: VaultCategory | 'all'; q?: string; page?: number; pageSize?: number } = {},
+): Promise<VaultPage> {
+  const query = new URLSearchParams({
+    category: params.category ?? 'all',
+    page: String(params.page ?? 1),
+    pageSize: String(params.pageSize ?? 100),
+  });
+  if (params.q) query.set('q', params.q);
+  const result = await request<VaultPage>(`/api/vault?${query}`);
+  if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
+  return result;
+}
+
+export async function createVaultItem(payload: VaultItemInput): Promise<VaultItem> {
+  const result = await request<{ item: VaultItem }>('/api/vault', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
+  return result.item;
+}
+
+export async function updateVaultItem(itemId: string, payload: Partial<VaultItemInput>): Promise<VaultItem> {
+  const result = await request<{ item: VaultItem }>(`/api/vault/${encodeURIComponent(itemId)}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+  if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
+  return result.item;
+}
+
+export async function deleteVaultItem(itemId: string): Promise<void> {
+  await request(`/api/vault/${encodeURIComponent(itemId)}`, { method: 'DELETE' });
+}
+
+export async function listLibraryItems(
+  params: {
+    category?: LibraryCategory | 'all';
+    status?: LibraryStatus | 'all';
+    q?: string;
+    page?: number;
+    pageSize?: number;
+  } = {},
+): Promise<LibraryPage> {
+  const query = new URLSearchParams({
+    category: params.category ?? 'all',
+    status: params.status ?? 'all',
+    page: String(params.page ?? 1),
+    pageSize: String(params.pageSize ?? 100),
+  });
+  if (params.q) query.set('q', params.q);
+  const result = await request<LibraryPage>(`/api/library?${query}`);
+  if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
+  return result;
+}
+
+export async function createLibraryItem(payload: LibraryItemInput): Promise<LibraryItem> {
+  const result = await request<{ item: LibraryItem }>('/api/library', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
+  return result.item;
+}
+
+export async function updateLibraryItem(
+  itemId: string,
+  payload: Partial<LibraryItemInput>,
+): Promise<LibraryItem> {
+  const result = await request<{ item: LibraryItem }>(`/api/library/${encodeURIComponent(itemId)}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+  if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
+  return result.item;
+}
+
+export async function deleteLibraryItem(itemId: string): Promise<void> {
+  await request(`/api/library/${encodeURIComponent(itemId)}`, { method: 'DELETE' });
+}
+
+
+// ------------------------------------------------------- custom categories & spaces
+
+export interface CustomCategory {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  parentId: string | null;
+  sortOrder: number;
+  itemCount: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface CustomCategoryInput {
+  name: string;
+  icon?: string;
+  color?: string;
+  parentId?: string | null;
+  sortOrder?: number;
+}
+
+export interface CustomCategoryItemsResult {
+  category: CustomCategory;
+  subcategories: CustomCategory[];
+  counts: {
+    notes: number;
+    tasks: number;
+    bookmarks: number;
+    files: number;
+    vault: number;
+    library: number;
+    total: number;
+  };
+  notes: Note[];
+  tasks: Task[];
+  bookmarks: Bookmark[];
+  files: StoredFile[];
+  vault: VaultItem[];
+  library: LibraryItem[];
+}
+
+export async function listCustomCategories(): Promise<CustomCategory[]> {
+  const result = await request<{ categories: CustomCategory[] }>('/api/custom-categories');
+  return result?.categories ?? [];
+}
+
+export async function createCustomCategory(payload: CustomCategoryInput): Promise<CustomCategory> {
+  const result = await request<{ category: CustomCategory }>('/api/custom-categories', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
+  return result.category;
+}
+
+export async function updateCustomCategory(
+  id: string,
+  payload: Partial<CustomCategoryInput>,
+): Promise<CustomCategory> {
+  const result = await request<{ category: CustomCategory }>(`/api/custom-categories/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+  if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
+  return result.category;
+}
+
+export async function deleteCustomCategory(id: string): Promise<void> {
+  await request(`/api/custom-categories/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export async function getCustomCategoryItems(id: string): Promise<CustomCategoryItemsResult> {
+  const result = await request<CustomCategoryItemsResult>(`/api/custom-categories/${encodeURIComponent(id)}/items`);
+  if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
+  return result;
+}
+
+export async function linkItemToCustomCategory(
+  categoryId: string,
+  itemType: 'note' | 'task' | 'bookmark' | 'library' | 'vault' | 'file',
+  itemId: string,
+): Promise<{ success: boolean; linkId: string }> {
+  const result = await request<{ success: boolean; linkId: string }>(
+    `/api/custom-categories/${encodeURIComponent(categoryId)}/items`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ itemType, itemId }),
+    },
+  );
+  if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
+  return result;
+}
+
+export async function unlinkItemFromCustomCategory(
+  categoryId: string,
+  itemType: 'note' | 'task' | 'bookmark' | 'library' | 'vault' | 'file',
+  itemId: string,
+): Promise<void> {
+  await request(
+    `/api/custom-categories/${encodeURIComponent(categoryId)}/items/${encodeURIComponent(itemType)}/${encodeURIComponent(itemId)}`,
+    { method: 'DELETE' },
+  );
+}
+
+export async function getItemCustomCategory(
+  itemType: 'note' | 'task' | 'bookmark' | 'library' | 'vault' | 'file',
+  itemId: string,
+): Promise<string | null> {
+  const result = await request<{ categoryId: string | null }>(
+    `/api/custom-categories/items/${encodeURIComponent(itemType)}/${encodeURIComponent(itemId)}`,
+  );
+  return result?.categoryId ?? null;
+}
+
+export async function setItemCustomCategory(
+  itemType: 'note' | 'task' | 'bookmark' | 'library' | 'vault' | 'file',
+  itemId: string,
+  categoryId: string | null,
+): Promise<void> {
+  await request(
+    `/api/custom-categories/items/${encodeURIComponent(itemType)}/${encodeURIComponent(itemId)}`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ categoryId }),
+    },
+  );
 }

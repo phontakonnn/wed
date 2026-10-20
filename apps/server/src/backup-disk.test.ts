@@ -134,4 +134,22 @@ describe('physical disk comparison', () => {
     expect(comparison.data.method).toBe('unsupported-platform');
     expect(comparison.backup.method).toBe('unsupported-platform');
   });
+
+  // Node passes the script as one `-Command` argument and PowerShell re-parses it, stripping any
+  // embedded double quote. A script containing `"` silently fails to parse, which made every real
+  // Windows probe return UNKNOWN while the unit tests (which inject a runner) stayed green.
+  it('never embeds a double quote in the generated PowerShell script', async () => {
+    const calls: string[] = [];
+    await mapPathToPhysicalDisk('D:\\PKH-Backups', {
+      ...windows,
+      runPowerShell: async (script) => {
+        calls.push(script);
+        return 'cim:1\n';
+      },
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).not.toContain('"');
+    expect(calls[0]).toContain('$_.Dependent.DeviceID -eq ($letter + \':\')');
+  });
 });

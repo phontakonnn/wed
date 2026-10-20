@@ -1,0 +1,306 @@
+{
+  "generatedAt": "2026-10-20T18:05:56.869Z",
+  "passed": 24,
+  "total": 24,
+  "failures": [],
+  "results": [
+    {
+      "id": "B5-00-login",
+      "status": "PASS",
+      "detail": {
+        "ok": true
+      }
+    },
+    {
+      "id": "B5-V1-vault-view-opens",
+      "status": "PASS",
+      "detail": {
+        "panel": true,
+        "addButton": true,
+        "hint": "ยังไม่มีรายการในคลัง — เริ่มจากเอกสารสำคัญหรือทรัพย์สินชิ้นแรก",
+        "active": "🔐คลังสำคัญ & ทรัพย์สิน (Vault)0"
+      }
+    },
+    {
+      "id": "B5-V2-vault-create",
+      "status": "PASS",
+      "detail": {
+        "cards": 1,
+        "title": "B5 กรมธรรม์รถยนต์",
+        "badge": "เอกสาร & ประกัน",
+        "code": "🔑 POL-B5-998877",
+        "due": "📅 2026-11-02 · อีก 12 วัน",
+        "urgent": true,
+        "place": "📍 ลิ้นชักชั้น 2 ห้องนอน",
+        "toast": "เพิ่มรายการเข้าคลังแล้ว×",
+        "attachments": true
+      }
+    },
+    {
+      "id": "B5-V3-vault-edit",
+      "status": "PASS",
+      "detail": {
+        "amount": "19,900 บาท/ปี",
+        "toast": "เพิ่มรายการเข้าคลังแล้ว× | บันทึกการแก้ไขแล้ว×"
+      }
+    },
+    {
+      "id": "B5-V4-vault-copy-key",
+      "status": "PASS",
+      "detail": {
+        "toast": "บันทึกการแก้ไขแล้ว× | คัดลอกลงคลิปบอร์ดแล้ว×",
+        "clipboard": "POL-B5-998877"
+      }
+    },
+    {
+      "id": "B5-V5-vault-to-reminders",
+      "status": "PASS",
+      "detail": {
+        "toast": "คัดลอกลงคลิปบอร์ดแล้ว× | ส่งวันครบกำหนดเข้าปฏิทินแจ้งเตือนแล้ว×",
+        "titles": [
+          "ต่ออายุ / ครบกำหนด: B5 กรมธรรม์รถยนต์",
+          "ต่ออายุ / ครบกำหนด: B5 กรมธรรม์รถยนต์"
+        ],
+        "dates": [
+          "2026-11-02",
+          "2026-11-02"
+        ]
+      }
+    },
+    {
+      "id": "B5-V6-vault-attach-file",
+      "status": "PASS",
+      "detail": {
+        "count": 1,
+        "name": "b5-attachment.txt",
+        "href": "/api/files/376aa9a6-df9e-42d3-8366-4eb74293e90c"
+      }
+    },
+    {
+      "id": "B5-L1-library-create",
+      "status": "PASS",
+      "detail": {
+        "cards": 1,
+        "title": "B5 SOP เปิดร้าน",
+        "status": "ใช้งานประจำ",
+        "category": "คู่มือชีวิต & SOP",
+        "takeaways": [
+          "1) เปิดไฟหน้าร้าน",
+          "2) ตรวจสต็อกของสด",
+          "3) เปิดลิ้นชักเก็บเงิน"
+        ],
+        "boxTitle": "แก่นสำคัญ 3 ข้อ (Key Takeaways)",
+        "attachments": true,
+        "toast": "เพิ่มความรู้เข้าห้องสมุดแล้ว×"
+      }
+    },
+    {
+      "id": "B5-L2-library-edit",
+      "status": "PASS",
+      "detail": {
+        "status": "สรุปจบแล้ว",
+        "takeaways": [
+          "1) เปิดไฟทุกครั้ง",
+          "2) เช็กสต็อกก่อนเที่ยง"
+        ],
+        "toast": "เพิ่มความรู้เข้าห้องสมุดแล้ว× | บันทึกการแก้ไขแล้ว×",
+        "originalStatus": "ใช้งานประจำ"
+      }
+    },
+    {
+      "id": "B5-L3-library-attach-file",
+      "status": "PASS",
+      "detail": {
+        "count": 1,
+        "name": "b5-attachment.txt"
+      }
+    },
+    {
+      "id": "B5-C1-ten-type-chips",
+      "status": "PASS",
+      "detail": {
+        "count": 10,
+        "labels": [
+          "โน้ต",
+          "งาน",
+          "โปรเจกต์",
+          "เป้าหมาย",
+          "บุคคล",
+          "แจ้งเตือน",
+          "บุ๊กมาร์ก",
+          "ไฟล์",
+          "คลังสำคัญ",
+          "ห้องสมุด"
+        ],
+        "pressed": 10,
+        "counter": "ประเภทข้อมูล (10/10)"
+      }
+    },
+    {
+      "id": "B5-C2-search-vault-and-library",
+      "status": "PASS",
+      "detail": {
+        "kinds": [
+          "แจ้งเตือน",
+          "ไฟล์",
+          "คลังสำคัญ",
+          "ห้องสมุด"
+        ],
+        "total": 8,
+        "vaultItem": true,
+        "libraryItem": true
+      }
+    },
+    {
+      "id": "B5-C3-navigate-vault",
+      "status": "PASS",
+      "detail": {
+        "active": "🔐คลังสำคัญ & ทรัพย์สิน (Vault)1",
+        "title": "B5 กรมธรรม์รถยนต์",
+        "dialog": false
+      }
+    },
+    {
+      "id": "B5-C4-navigate-library",
+      "status": "PASS",
+      "detail": {
+        "active": "📚ห้องสมุด & คู่มือชีวิต (Library)1",
+        "title": "B5 SOP เปิดร้าน"
+      }
+    },
+    {
+      "id": "B5-T1-five-themes",
+      "status": "PASS",
+      "detail": [
+        {
+          "label": "Emerald",
+          "theme": "emerald",
+          "green": "#2f7d5a",
+          "accent": "#2f9e76",
+          "glow": "#2f9e7629",
+          "takeawayBg": "linear-gradient(135deg, rgb(233, 247, 23"
+        },
+        {
+          "label": "Indigo",
+          "theme": "indigo",
+          "green": "#4c5fd0",
+          "accent": "#6577d8",
+          "glow": "#6577d829",
+          "takeawayBg": "linear-gradient(135deg, rgb(236, 239, 25"
+        },
+        {
+          "label": "Rose",
+          "theme": "rose",
+          "green": "#b3506e",
+          "accent": "#d1648a",
+          "glow": "#d1648a29",
+          "takeawayBg": "linear-gradient(135deg, rgb(253, 236, 24"
+        },
+        {
+          "label": "Amber",
+          "theme": "amber",
+          "green": "#b8792a",
+          "accent": "#d99b3c",
+          "glow": "#d99b3c2e",
+          "takeawayBg": "linear-gradient(135deg, rgb(253, 243, 22"
+        },
+        {
+          "label": "Violet",
+          "theme": "violet",
+          "green": "#7350b8",
+          "accent": "#8a63d2",
+          "glow": "#8a63d229",
+          "takeawayBg": "linear-gradient(135deg, rgb(242, 237, 25"
+        }
+      ]
+    },
+    {
+      "id": "B5-R1-1280-library",
+      "status": "PASS",
+      "detail": {
+        "overflow": false,
+        "scrollWidth": 1280,
+        "innerWidth": 1280,
+        "smallButtons": [],
+        "smallInputs": 0
+      }
+    },
+    {
+      "id": "B5-R1-768-library",
+      "status": "PASS",
+      "detail": {
+        "overflow": false,
+        "scrollWidth": 768,
+        "innerWidth": 768,
+        "smallButtons": [],
+        "smallInputs": 0
+      }
+    },
+    {
+      "id": "B5-R1-390-library",
+      "status": "PASS",
+      "detail": {
+        "overflow": false,
+        "scrollWidth": 390,
+        "innerWidth": 390,
+        "smallButtons": [],
+        "smallInputs": 0
+      }
+    },
+    {
+      "id": "B5-R2-1280-command",
+      "status": "PASS",
+      "detail": {
+        "overflow": false,
+        "dialogOverflowX": false,
+        "smallButtons": 0,
+        "chips": 10
+      }
+    },
+    {
+      "id": "B5-R2-768-command",
+      "status": "PASS",
+      "detail": {
+        "overflow": false,
+        "dialogOverflowX": false,
+        "smallButtons": 0,
+        "chips": 10
+      }
+    },
+    {
+      "id": "B5-R2-390-command",
+      "status": "PASS",
+      "detail": {
+        "overflow": false,
+        "dialogOverflowX": false,
+        "smallButtons": 0,
+        "chips": 10
+      }
+    },
+    {
+      "id": "B5-L4-library-delete",
+      "status": "PASS",
+      "detail": {
+        "cards": 0,
+        "toast": "ลบรายการออกจากห้องสมุดแล้ว×"
+      }
+    },
+    {
+      "id": "B5-V7-vault-delete",
+      "status": "PASS",
+      "detail": {
+        "cards": 0,
+        "toast": "ลบรายการออกจากคลังแล้ว×"
+      }
+    },
+    {
+      "id": "B5-X1-console-clean",
+      "status": "PASS",
+      "detail": {
+        "realErrors": [],
+        "exceptions": [],
+        "httpErrors": []
+      }
+    }
+  ]
+}

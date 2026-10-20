@@ -1,0 +1,36 @@
+{
+  "generatedAt": "2026-10-20T16:02:04.754Z",
+  "base": "http://127.0.0.1:3494",
+  "dates": {
+    "today": "2026-10-20",
+    "plus3": "2026-10-23",
+    "plus5": "2026-10-25",
+    "plus30": "2026-11-19",
+    "plus40": "2026-11-29"
+  },
+  "ids": {
+    "noteA": "12eaa3fb-a26e-4b3a-9b3f-2adf3cd605bf",
+    "noteB": "56bf6eae-cd7c-4fb6-b80f-a8388434a7e0",
+    "taskNear": "cdb5f22a-4d4c-4a5e-8ba6-c54d6d05f141",
+    "taskFar": "789f84bb-ccbd-4eff-892b-98db87484fb2",
+    "project": "f8857e40-7c9a-44df-abde-8c8393f91b48",
+    "goal": "399c95d3-0886-4605-a782-8db85dde73ad",
+    "person": "b34efc6e-6357-4c82-9029-92b3a0f7a0c8",
+    "bookmark": "cdc71413-5f95-434b-8ad3-0f8783a6c13f",
+    "reminder": "58db27a6-c0f5-4c90-9ea4-14295b32b25d",
+    "fileAlpha": "f1763d82-dc7e-4b10-b709-da20af92cb98",
+    "fileBeta": "3bda98d8-702d-48c9-87b9-2f1e8430765e",
+    "fileGamma": "0c5596b0-d8f7-4018-a382-40069433986b"
+  },
+  "names": {
+    "noteA": "B4 โน้ตทดสอบการแนบไฟล์",
+    "taskNear": "B4 งานด่วนสัปดาห์นี้",
+    "taskFar": "B4 งานไกลเดือนหน้า",
+    "project": "B4 โปรเจกต์อัลฟา",
+    "goal": "B4 เป้าหมายรายได้",
+    "person": "B4 สมชาย ทดสอบ",
+    "bookmark": "B4 เอกสารอ้างอิง",
+    "reminder": "B4 แจ้งเตือนประชุม",
+    "fileAlpha": "b4-alpha.txt"
+  }
+}

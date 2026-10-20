@@ -11,6 +11,7 @@
     "build:web": "npm --prefix apps/web run build",
     "dev:server": "npm --prefix apps/server run dev",
     "build:server": "npm --prefix apps/server run build",
+    "start:server": "npm --prefix apps/server start",
     "bootstrap:admin": "npm --prefix apps/server run bootstrap:admin",
     "backup:create": "npm --prefix apps/server run backup:create --",
     "backup:list": "npm --prefix apps/server run backup:list --",

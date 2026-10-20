@@ -721,3 +721,73 @@ CREATE TABLE entity_files (
   are soft-deleted, so their links survive a trash restore on purpose.
 - Deleting a file cascades its links; deleting a link never deletes the file.
 - `requiredTablesForSchema(11)` adds `entity_files`.
+
+## 15. Personal Vault and Knowledge Library (migration 012)
+
+```sql
+CREATE TABLE vault_items (
+  id TEXT PRIMARY KEY,
+  owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'เอกสาร & ประกัน'
+           CHECK (category IN ('เอกสาร & ประกัน','ทรัพย์สิน & บ้าน','รอบบิลรายเดือน')),
+  key_value TEXT NOT NULL DEFAULT '',              -- policy no. / serial / access code
+  physical_location TEXT NOT NULL DEFAULT '',
+  renewal_or_expiry_date TEXT,                     -- NULL = no renewal date (a bicycle has none)
+  amount_text TEXT NOT NULL DEFAULT '',            -- premium / monthly fee, free text on purpose
+  notes TEXT NOT NULL DEFAULT '',
+  is_favorite INTEGER NOT NULL DEFAULT 0 CHECK (is_favorite IN (0,1)),
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  CHECK (renewal_or_expiry_date IS NULL
+    OR renewal_or_expiry_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')
+);
+
+CREATE TABLE library_items (
+  id TEXT PRIMARY KEY,
+  owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'คู่มือชีวิต & SOP'
+           CHECK (category IN ('คู่มือชีวิต & SOP','หนังสือ & คอร์สเรียน','โพยคำสั่ง & สูตร')),
+  status TEXT NOT NULL DEFAULT 'ใช้งานประจำ'
+         CHECK (status IN ('ใช้งานประจำ','กำลังศึกษา','สรุปจบแล้ว')),
+  source_url_or_author TEXT NOT NULL DEFAULT '',
+  key_takeaways TEXT NOT NULL DEFAULT '',
+  content TEXT NOT NULL DEFAULT '',
+  is_favorite INTEGER NOT NULL DEFAULT 0 CHECK (is_favorite IN (0,1)),
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+```
+
+- Both tables are owner-scoped and carry `owner_id`; every query filters on it.
+- Indexes lead with `owner_id` because that is always the first predicate:
+  `vault_items(owner_id, category)`, `(owner_id, renewal_or_expiry_date)`, `(owner_id, updated_at DESC)`
+  and `library_items(owner_id, category)`, `(owner_id, status)`, `(owner_id, updated_at DESC)`.
+- `amount_text` is text, not an integer: "18,500 บาท/ปี" and "599.-" are the real inputs, and forcing a
+  number would lose the unit and the billing period.
+
+### `entity_files` widened to seven types
+
+SQLite cannot alter a `CHECK`, so 012 rebuilds the table: create `entity_files_v12` with
+`entity_type IN ('note','task','project','person','bookmark','vault','library')`, copy every row,
+drop the old table, rename, then recreate the three indexes and every trigger. Two details matter:
+
+1. The four `AFTER DELETE` triggers on `tasks`/`projects`/`people`/`bookmarks` reference
+   `entity_files` from another table, and SQLite refuses to drop a table they point at. They are
+   dropped before the `DROP TABLE` and recreated afterwards.
+2. The rebuild is a copy, not a reset. A populated schema-11 directory keeps all of its links;
+   `safe-open.test.ts` proves that with a real 11→12 upgrade on a file-backed `DATA_DIR`.
+
+New triggers `entity_files_vault_insert` / `entity_files_library_insert` validate the polymorphic id
+against `vault_items` / `library_items` (and the file owner) exactly like the other five, and
+`entity_files_vault_delete` / `entity_files_library_delete` remove links when the entity is deleted.
+
+- `requiredTablesForSchema(12)` adds `vault_items` and `library_items`, so `backup:verify` fails on a
+  schema-12 backup that is missing either table.
+
+### Security note (D-1 still open)
+
+`vault_items.key_value` is stored as plain text in the same SQLite file as everything else. It is a
+convenience field for policy numbers and serials, **not** a password manager: nothing is encrypted at
+rest, and the API never returns it masked. Storing real secrets stays blocked on decision D-1.

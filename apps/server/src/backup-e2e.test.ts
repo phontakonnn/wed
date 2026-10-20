@@ -185,10 +185,45 @@ function seed(database: SqliteDatabase, dataDirectory: string): void {
     INSERT INTO entity_files (id, owner_id, entity_type, entity_id, file_id, created_at)
     VALUES (?, ?, 'note', ?, ?, ?)
   `).run('eeeeeeee-0000-4000-8000-000000000012', ids.userA, ids.noteA, ids.fileA, now);
+
+  database.prepare(`
+    INSERT INTO vault_items (id, owner_id, title, category, key_value, physical_location,
+      renewal_or_expiry_date, amount_text, notes, is_favorite, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run('eeeeeeee-0000-4000-8000-000000000013', ids.userA, 'กรมธรรม์รถยนต์', 'เอกสาร & ประกัน',
+    'POL-2026-000123', 'ลิ้นชักชั้น 2', '2027-03-15', '18,500 บาท/ปี', 'ต่ออายุออนไลน์ได้', 1, now, now);
+  database.prepare(`
+    INSERT INTO vault_items (id, owner_id, title, category, key_value, physical_location,
+      renewal_or_expiry_date, amount_text, notes, is_favorite, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run('eeeeeeee-0000-4000-8000-000000000014', ids.userB, 'โฉนดที่ดิน', 'ทรัพย์สิน & บ้าน',
+    'DEED-0001', 'ตู้เซฟธนาคาร', null, '', '', 0, now, now);
+
+  database.prepare(`
+    INSERT INTO library_items (id, owner_id, title, category, status, source_url_or_author,
+      key_takeaways, content, is_favorite, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run('eeeeeeee-0000-4000-8000-000000000015', ids.userA, 'SOP เปิดร้าน', 'คู่มือชีวิต & SOP',
+    'ใช้งานประจำ', 'ทำเอง', 'เปิดไฟ ตรวจสต็อก', 'ขั้นตอนที่ 1 …', 0, now, now);
+  database.prepare(`
+    INSERT INTO library_items (id, owner_id, title, category, status, source_url_or_author,
+      key_takeaways, content, is_favorite, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run('eeeeeeee-0000-4000-8000-000000000016', ids.userB, 'คู่มือเครื่องซักผ้า', 'คู่มือชีวิต & SOP',
+    'ใช้งานประจำ', 'LG', 'แยกผ้าขาว-สี', 'กดปุ่มเริ่ม', 0, now, now);
+
+  const entityFile = database.prepare(`
+    INSERT INTO entity_files (id, owner_id, entity_type, entity_id, file_id, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+  entityFile.run('eeeeeeee-0000-4000-8000-000000000017', ids.userA, 'vault',
+    'eeeeeeee-0000-4000-8000-000000000013', ids.fileA, now);
+  entityFile.run('eeeeeeee-0000-4000-8000-000000000018', ids.userA, 'library',
+    'eeeeeeee-0000-4000-8000-000000000015', ids.fileA, now);
 }
 
 function destroyContent(database: SqliteDatabase, dataDirectory: string): void {
-  for (const table of ['entity_files', 'habit_logs', 'inbox_items', 'task_checklist_items', 'tasks', 'projects', 'goals', 'favorites', 'note_people', 'reminders', 'life_timeblocks', 'habits', 'note_tags', 'note_categories', 'files', 'tags', 'categories', 'bookmarks', 'notes', 'people', 'users']) {
+  for (const table of ['entity_files', 'habit_logs', 'inbox_items', 'task_checklist_items', 'tasks', 'projects', 'goals', 'favorites', 'note_people', 'reminders', 'life_timeblocks', 'habits', 'note_tags', 'note_categories', 'vault_items', 'library_items', 'files', 'tags', 'categories', 'bookmarks', 'notes', 'people', 'users']) {
     database.prepare(`DELETE FROM ${table}`).run();
   }
   rmSync(join(dataDirectory, 'objects'), { recursive: true, force: true });
@@ -219,6 +254,8 @@ function snapshotState(database: SqliteDatabase): Record<string, number> {
     inbox: count('inbox_items'),
     habitLogs: count('habit_logs'),
     entityFiles: count('entity_files'),
+    vault: count('vault_items'),
+    library: count('library_items'),
   };
 }
 
@@ -355,11 +392,37 @@ describe('end-to-end backup and restore', () => {
     `).get('eeeeeeee-0000-4000-8000-000000000002'))
       .toEqual({ recurrence: 'yearly', anchor: '2026-05-20', snoozed: '2026-05-22' });
 
-    // The file link survives with both sides intact and the object bytes still match.
+    // Vault and library rows come back with their content, not just their counts.
     expect(reopened.prepare(`
+      SELECT title, category, key_value AS keyValue, renewal_or_expiry_date AS renewal, is_favorite AS favorite
+      FROM vault_items WHERE id = ?
+    `).get('eeeeeeee-0000-4000-8000-000000000013')).toEqual({
+      title: 'กรมธรรม์รถยนต์',
+      category: 'เอกสาร & ประกัน',
+      keyValue: 'POL-2026-000123',
+      renewal: '2027-03-15',
+      favorite: 1,
+    });
+    expect(reopened.prepare('SELECT COUNT(*) AS count FROM vault_items WHERE owner_id = ?').get(ids.userB))
+      .toEqual({ count: 1 });
+    expect(reopened.prepare(`
+      SELECT title, status, key_takeaways AS takeaways FROM library_items WHERE id = ?
+    `).get('eeeeeeee-0000-4000-8000-000000000015')).toEqual({
+      title: 'SOP เปิดร้าน',
+      status: 'ใช้งานประจำ',
+      takeaways: 'เปิดไฟ ตรวจสต็อก',
+    });
+
+    // Every file link survives with both sides intact and the object bytes still match.
+    const links = reopened.prepare(`
       SELECT entity_type AS entityType, entity_id AS entityId, file_id AS fileId
-      FROM entity_files WHERE owner_id = ?
-    `).get(ids.userA)).toEqual({ entityType: 'note', entityId: ids.noteA, fileId: ids.fileA });
+      FROM entity_files WHERE owner_id = ? ORDER BY entity_type
+    `).all(ids.userA);
+    expect(links).toEqual([
+      { entityType: 'library', entityId: 'eeeeeeee-0000-4000-8000-000000000015', fileId: ids.fileA },
+      { entityType: 'note', entityId: ids.noteA, fileId: ids.fileA },
+      { entityType: 'vault', entityId: 'eeeeeeee-0000-4000-8000-000000000013', fileId: ids.fileA },
+    ]);
 
     // The safety copy is itself a complete, verifiable rollback point.
     const safety = await verifyBackup(restored.safetyCopyPath as string, { encryptionKey: key });

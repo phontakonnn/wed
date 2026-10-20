@@ -82,6 +82,8 @@ const INLINE_MEDIA_TYPES = new Set([
   'image/avif',
   'video/mp4',
   'video/webm',
+  'video/quicktime',
+  'application/pdf',
   'audio/mpeg',
   'audio/ogg',
   'audio/wav',
@@ -112,7 +114,8 @@ export function detectMediaType(head: Buffer): string {
   if (ascii('ftyp', 4)) {
     const brand = head.subarray(8, 12).toString('latin1');
     if (brand === 'avif' || brand === 'avis') return 'image/avif';
-    if (['isom', 'iso2', 'mp41', 'mp42', 'M4V ', 'dash', 'avc1'].includes(brand)) return 'video/mp4';
+    if (brand === 'qt  ') return 'video/quicktime';
+    if (['isom', 'iso2', 'mp41', 'mp42', 'M4V ', 'dash', 'avc1', 'MSNV', 'NDAS'].includes(brand)) return 'video/mp4';
     return 'application/octet-stream';
   }
   return 'application/octet-stream';
