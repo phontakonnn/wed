@@ -717,6 +717,7 @@ function App() {
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeNote, setActiveNote] = useState<Note | null>(null);
+  const [noteViewMode, setNoteViewMode] = useState<'grid' | 'editor'>('grid');
   const [activeTrashNote, setActiveTrashNote] = useState<Note | null>(null);
   const [activeBookmark, setActiveBookmark] = useState<Bookmark | null>(null);
   const [permanentDeleteOpen, setPermanentDeleteOpen] = useState(false);
@@ -1535,6 +1536,7 @@ function App() {
   }
 
   function startNewNote() {
+    setNoteViewMode('editor');
     notesRequestId.current += 1;
     isNewBookmarkRef.current = false;
     setMobileMenuOpen(false);
@@ -1819,6 +1821,7 @@ function App() {
     isNewBookmarkRef.current = false;
     if (nextView !== 'custom-category') setSelectedCustomCategoryId(null);
     setViewMode(nextView);
+    setNoteViewMode('grid');
     setSearchInput('');
     setSearchQuery('');
     setPage(1);
@@ -3376,6 +3379,22 @@ function App() {
     }
   }
 
+  async function moveToTrash(note: Note) {
+    if (!window.confirm('ย้ายโน้ตนี้ไปถังขยะหรือไม่? เนื้อหาจะยังถูกเก็บไว้')) return;
+    setNotesBusy(true);
+    try {
+      await deleteNote(note.id);
+      if (activeNote?.id === note.id) activateNote(null);
+      if (notes.length === 1 && page > 1) setPage((currentPage) => currentPage - 1);
+      else setRefreshKey((key) => key + 1);
+      pushToast('info', 'ย้ายโน้ตไปถังขยะแล้ว');
+    } catch (err) {
+      pushToast('error', errorMessage(err));
+    } finally {
+      setNotesBusy(false);
+    }
+  }
+
   async function handleDelete() {
     setNoteMenuOpen(false);
     if (!activeNote || !window.confirm('ย้ายโน้ตนี้ไปถังขยะหรือไม่? เนื้อหาจะยังถูกเก็บไว้')) return;
@@ -3727,6 +3746,14 @@ function App() {
   return (
     <main className={`app-shell${focusMode ? ' focus-mode' : ''}`}>
       <header className="topbar">
+        <button
+          className="icon-button mobile-menu-button topbar-mobile-menu"
+          type="button"
+          aria-label="เปิดเมนู"
+          onClick={() => setMobileMenuOpen(true)}
+        >
+          ☰
+        </button>
         <a className="brand" href="/" aria-label="PKH หน้าหลัก">
           <span className="brand-mark" aria-hidden="true">P</span>
           <span>
@@ -4050,807 +4077,8 @@ function App() {
           />
         )}
 
-        <section className="list-panel" aria-label={viewAriaLabel}>
-          <div className="list-header">
-            <button
-              className="icon-button mobile-menu-button"
-              type="button"
-              aria-label="เปิดเมนู"
-              onClick={() => setMobileMenuOpen(true)}
-            >
-              ☰
-            </button>
-            <div className="list-heading">
-              <h1>{viewTitle}</h1>
-              <span className="note-count">{listTotal}</span>
-            </div>
-          </div>
 
-          {viewMode === 'notes' && (
-            <div className="search-control list-search">
-              <label htmlFor="note-search">ค้นหาโน้ต</label>
-              <div className="search-input-row">
-                <input
-                  id="note-search"
-                  type="search"
-                  value={searchInput}
-                  onChange={(event) => {
-                    setSearchInput(event.target.value);
-                    setPage(1);
-                    setNotesError('');
-                  }}
-                  maxLength={500}
-                  placeholder="ค้นหาจากหัวข้อหรือเนื้อหา…"
-                />
-                {searchInput && (
-                  <button
-                    className="button button-quiet search-clear"
-                    type="button"
-                    onClick={clearSearch}
-                  >
-                    ล้าง
-                  </button>
-                )}
-              </div>
-              {shortSearch && (
-                <p className="search-hint" role="note">
-                  คำค้นสั้น 1–2 อักขระอาจได้ผลลัพธ์กว้าง ระบบจะค้นทุกโน้ตที่ยังไม่อยู่ในถังขยะ
-                </p>
-              )}
-            </div>
-          )}
-
-          {viewMode === 'people' && (
-            <div className="search-control list-search">
-              <label htmlFor="people-search">ค้นหาบุคคล</label>
-              <div className="search-input-row">
-                <input
-                  id="people-search"
-                  type="search"
-                  value={peopleQuery}
-                  onChange={(event) => setPeopleQuery(event.target.value)}
-                  maxLength={120}
-                  placeholder="ชื่อ บทบาท ของที่ชอบ หรือสิ่งที่แพ้…"
-                />
-                {peopleQuery && (
-                  <button
-                    className="button button-quiet search-clear"
-                    type="button"
-                    onClick={() => setPeopleQuery('')}
-                  >
-                    ล้าง
-                  </button>
-                )}
-              </div>
-              <div className="filter-chips">
-                {([
-                  ['', 'ทั้งหมด'],
-                  ['family', 'ครอบครัว'],
-                  ['partner', 'แฟน'],
-                  ['friend', 'เพื่อน'],
-                ] as const).map(([value, label]) => (
-                  <button
-                    className={`chip-add${peopleGroup === value ? ' is-open' : ''}`}
-                    key={value || 'all'}
-                    type="button"
-                    onClick={() => setPeopleGroup(value)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {viewMode === 'vault' && (
-            <div className="search-control list-search">
-              <label htmlFor="vault-search">ค้นหาในคลังสำคัญ</label>
-              <div className="search-input-row">
-                <input
-                  id="vault-search"
-                  type="search"
-                  value={vaultQuery}
-                  onChange={(event) => {
-                    setVaultBusy(true);
-                    setVaultQuery(event.target.value);
-                  }}
-                  maxLength={120}
-                  placeholder="ชื่อ รหัส สถานที่เก็บ หรือยอดเงิน…"
-                />
-                {vaultQuery && (
-                  <button
-                    className="button button-quiet search-clear"
-                    type="button"
-                    onClick={() => {
-                      setVaultBusy(true);
-                      setVaultQuery('');
-                    }}
-                  >
-                    ล้าง
-                  </button>
-                )}
-              </div>
-              <div className="filter-chips" role="group" aria-label="กรองหมวดหมู่คลังสำคัญ">
-                {(['all', ...VAULT_CATEGORIES] as Array<VaultCategory | 'all'>).map((value) => (
-                  <button
-                    className={`chip-add${vaultCategory === value ? ' is-open' : ''}`}
-                    key={value}
-                    type="button"
-                    aria-pressed={vaultCategory === value}
-                    onClick={() => {
-                      setVaultBusy(true);
-                      setVaultCategory(value);
-                    }}
-                  >
-                    {value === 'all' ? 'ทั้งหมด' : value}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {viewMode === 'library' && (
-            <div className="search-control list-search">
-              <label htmlFor="library-search">ค้นหาในห้องสมุด</label>
-              <div className="search-input-row">
-                <input
-                  id="library-search"
-                  type="search"
-                  value={libraryQuery}
-                  onChange={(event) => {
-                    setLibraryBusy(true);
-                    setLibraryQuery(event.target.value);
-                  }}
-                  maxLength={120}
-                  placeholder="ชื่อเรื่อง แก่นสำคัญ หรือขั้นตอน…"
-                />
-                {libraryQuery && (
-                  <button
-                    className="button button-quiet search-clear"
-                    type="button"
-                    onClick={() => {
-                      setLibraryBusy(true);
-                      setLibraryQuery('');
-                    }}
-                  >
-                    ล้าง
-                  </button>
-                )}
-              </div>
-              <div className="filter-chips" role="group" aria-label="กรองหมวดหมู่ห้องสมุด">
-                {(['all', ...LIBRARY_CATEGORIES] as Array<LibraryCategory | 'all'>).map((value) => (
-                  <button
-                    className={`chip-add${libraryCategory === value ? ' is-open' : ''}`}
-                    key={value}
-                    type="button"
-                    aria-pressed={libraryCategory === value}
-                    onClick={() => {
-                      setLibraryBusy(true);
-                      setLibraryCategory(value);
-                    }}
-                  >
-                    {value === 'all' ? 'ทั้งหมด' : value}
-                  </button>
-                ))}
-              </div>
-              <div className="filter-chips status-chips" role="group" aria-label="กรองสถานะ">
-                {(['all', ...LIBRARY_STATUSES] as Array<LibraryStatus | 'all'>).map((value) => (
-                  <button
-                    className={`chip-add${libraryStatus === value ? ' is-open' : ''}`}
-                    key={value}
-                    type="button"
-                    aria-pressed={libraryStatus === value}
-                    onClick={() => {
-                      setLibraryBusy(true);
-                      setLibraryStatus(value);
-                    }}
-                  >
-                    {value === 'all' ? 'ทุกสถานะ' : value}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {viewMode === 'schedule' && (
-            <div className="search-control list-search">
-              <label htmlFor="schedule-date">วันที่ของตารางชีวิต</label>
-              <input
-                id="schedule-date"
-                type="date"
-                value={scheduleDate}
-                onChange={(event) => {
-                  setScheduleBusy(true);
-                  setScheduleDate(event.target.value);
-                }}
-              />
-            </div>
-          )}
-
-          {notesError && <p className="form-error sidebar-error" role="alert">{notesError}</p>}
-
-          <div className="list-scroll">
-            {(sidebarBusy || searchSettling) && listLength === 0 && (
-              <p className="empty-state" aria-live="polite">
-                {searchSettling
-                  ? 'กำลังค้นหา…'
-                  : viewMode === 'all'
-                    ? 'กำลังโหลดรายการทั้งหมด…'
-                    : viewMode === 'people'
-                      ? 'กำลังโหลดบุคคลสำคัญ…'
-                      : viewMode === 'schedule'
-                        ? 'กำลังโหลดตารางชีวิต…'
-                        : viewMode === 'trash'
-                      ? 'กำลังโหลดถังขยะ…'
-                      : viewMode === 'bookmarks'
-                        ? 'กำลังโหลดลิงก์…'
-                        : viewMode === 'favorites'
-                          ? 'กำลังโหลดรายการโปรด…'
-                          : viewMode === 'files'
-                            ? 'กำลังโหลดไฟล์…'
-                            : 'กำลังโหลดโน้ต…'}
-              </p>
-            )}
-            {!sidebarBusy && !searchSettling && listLength === 0 && !notesError && (
-              <div className="empty-state">
-                <span className="empty-icon" aria-hidden="true">✎</span>
-                <strong>
-                  {viewMode === 'all'
-                    ? 'ยังไม่มีรายการ'
-                    : viewMode === 'people'
-                      ? 'ยังไม่มีบุคคลสำคัญ'
-                      : viewMode === 'schedule'
-                        ? 'ยังไม่มีแจ้งเตือน'
-                        : viewMode === 'trash'
-                      ? 'ถังขยะว่าง'
-                      : viewMode === 'bookmarks'
-                        ? 'ยังไม่มีลิงก์'
-                        : viewMode === 'favorites'
-                          ? 'ยังไม่มีรายการโปรด'
-                          : viewMode === 'files'
-                            ? 'ยังไม่มีไฟล์'
-                            : searchQuery
-                              ? 'ไม่พบโน้ตที่ตรงกับคำค้น'
-                              : 'ยังไม่มีโน้ต'}
-                </strong>
-                <span>
-                  {viewMode === 'all'
-                    ? 'โน้ต ลิงก์ และไฟล์ล่าสุดจะแสดงที่นี่'
-                    : viewMode === 'people'
-                      ? 'เพิ่มคุณพ่อ คุณแม่ คนพิเศษ หรือเพื่อนสนิทเพื่อเก็บรายละเอียดที่ควรจำ'
-                      : viewMode === 'schedule'
-                        ? 'เพิ่มวันเกิด วันครบรอบ หรือนัดสำคัญเพื่อให้ระบบเตือนล่วงหน้า'
-                        : viewMode === 'trash'
-                      ? 'โน้ตที่ย้ายไปถังขยะจะแสดงที่นี่'
-                      : viewMode === 'bookmarks'
-                        ? 'เพิ่มลิงก์ที่ต้องการเก็บไว้กลับมาอ่านภายหลัง'
-                        : viewMode === 'favorites'
-                          ? 'กดดาวที่โน้ตหรือลิงก์เพื่อเก็บไว้ที่นี่'
-                          : viewMode === 'files'
-                            ? 'อัปโหลดไฟล์แรกเพื่อเก็บไว้ในพื้นที่ส่วนตัว'
-                            : searchQuery
-                              ? 'ลองใช้คำค้นอื่น หรือกดล้างเพื่อกลับไปดูโน้ตทั้งหมด'
-                              : 'เริ่มบันทึกไอเดียแรกของคุณ'}
-                </span>
-              </div>
-            )}
-
-            {viewMode === 'custom-category' ? (
-              <div className="work-list" aria-label="สรุปหมวดหมู่">
-                {customCategoryDataBusy ? (
-                  <p className="sidebar-hint">กำลังโหลดข้อมูลในหมวดหมู่…</p>
-                ) : !customCategoryData ? (
-                  <p className="sidebar-hint">ไม่พบข้อมูลหมวดหมู่นี้</p>
-                ) : (
-                  <>
-                    <div className="dash-stat">
-                      <strong>{customCategoryData.counts.total}</strong>
-                      <span>รายการทั้งหมดในหมวดนี้</span>
-                    </div>
-                    {customCategoryData.subcategories.length > 0 && (
-                      <div className="sidebar-section" style={{ padding: '0 4px', marginTop: '10px' }}>
-                        <span className="sidebar-hint">หมวดหมู่ย่อย ({customCategoryData.subcategories.length}):</span>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
-                          {customCategoryData.subcategories.map((sub) => (
-                            <button
-                              key={sub.id}
-                              className="button button-quiet"
-                              type="button"
-                              style={{ justifyContent: 'flex-start', textAlign: 'left', fontSize: '13px' }}
-                              onClick={() => selectCustomCategory(sub.id)}
-                            >
-                              <span>{sub.icon}</span>
-                              <span style={{ flex: 1 }}>{sub.name}</span>
-                              <small>({sub.itemCount ?? 0})</small>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    <div className="quick-add-grid" style={{ marginTop: '16px' }}>
-                      <button className="button button-primary" type="button" onClick={() => setQuickAddCatOpen(true)}>
-                        ＋ เพิ่มข้อมูลในหมวดนี้
-                      </button>
-                      <button className="button button-quiet" type="button" onClick={() => openCreateCategoryModal(selectedCustomCategoryId)}>
-                        ＋ หมวดย่อย
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            ) : viewMode === 'all' ? (
-              <nav className="note-list" aria-label="รายการทั้งหมด">
-                {allEntries.map((entry) => (
-                  <button
-                    className="note-list-item"
-                    key={`${entry.kind}:${entry.id}`}
-                    type="button"
-                    onClick={() => selectAllEntry(entry)}
-                  >
-                    <strong>
-                      <span className={`entry-kind ${entry.kind}`}>
-                        {entry.kind === 'note' ? 'โน้ต' : entry.kind === 'bookmark' ? 'ลิงก์' : 'ไฟล์'}
-                      </span>
-                      {entry.title}
-                    </strong>
-                    <span>{entry.subtitle}</span>
-                    <time dateTime={new Date(entry.timestamp).toISOString()}>
-                      {formatDate(entry.timestamp)}
-                    </time>
-                  </button>
-                ))}
-              </nav>
-            ) : viewMode === 'home' ? (
-              <div className="work-list dashboard-list" aria-label="สรุปวันนี้">
-                {dashboardError && <p className="form-error sidebar-error" role="alert">{dashboardError}</p>}
-                <div className="dash-stat">
-                  <strong>{dashboard?.counts.dueToday ?? 0}</strong>
-                  <span>งานครบกำหนดวันนี้</span>
-                </div>
-                <div className={`dash-stat${(dashboard?.counts.overdue ?? 0) > 0 ? ' is-warn' : ''}`}>
-                  <strong>{dashboard?.counts.overdue ?? 0}</strong>
-                  <span>งานเกินกำหนด</span>
-                </div>
-                <div className="dash-stat">
-                  <strong>{dashboard?.counts.inbox ?? 0}</strong>
-                  <span>รอจัดการในกล่องขาเข้า</span>
-                </div>
-                <div className="dash-stat">
-                  <strong>{dashboard?.counts.habitsOutstanding ?? 0}</strong>
-                  <span>กิจวัตรที่ยังไม่ครบวันนี้</span>
-                </div>
-                <div className="quick-add-grid">
-                  <button className="button button-quiet" type="button" onClick={startNewNote}>＋ โน้ต</button>
-                  <button className="button button-quiet" type="button" onClick={() => switchView('inbox')}>＋ เก็บเข้า inbox</button>
-                  <button className="button button-quiet" type="button" onClick={() => switchView('tasks')}>＋ งาน</button>
-                </div>
-              </div>
-            ) : viewMode === 'inbox' ? (
-              <div className="work-list" aria-label="รายการในกล่องขาเข้า">
-                {inboxItems.length === 0 ? (
-                  <p className="sidebar-hint">กล่องขาเข้าว่าง — จดอะไรก็ได้ก่อน แล้วค่อยจัดหมวดทีหลัง</p>
-                ) : inboxItems.map((item) => (
-                  <div className="work-row inbox-row" key={item.id}>
-                    <div className="work-row-head">
-                      <strong>{item.body.length > 90 ? `${item.body.slice(0, 90)}…` : item.body}</strong>
-                    </div>
-                    <div className="work-row-meta">
-                      <span>{item.kind === 'url' ? 'ลิงก์' : 'ข้อความ'}</span>
-                      <span>{formatDate(item.createdAt)}</span>
-                    </div>
-                    <div className="work-actions">
-                      <button className="text-button" type="button" disabled={inboxBusy} onClick={() => void convertItem(item, 'note')}>เป็นโน้ต</button>
-                      <button className="text-button" type="button" disabled={inboxBusy} onClick={() => void convertItem(item, 'task')}>เป็นงาน</button>
-                      <button className="text-button" type="button" disabled={inboxBusy} onClick={() => void convertItem(item, 'project')}>เป็นโปรเจกต์</button>
-                      <button className="text-button" type="button" disabled={inboxBusy} onClick={() => void convertItem(item, 'bookmark')}>เป็นลิงก์</button>
-                      <button className="text-button" type="button" disabled={inboxBusy} onClick={() => void convertItem(item, 'reminder')}>เป็นแจ้งเตือน</button>
-                      <button className="text-button" type="button" disabled={inboxBusy} onClick={() => void archiveInboxItem(item)}>เก็บเข้าคลัง</button>
-                      <button className="text-button danger-text" type="button" disabled={inboxBusy} onClick={() => void removeInboxItem(item)}>ลบ</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : viewMode === 'tasks' ? (
-              <div className="work-list" aria-label="รายการงาน">
-                {tasks.length === 0 ? (
-                  <p className="sidebar-hint">ยังไม่มีงานในตัวกรองนี้ — เพิ่มงานแรกได้จากช่องด้านขวา</p>
-                ) : tasks.map((task) => (
-                  <div className={`work-row${task.status === 'done' ? ' is-done' : ''}`} key={task.id}>
-                    <label className="work-check">
-                      <input
-                        type="checkbox"
-                        checked={task.status === 'done'}
-                        disabled={tasksBusy}
-                        onChange={() => void toggleTask(task)}
-                      />
-                      <span>
-                        <strong>{task.title}</strong>
-                        <span className="work-row-meta">
-                          <span>{taskStatusLabel(task.status)}</span>
-                          <span>{taskPriorityLabel(task.priority)}</span>
-                          {task.dueDate && <span>กำหนด {task.dueDate}</span>}
-                          {task.projectName && <span>▣ {task.projectName}</span>}
-                          {task.recurrence !== 'none' && <span>↻ {task.recurrence}</span>}
-                          {task.checklistTotal > 0 && <span>☑ {task.checklistDone}/{task.checklistTotal}</span>}
-                        </span>
-                      </span>
-                    </label>
-                    <div className="work-actions">
-                      <select
-                        className="task-cat-select"
-                        style={{ fontSize: '11px', padding: '2px 4px', borderRadius: '4px', border: '1px solid var(--border)' }}
-                        aria-label="เปลี่ยนหมวดหมู่"
-                        onChange={async (e) => {
-                          const val = e.target.value || null;
-                          try {
-                            await setItemCustomCategory('task', task.id, val);
-                            pushToast('success', 'อัปเดตหมวดหมู่ของงานแล้ว');
-                            setRefreshKey((k) => k + 1);
-                          } catch (err) {
-                            pushToast('error', errorMessage(err));
-                          }
-                        }}
-                        defaultValue=""
-                      >
-                        <option value="">📁 ย้ายหมวด</option>
-                        {customCategories.map((c) => (
-                          <option value={c.id} key={c.id}>{c.parentId ? '↳ ' : ''}{c.icon} {c.name}</option>
-                        ))}
-                      </select>
-                      <button className="text-button danger-text" type="button" disabled={tasksBusy} onClick={() => void removeTask(task)}>ลบ</button>
-                    </div>
-                    <EntityAttachments
-                      entityType="task"
-                      entityId={task.id}
-                      availableFiles={files}
-                      onFilesChanged={() => setRefreshKey((key) => key + 1)}
-                    />
-                  </div>
-                ))}
-              </div>
-            ) : viewMode === 'projects' ? (
-              <div className="work-list" aria-label="รายการโปรเจกต์">
-                {projects.length === 0 ? (
-                  <p className="sidebar-hint">ยังไม่มีโปรเจกต์ที่กำลังทำ</p>
-                ) : projects.map((project) => {
-                  const percent = project.taskTotal === 0
-                    ? 0
-                    : Math.round((project.taskDone / project.taskTotal) * 100);
-                  return (
-                    <div className="work-row" key={project.id}>
-                      <strong>{project.name}</strong>
-                      <span className="work-row-meta">
-                        <span>{project.taskDone}/{project.taskTotal} งานเสร็จ</span>
-                        {project.dueDate && <span>กำหนด {project.dueDate}</span>}
-                        {project.goalTitle && <span>◎ {project.goalTitle}</span>}
-                      </span>
-                      <div className="progress-track" aria-hidden="true">
-                        <span style={{ width: `${percent}%` }} />
-                      </div>
-                      <div className="work-actions">
-                        <button className="text-button" type="button" disabled={projectsBusy} onClick={() => void finishProject(project)}>ปิดโปรเจกต์</button>
-                        <button className="text-button danger-text" type="button" disabled={projectsBusy} onClick={() => void removeProject(project)}>ลบ</button>
-                      </div>
-                      <EntityAttachments
-                        entityType="project"
-                        entityId={project.id}
-                        availableFiles={files}
-                        onFilesChanged={() => setRefreshKey((key) => key + 1)}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            ) : viewMode === 'goals' ? (
-              <div className="work-list" aria-label="รายการเป้าหมาย">
-                {goals.length === 0 ? (
-                  <p className="sidebar-hint">ยังไม่มีเป้าหมายที่กำลังติดตาม</p>
-                ) : goals.map((goal) => (
-                  <div className="work-row" key={goal.id}>
-                    <strong>{goal.title}</strong>
-                    <span className="work-row-meta">
-                      {goal.progressPercent === null
-                        ? <span>ยังไม่มีตัวชี้วัด</span>
-                        : <span>{goal.currentValue}/{goal.targetValue} {goal.unit} · {goal.progressPercent}%</span>}
-                      {goal.activeProjects > 0 && <span>▣ {goal.activeProjects} โปรเจกต์</span>}
-                    </span>
-                    {goal.progressPercent !== null && (
-                      <div className="progress-track" aria-hidden="true">
-                        <span style={{ width: `${goal.progressPercent}%` }} />
-                      </div>
-                    )}
-                    <div className="work-actions">
-                      <button className="text-button" type="button" disabled={goalsBusy} onClick={() => void bumpGoal(goal, 1)}>+1</button>
-                      <button className="text-button" type="button" disabled={goalsBusy} onClick={() => void bumpGoal(goal, -1)}>−1</button>
-                      <button className="text-button danger-text" type="button" disabled={goalsBusy} onClick={() => void removeGoal(goal)}>ลบ</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : viewMode === 'people' ? (
-              <div className="people-list" aria-label="รายการบุคคลสำคัญ">
-                {filteredPeople.map((person) => {
-                  const days = daysUntilNext(person.birthdayOrAnniversary);
-                  const groupLabel = person.relationshipGroup === 'family'
-                    ? 'ครอบครัว'
-                    : person.relationshipGroup === 'partner' ? 'แฟน' : 'เพื่อน';
-                  return (
-                    <button
-                      className={`person-card${activePerson?.id === person.id ? ' is-active' : ''}`}
-                      key={person.id}
-                      type="button"
-                      onClick={() => selectPerson(person)}
-                    >
-                      <span className="avatar person-avatar">
-                        {person.avatarFileId ? (
-                          <img src={`/api/files/${person.avatarFileId}`} alt="" loading="lazy" decoding="async" />
-                        ) : (
-                          person.avatarPreset || person.name.slice(0, 1)
-                        )}
-                      </span>
-                      <span className="person-copy">
-                        <strong>{person.name}</strong>
-                        <small>{person.roleLabel || groupLabel}</small>
-                      </span>
-                      <span className="person-meta">
-                        {days !== null && (
-                          <span className={`countdown${days <= 7 ? ' is-soon' : ''}`}>
-                            {days === 0 ? 'วันนี้' : `อีก ${days} วัน`}
-                          </span>
-                        )}
-                        <span>{person.noteCount ?? 0} โน้ต</span>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : viewMode === 'schedule' ? (
-              <div className="schedule-list" aria-label="รายการแจ้งเตือน">
-                <div className="schedule-summary-card">
-                  <div>
-                    <span className="eyebrow">วันนี้</span>
-                    <strong>{todayDone}/{todayBlocks.length} ช่วงเวลา</strong>
-                  </div>
-                  <div className="progress-track" aria-hidden="true">
-                    <span style={{ width: `${todayProgress}%` }} />
-                  </div>
-                  <small>{todayProgress}% ของตารางชีวิตวันนี้</small>
-                </div>
-                {upcomingReminders.map((reminder) => (
-                  <button
-                    className="reminder-list-item"
-                    key={reminder.id}
-                    type="button"
-                    onClick={() => {
-                      setScheduleDate(reminder.targetDate);
-                      setMobileDetailOpen(true);
-                    }}
-                  >
-                    <strong>{reminder.title}</strong>
-                    <span>{reminder.targetDate}{reminder.linkedPersonName ? ` · ${reminder.linkedPersonName}` : ''}</span>
-                    <span className={`priority-dot ${reminder.priority}`} aria-hidden="true" />
-                  </button>
-                ))}
-              </div>
-            ) : viewMode === 'favorites' ? (
-              <nav className="note-list" aria-label="รายการโปรด">
-                {favorites.map((favorite) => {
-                  const isActive = activeFavorite?.itemType === favorite.itemType
-                    && activeFavorite?.itemId === favorite.itemId;
-                  return (
-                    <button
-                      className={`note-list-item${isActive ? ' is-active' : ''}`}
-                      key={`${favorite.itemType}:${favorite.itemId}`}
-                      type="button"
-                      onClick={() => {
-                        setActiveFavorite(favorite);
-                        setMobileMenuOpen(false);
-                        setMobileDetailOpen(true);
-                      }}
-                      aria-current={isActive ? 'page' : undefined}
-                    >
-                      <strong>
-                        <span className="favorite-mark" aria-hidden="true">★</span>
-                        {favorite.title}
-                      </strong>
-                      <span>{favorite.subtitle || (favorite.itemType === 'note' ? 'ไม่มีเนื้อหา' : '')}</span>
-                      <time dateTime={new Date(favorite.createdAt).toISOString()}>
-                        {favorite.itemType === 'note' ? 'โน้ต · ' : 'ลิงก์ · '}
-                        {formatDate(favorite.createdAt)}
-                      </time>
-                    </button>
-                  );
-                })}
-              </nav>
-            ) : viewMode === 'vault' ? (
-              <div className="vault-list" aria-label="รายการในคลังสำคัญ">
-                <button className="button button-primary list-add-button" type="button" onClick={startNewVaultItem}>
-                  ＋ เพิ่มรายการเข้าคลัง
-                </button>
-                {vaultItems.length === 0 ? (
-                  <p className="sidebar-hint">ยังไม่มีรายการในคลัง — เริ่มจากเอกสารสำคัญหรือทรัพย์สินชิ้นแรก</p>
-                ) : vaultItems.map((item) => {
-                  const days = daysUntilIso(item.renewalOrExpiryDate);
-                  const urgent = days !== null && days <= 30;
-                  return (
-                    <button
-                      className={`vault-card${activeVault?.id === item.id ? ' is-active' : ''}`}
-                      key={item.id}
-                      type="button"
-                      onClick={() => selectVaultItem(item)}
-                    >
-                      <span className="vault-card-head">
-                        <strong>{item.title}</strong>
-                        <span className={`category-badge tone-${vaultTone(item.category)}`}>{item.category}</span>
-                      </span>
-                      {item.keyValue && <span className="vault-code">🔑 {item.keyValue}</span>}
-                      <span className="vault-meta">
-                        {item.renewalOrExpiryDate ? (
-                          <span className={`vault-due${urgent ? ' is-urgent' : ''}`}>
-                            📅 {item.renewalOrExpiryDate}
-                            {days !== null && days < 0 ? ' · เกินกำหนดแล้ว' : ''}
-                            {days !== null && days >= 0 && days <= 30 ? ` · อีก ${days} วัน` : ''}
-                          </span>
-                        ) : (
-                          <span className="vault-due is-empty">ไม่มีวันครบกำหนด</span>
-                        )}
-                        {item.amountText && <span className="vault-amount">{item.amountText}</span>}
-                      </span>
-                      {item.physicalLocation && <span className="vault-place">📍 {item.physicalLocation}</span>}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : viewMode === 'library' ? (
-              <div className="library-list" aria-label="รายการในห้องสมุด">
-                <button className="button button-primary list-add-button" type="button" onClick={startNewLibraryItem}>
-                  ＋ เพิ่มความรู้ใหม่
-                </button>
-                {libraryItems.length === 0 ? (
-                  <p className="sidebar-hint">ยังไม่มีคู่มือ — เก็บ SOP แรกที่อยากจำให้ขึ้นใจ</p>
-                ) : libraryItems.map((item) => (
-                  <button
-                    className={`library-card${activeLibrary?.id === item.id ? ' is-active' : ''}`}
-                    key={item.id}
-                    type="button"
-                    onClick={() => selectLibraryItem(item)}
-                  >
-                    <span className="library-card-head">
-                      <strong>{item.title}</strong>
-                      <span className={`status-badge tone-${libraryStatusTone(item.status)}`}>{item.status}</span>
-                    </span>
-                    <span className={`category-badge tone-${libraryTone(item.category)}`}>{item.category}</span>
-                    {item.keyTakeaways && <span className="library-preview">{item.keyTakeaways}</span>}
-                    {item.sourceUrlOrAuthor && <span className="library-source">↗ {item.sourceUrlOrAuthor}</span>}
-                  </button>
-                ))}
-              </div>
-            ) : viewMode === 'files' ? (
-              <div className="file-grid" aria-label="รายการไฟล์">
-                {files.map((file) => (
-                  <article className={`file-card${activeFile?.id === file.id ? ' is-active' : ''}`} key={file.id}>
-                    <button
-                      className="file-card-main"
-                      type="button"
-                      onClick={() => {
-                        setActiveFile(file);
-                        setMobileMenuOpen(false);
-                        setMobileDetailOpen(true);
-                      }}
-                    >
-                      <span className="file-thumb">
-                        <span className="file-icon">{fileIcon(file.mediaType, file.displayName)}</span>
-                        {file.mediaType.startsWith('image/') && (
-                          <img
-                            src={file.downloadUrl}
-                            alt=""
-                            loading="lazy"
-                            onError={(event) => {
-                              event.currentTarget.style.display = 'none';
-                            }}
-                          />
-                        )}
-                      </span>
-                      <strong>{file.displayName}</strong>
-                      <span>{formatBytes(file.sizeBytes)} · {file.mediaType}</span>
-                    </button>
-                    <div className="file-card-actions">
-                      <button
-                        className="button button-quiet"
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setMediaLightboxFile(file);
-                        }}
-                      >
-                        👁️ ดูตัวอย่าง
-                      </button>
-                      <a className="button button-quiet" href={file.downloadUrl} download={file.displayName}>
-                        ดาวน์โหลด
-                      </a>
-                      <button
-                        className="button button-danger-quiet"
-                        type="button"
-                        onClick={() => void handleDeleteFile(file)}
-                      >
-                        ลบ
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <nav className="note-list" aria-label="รายการโน้ต">
-                {!searchSettling && filteredNotes.map((note) => (
-                  <button
-                    className={`note-list-item${(
-                      viewMode === 'trash'
-                        ? activeTrashNote?.id
-                        : viewMode === 'bookmarks'
-                          ? activeBookmark?.id
-                          : activeNote?.id
-                    ) === note.id ? ' is-active' : ''}`}
-                    key={note.id}
-                    type="button"
-                    onClick={() => selectNote(note)}
-                    aria-current={(
-                      viewMode === 'trash'
-                        ? activeTrashNote?.id
-                        : viewMode === 'bookmarks'
-                          ? activeBookmark?.id
-                          : activeNote?.id
-                    ) === note.id ? 'page' : undefined}
-                  >
-                    <strong>{note.title}</strong>
-                    <span>{note.content || 'ไม่มีเนื้อหา'}</span>
-                    <time dateTime={new Date(note.updatedAt).toISOString()}>
-                      {viewMode === 'trash' ? 'ย้ายเมื่อ ' : 'แก้ไข '}
-                      {formatDate(note.updatedAt)}
-                    </time>
-                  </button>
-                ))}
-              </nav>
-            )}
-
-            {viewMode === 'notes' && activeFilterCount > 0 && !filterBusy && (
-              <p className="filter-summary">
-                แสดง {filteredNotes.length} จาก {notes.length} รายการในหน้านี้
-              </p>
-            )}
-
-            {pageCount > 1 && !searchSettling && viewMode !== 'all' && (
-              <div className="pagination">
-                <button
-                  className="button button-quiet"
-                  type="button"
-                  disabled={page <= 1 || sidebarBusy || searchSettling}
-                  onClick={() => {
-                    markListBusy();
-                    setNotesError('');
-                    setPage((currentPage) => currentPage - 1);
-                  }}
-                >
-                  ก่อนหน้า
-                </button>
-                <span>{page} / {pageCount}</span>
-                <button
-                  className="button button-quiet"
-                  type="button"
-                  disabled={page >= pageCount || sidebarBusy || searchSettling}
-                  onClick={() => {
-                    markListBusy();
-                    setNotesError('');
-                    setPage((currentPage) => currentPage + 1);
-                  }}
-                >
-                  ถัดไป
-                </button>
-              </div>
-            )}
-          </div>
-        </section>
-
-        <div className={`detail-panel${mobileDetailOpen ? ' is-open' : ''}`}>
+        <div className={`detail-panel${mobileDetailOpen ? ' is-open' : ''}`} aria-label={viewAriaLabel}>
           <div className="detail-mobile-bar">
             <button
               className="button button-quiet detail-back"
@@ -5523,9 +4751,43 @@ function App() {
               </button>
             </form>
             <p className="sidebar-hint">
-              รายการในกล่องจะยังไม่ถูกตีความเป็นโน้ตหรืองานจนกว่าจะเลือกทางขวา —
-              และแปลงได้ครั้งเดียวเท่านั้น ต้นฉบับยังอยู่ครบ
+              รายการในกล่องจะยังไม่ถูกตีความเป็นโน้ตหรืองานจนกว่าจะแปลง — และแปลงได้ครั้งเดียวเท่านั้น ต้นฉบับยังอยู่ครบ
             </p>
+            <div className="inbox-list-section" style={{ marginTop: '24px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 650, marginBottom: '14px', color: 'var(--ink)' }}>
+                รายการในกล่องขาเข้า ({inboxItems.length})
+              </h3>
+              {inboxItems.length === 0 ? (
+                <div className="empty-state" style={{ padding: '40px 20px', background: 'var(--paper)', borderRadius: '16px', border: '1px dashed var(--line)', textAlign: 'center' }}>
+                  <span className="empty-icon" style={{ fontSize: '36px', display: 'block', marginBottom: '8px' }}>📥</span>
+                  <strong>กล่องขาเข้าว่าง</strong>
+                  <span style={{ color: 'var(--muted)', display: 'block', marginTop: '4px' }}>จดอะไรก็ได้ก่อน แล้วค่อยจัดหมวดทีหลัง</span>
+                </div>
+              ) : (
+                <div className="work-list">
+                  {inboxItems.map((item) => (
+                    <div className="work-row inbox-row" key={item.id}>
+                      <div className="work-row-head">
+                        <strong>{item.body.length > 90 ? `${item.body.slice(0, 90)}…` : item.body}</strong>
+                      </div>
+                      <div className="work-row-meta">
+                        <span>{item.kind === 'url' ? 'ลิงก์' : 'ข้อความ'}</span>
+                        <span>{formatDate(item.createdAt)}</span>
+                      </div>
+                      <div className="work-actions">
+                        <button className="text-button" type="button" disabled={inboxBusy} onClick={() => void convertItem(item, 'note')}>เป็นโน้ต</button>
+                        <button className="text-button" type="button" disabled={inboxBusy} onClick={() => void convertItem(item, 'task')}>เป็นงาน</button>
+                        <button className="text-button" type="button" disabled={inboxBusy} onClick={() => void convertItem(item, 'project')}>เป็นโปรเจกต์</button>
+                        <button className="text-button" type="button" disabled={inboxBusy} onClick={() => void convertItem(item, 'bookmark')}>เป็นลิงก์</button>
+                        <button className="text-button" type="button" disabled={inboxBusy} onClick={() => void convertItem(item, 'reminder')}>เป็นแจ้งเตือน</button>
+                        <button className="text-button" type="button" disabled={inboxBusy} onClick={() => void archiveInboxItem(item)}>เก็บเข้าคลัง</button>
+                        <button className="text-button danger-text" type="button" disabled={inboxBusy} onClick={() => void removeInboxItem(item)}>ลบ</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </section>
         ) : viewMode === 'vault' ? (
           <section className="editor-panel vault-panel" aria-label="แก้ไขข้อมูลคลังสำคัญ">
@@ -5533,6 +4795,11 @@ function App() {
               <div>
                 <span className="eyebrow">Personal Vault</span>
                 <h2 className="panel-title">{activeVault ? 'แก้ไขข้อมูลในคลัง' : 'เพิ่มรายการเข้าคลัง'}</h2>
+              </div>
+              <div className="editor-actions">
+                <button className="button button-primary" type="button" onClick={startNewVaultItem}>
+                  ＋ เพิ่มรายการเข้าคลัง
+                </button>
                 <p className="updated-label">
                   {activeVault
                     ? `แก้ไขล่าสุด ${formatDate(activeVault.updatedAt)}`
@@ -5669,6 +4936,96 @@ function App() {
             ) : (
               <p className="sidebar-hint">บันทึกรายการก่อน แล้วจึงแนบไฟล์กรมธรรม์หรือใบเสร็จได้</p>
             )}
+
+            <div className="vault-items-section" style={{ marginTop: '28px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: 650, margin: 0, color: 'var(--ink)' }}>
+                  รายการทั้งหมดในคลัง ({vaultItems.length})
+                </h3>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="search"
+                    placeholder="ค้นหาในคลัง..."
+                    value={vaultQuery}
+                    onChange={(e) => setVaultQuery(e.target.value)}
+                    style={{ fontSize: '12px', padding: '4px 10px' }}
+                  />
+                  <select
+                    value={vaultCategory}
+                    onChange={(e) => setVaultCategory(e.target.value as VaultCategory | 'all')}
+                    style={{ fontSize: '12px', padding: '4px 8px' }}
+                  >
+                    <option value="all">ทุกหมวด</option>
+                  </select>
+                  <select
+                    value={libraryStatus}
+                    onChange={(e) => setLibraryStatus(e.target.value as LibraryStatus | 'all')}
+                    style={{ fontSize: '12px', padding: '4px 8px' }}
+                  >
+                    <option value="all">ทุกสถานะ</option>
+                    {LIBRARY_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                    {VAULT_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
+              {vaultItems.length === 0 ? (
+                <div className="empty-state" style={{ padding: '40px 20px', background: 'var(--paper)', borderRadius: '16px', border: '1px dashed var(--line)', textAlign: 'center' }}>
+                  <span className="empty-icon" style={{ fontSize: '36px', display: 'block', marginBottom: '8px' }}>🔐</span>
+                  <strong>ยังไม่มีรายการในคลัง</strong>
+                  <span style={{ color: 'var(--muted)', display: 'block', marginTop: '4px' }}>เริ่มจากเอกสารสำคัญหรือทรัพย์สินชิ้นแรก</span>
+                </div>
+              ) : (
+                <div className="vault-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
+                  {vaultItems.map((item) => {
+                    const days = daysUntilIso(item.renewalOrExpiryDate);
+                    const urgent = days !== null && days <= 30;
+                    return (
+                      <div
+                        className={`dash-card vault-card${activeVault?.id === item.id ? ' is-active' : ''}`}
+                        key={item.id}
+                        style={{ padding: '18px', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}
+                        onClick={() => selectVaultItem(item)}
+                      >
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                            <strong style={{ fontSize: '15px', color: 'var(--ink)' }}>{item.title}</strong>
+                            <span className={`category-badge tone-${vaultTone(item.category)}`}>{item.category}</span>
+                          </div>
+                          {item.keyValue && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--canvas)', padding: '6px 10px', borderRadius: '8px', marginBottom: '8px', fontSize: '13px' }}>
+                              <code>🔑 {item.keyValue}</code>
+                              <button
+                                className="button button-quiet"
+                                type="button"
+                                style={{ padding: '2px 8px', minHeight: '24px', fontSize: '11px' }}
+                                onClick={(e) => { e.stopPropagation(); void copyVaultKey(item, item.keyValue); }}
+                              >
+                                คัดลอก
+                              </button>
+                            </div>
+                          )}
+                          <div style={{ fontSize: '12px', color: 'var(--muted)', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                            {item.renewalOrExpiryDate && (
+                              <span style={{ color: urgent ? 'var(--danger)' : undefined }}>
+                                📅 {item.renewalOrExpiryDate}
+                                {days !== null && days < 0 ? ' (เกินกำหนด)' : ''}
+                                {days !== null && days >= 0 && days <= 30 ? ` (อีก ${days} วัน)` : ''}
+                              </span>
+                            )}
+                            {item.amountText && <span>💰 {item.amountText}</span>}
+                          </div>
+                          {item.physicalLocation && <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '4px' }}>📍 {item.physicalLocation}</div>}
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px', marginTop: '12px', paddingTop: '8px', borderTop: '1px solid var(--line)' }}>
+                          <button className="text-button" type="button" onClick={(e) => { e.stopPropagation(); selectVaultItem(item); }}>แก้ไข</button>
+                          <button className="text-button danger-text" type="button" onClick={(e) => { e.stopPropagation(); void removeVaultItem(item); }}>ลบ</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </section>
         ) : viewMode === 'library' ? (
           <section className="editor-panel library-panel" aria-label="แก้ไขความรู้ในห้องสมุด">
@@ -5676,6 +5033,11 @@ function App() {
               <div>
                 <span className="eyebrow">Knowledge Library &amp; SOPs</span>
                 <h2 className="panel-title">{activeLibrary ? 'แก้ไขความรู้' : 'เพิ่มความรู้ใหม่'}</h2>
+              </div>
+              <div className="editor-actions">
+                <button className="button button-primary" type="button" onClick={startNewLibraryItem}>
+                  ＋ เพิ่มความรู้ใหม่
+                </button>
                 <p className="updated-label">
                   {activeLibrary
                     ? `แก้ไขล่าสุด ${formatDate(activeLibrary.updatedAt)}`
@@ -5809,14 +5171,71 @@ function App() {
             ) : (
               <p className="sidebar-hint">บันทึกความรู้ก่อน แล้วจึงแนบไฟล์คู่มือหรือเอกสารประกอบได้</p>
             )}
+
+            <div className="library-items-section" style={{ marginTop: '28px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: 650, margin: 0, color: 'var(--ink)' }}>
+                  คู่มือและ SOPs ทั้งหมด ({libraryItems.length})
+                </h3>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="search"
+                    placeholder="ค้นหาคู่มือ..."
+                    value={libraryQuery}
+                    onChange={(e) => setLibraryQuery(e.target.value)}
+                    style={{ fontSize: '12px', padding: '4px 10px' }}
+                  />
+                  <select
+                    value={libraryCategory}
+                    onChange={(e) => setLibraryCategory(e.target.value as LibraryCategory | 'all')}
+                    style={{ fontSize: '12px', padding: '4px 8px' }}
+                  >
+                    <option value="all">ทุกหมวด</option>
+                    {LIBRARY_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
+              {libraryItems.length === 0 ? (
+                <div className="empty-state" style={{ padding: '40px 20px', background: 'var(--paper)', borderRadius: '16px', border: '1px dashed var(--line)', textAlign: 'center' }}>
+                  <span className="empty-icon" style={{ fontSize: '36px', display: 'block', marginBottom: '8px' }}>📚</span>
+                  <strong>ยังไม่มีคู่มือในห้องสมุด</strong>
+                  <span style={{ color: 'var(--muted)', display: 'block', marginTop: '4px' }}>เก็บ SOP แรกที่อยากจำให้ขึ้นใจ</span>
+                </div>
+              ) : (
+                <div className="library-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
+                  {libraryItems.map((item) => (
+                    <div
+                      className={`dash-card library-card${activeLibrary?.id === item.id ? ' is-active' : ''}`}
+                        key={item.id}
+                      style={{ padding: '18px', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}
+                      onClick={() => selectLibraryItem(item)}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                          <strong style={{ fontSize: '15px', color: 'var(--ink)' }}>{item.title}</strong>
+                          <span className={`status-badge tone-${libraryStatusTone(item.status)}`}>{item.status}</span>
+                        </div>
+                        <span className={`category-badge tone-${libraryTone(item.category)}`}>{item.category}</span>
+                        {item.keyTakeaways && <p style={{ fontSize: '13px', color: 'var(--muted)', margin: '8px 0', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.keyTakeaways}</p>}
+                        {item.sourceUrlOrAuthor && <div style={{ fontSize: '12px', color: 'var(--green, #3f7658)' }}>↗ {item.sourceUrlOrAuthor}</div>}
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px', marginTop: '12px', paddingTop: '8px', borderTop: '1px solid var(--line)' }}>
+                        <button className="text-button" type="button" onClick={(e) => { e.stopPropagation(); selectLibraryItem(item); }}>แก้ไข</button>
+                        <button className="text-button danger-text" type="button" onClick={(e) => { e.stopPropagation(); void removeLibraryItem(item); }}>ลบ</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </section>
         ) : viewMode === 'tasks' ? (
           <section className="editor-panel work-panel" aria-label="งานที่ต้องทำ">
             <div className="editor-toolbar">
               <div>
-                <span className="eyebrow">Tasks</span>
+                <span className="eyebrow">Tasks &amp; To-Do</span>
                 <h2 className="panel-title">งานที่ต้องทำ</h2>
-                <p className="updated-label">{tasks.length} รายการในตัวกรองนี้</p>
+                <p className="updated-label">{tasks.length} รายการในตัวกรองนี้ · จัดการภารกิจให้เสร็จตรงเวลา</p>
               </div>
             </div>
             <div className="mode-toggle" role="group" aria-label="ตัวกรองงาน">
@@ -5899,6 +5318,76 @@ function App() {
             <p className="sidebar-hint">
               งานที่ตั้งให้ทำซ้ำจะสร้างรอบถัดไปเมื่อปิดรอบปัจจุบัน และเก็บรอบที่ปิดแล้วไว้เป็นประวัติ
             </p>
+            <div className="task-list-section" style={{ marginTop: '24px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 650, marginBottom: '14px', color: 'var(--ink)' }}>
+                รายการงาน ({tasks.length})
+              </h3>
+              {tasks.length === 0 ? (
+                <div className="empty-state" style={{ padding: '40px 20px', background: 'var(--paper)', borderRadius: '16px', border: '1px dashed var(--line)', textAlign: 'center' }}>
+                  <span className="empty-icon" style={{ fontSize: '36px', display: 'block', marginBottom: '8px' }}>☑️</span>
+                  <strong>ยังไม่มีงานในตัวกรองนี้</strong>
+                  <span style={{ color: 'var(--muted)', display: 'block', marginTop: '4px' }}>
+                    เพิ่มงานใหม่จากฟอร์มด้านบนเพื่อเริ่มวางแผนงานของคุณ
+                  </span>
+                </div>
+              ) : (
+                <div className="work-list">
+                  {tasks.map((task) => (
+                    <div className={`work-row${task.status === 'done' ? ' is-done' : ''}`} key={task.id}>
+                      <label className="work-check">
+                        <input
+                          type="checkbox"
+                          checked={task.status === 'done'}
+                          disabled={tasksBusy}
+                          onChange={() => void toggleTask(task)}
+                        />
+                        <span>
+                          <strong>{task.title}</strong>
+                          <span className="work-row-meta">
+                            <span>{taskStatusLabel(task.status)}</span>
+                            <span>{taskPriorityLabel(task.priority)}</span>
+                            {task.dueDate && <span>กำหนด {task.dueDate}</span>}
+                            {task.projectName && <span>▣ {task.projectName}</span>}
+                            {task.recurrence !== 'none' && <span>↻ {task.recurrence}</span>}
+                            {task.checklistTotal > 0 && <span>☑ {task.checklistDone}/{task.checklistTotal}</span>}
+                          </span>
+                        </span>
+                      </label>
+                      <div className="work-actions">
+                        <select
+                          className="task-cat-select"
+                          style={{ fontSize: '11px', padding: '2px 4px', borderRadius: '4px', border: '1px solid var(--border)' }}
+                          aria-label="เปลี่ยนหมวดหมู่"
+                          onChange={async (e) => {
+                            const val = e.target.value || null;
+                            try {
+                              await setItemCustomCategory('task', task.id, val);
+                              pushToast('success', 'อัปเดตหมวดหมู่ของงานแล้ว');
+                              setRefreshKey((k) => k + 1);
+                            } catch (err) {
+                              pushToast('error', errorMessage(err));
+                            }
+                          }}
+                          defaultValue=""
+                        >
+                          <option value="">📁 ย้ายหมวด</option>
+                          {customCategories.map((c) => (
+                            <option value={c.id} key={c.id}>{c.parentId ? '↳ ' : ''}{c.icon} {c.name}</option>
+                          ))}
+                        </select>
+                        <button className="text-button danger-text" type="button" disabled={tasksBusy} onClick={() => void removeTask(task)}>ลบ</button>
+                      </div>
+                      <EntityAttachments
+                        entityType="task"
+                        entityId={task.id}
+                        availableFiles={files}
+                        onFilesChanged={() => setRefreshKey((key) => key + 1)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </section>
         ) : viewMode === 'projects' ? (
           <section className="editor-panel work-panel" aria-label="โปรเจกต์">
@@ -5961,6 +5450,53 @@ function App() {
             <p className="sidebar-hint">
               เปอร์เซ็นต์ที่แสดงคือจำนวนงานที่ปิดแล้วหารด้วยงานทั้งหมดในโปรเจกต์ ไม่มีการถ่วงน้ำหนัก
             </p>
+            <div className="projects-grid-section" style={{ marginTop: '24px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 650, marginBottom: '14px', color: 'var(--ink)' }}>
+                โปรเจกต์ที่กำลังดำเนินการ ({projects.length})
+              </h3>
+              {projects.length === 0 ? (
+                <div className="empty-state" style={{ padding: '40px 20px', background: 'var(--paper)', borderRadius: '16px', border: '1px dashed var(--line)', textAlign: 'center' }}>
+                  <span className="empty-icon" style={{ fontSize: '36px', display: 'block', marginBottom: '8px' }}>▣</span>
+                  <strong>ยังไม่มีโปรเจกต์</strong>
+                  <span style={{ color: 'var(--muted)', display: 'block', marginTop: '4px' }}>
+                    สร้างโปรเจกต์แรกเพื่อรวบรวมงานที่มีจุดหมายเดียวกัน
+                  </span>
+                </div>
+              ) : (
+                <div className="project-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
+                  {projects.map((project) => {
+                    const percent = project.taskTotal === 0
+                      ? 0
+                      : Math.round((project.taskDone / project.taskTotal) * 100);
+                    return (
+                      <div className="dash-card project-card" key={project.id} style={{ padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                        <div>
+                          <strong style={{ fontSize: '16px', color: 'var(--ink)', display: 'block', marginBottom: '6px' }}>{project.name}</strong>
+                          <span className="work-row-meta" style={{ display: 'flex', gap: '8px', fontSize: '12px', color: 'var(--muted)', marginBottom: '12px' }}>
+                            <span>{project.taskDone}/{project.taskTotal} งานเสร็จ</span>
+                            {project.dueDate && <span>กำหนด {project.dueDate}</span>}
+                            {project.goalTitle && <span>◎ {project.goalTitle}</span>}
+                          </span>
+                          <div className="progress-track" aria-hidden="true" style={{ height: '6px', borderRadius: '3px', background: 'var(--line)', overflow: 'hidden' }}>
+                            <span style={{ display: 'block', height: '100%', width: `${percent}%`, background: 'var(--green, #3f7658)', borderRadius: '3px' }} />
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '14px', paddingTop: '10px', borderTop: '1px solid var(--line)' }}>
+                          <button className="button button-quiet" type="button" disabled={projectsBusy} onClick={() => void finishProject(project)}>ปิดโปรเจกต์</button>
+                          <button className="button button-danger-quiet" type="button" disabled={projectsBusy} onClick={() => void removeProject(project)}>ลบ</button>
+                        </div>
+                        <EntityAttachments
+                          entityType="project"
+                          entityId={project.id}
+                          availableFiles={files}
+                          onFilesChanged={() => setRefreshKey((key) => key + 1)}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </section>
         ) : viewMode === 'goals' ? (
           <section className="editor-panel work-panel" aria-label="เป้าหมาย">
@@ -6020,6 +5556,47 @@ function App() {
             <p className="sidebar-hint">
               ถ้าไม่ใส่ค่าเป้าหมาย ระบบจะไม่แสดงเปอร์เซ็นต์เลย เพราะไม่มีข้อมูลรองรับการคำนวณ
             </p>
+
+            <div className="goals-grid-section" style={{ marginTop: '24px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 650, marginBottom: '14px', color: 'var(--ink)' }}>
+                เป้าหมายทั้งหมด ({goals.length})
+              </h3>
+              {goals.length === 0 ? (
+                <div className="empty-state" style={{ padding: '40px 20px', background: 'var(--paper)', borderRadius: '16px', border: '1px dashed var(--line)', textAlign: 'center' }}>
+                  <span className="empty-icon" style={{ fontSize: '36px', display: 'block', marginBottom: '8px' }}>🎯</span>
+                  <strong>ยังไม่มีเป้าหมาย</strong>
+                  <span style={{ color: 'var(--muted)', display: 'block', marginTop: '4px' }}>
+                    กำหนดเป้าหมายแรกเพื่อสร้างแรงผลักดันและเห็นผลลัพธ์ที่ชัดเจน
+                  </span>
+                </div>
+              ) : (
+                <div className="goal-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
+                  {goals.map((goal) => (
+                    <div className="dash-card goal-card" key={goal.id} style={{ padding: '20px' }}>
+                      <strong style={{ fontSize: '16px', color: 'var(--ink)', display: 'block', marginBottom: '6px' }}>{goal.title}</strong>
+                      <span className="work-row-meta" style={{ display: 'flex', gap: '8px', fontSize: '12px', color: 'var(--muted)', marginBottom: '10px' }}>
+                        {goal.progressPercent === null
+                          ? <span>ยังไม่มีตัวชี้วัด</span>
+                          : <span>{goal.currentValue}/{goal.targetValue} {goal.unit} · {goal.progressPercent}%</span>}
+                        {goal.activeProjects > 0 && <span>▣ {goal.activeProjects} โปรเจกต์</span>}
+                      </span>
+                      {goal.progressPercent !== null && (
+                        <div className="progress-track" aria-hidden="true" style={{ height: '6px', borderRadius: '3px', background: 'var(--line)', overflow: 'hidden', marginBottom: '12px' }}>
+                          <span style={{ display: 'block', height: '100%', width: `${goal.progressPercent}%`, background: 'var(--green, #3f7658)', borderRadius: '3px' }} />
+                        </div>
+                      )}
+                      <div className="work-actions" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid var(--line)' }}>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button className="button button-quiet" style={{ padding: '2px 10px', minHeight: '28px' }} type="button" disabled={goalsBusy} onClick={() => void bumpGoal(goal, 1)}>+1</button>
+                          <button className="button button-quiet" style={{ padding: '2px 10px', minHeight: '28px' }} type="button" disabled={goalsBusy} onClick={() => void bumpGoal(goal, -1)}>−1</button>
+                        </div>
+                        <button className="text-button danger-text" type="button" disabled={goalsBusy} onClick={() => void removeGoal(goal)}>ลบ</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </section>
         ) : viewMode === 'people' ? (
           <section className="editor-panel people-panel" aria-label="ข้อมูลบุคคลสำคัญ">
@@ -6054,6 +5631,15 @@ function App() {
             </div>
             {personError && <p className="form-error editor-error" role="alert">{personError}</p>}
             {personNotice && <p className="form-notice" role="status">{personNotice}</p>}
+            <div className="dash-card" style={{ padding: '12px 18px', marginBottom: '18px', display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <input type="search" placeholder="ค้นหาบุคคลจากชื่อหรือบทบาท..." value={peopleQuery} onChange={(e) => setPeopleQuery(e.target.value)} style={{ flex: 1 }} />
+              <select value={peopleGroup} onChange={(e) => setPeopleGroup(e.target.value as RelationshipGroup | '')}>
+                <option value="">ทุกกลุ่ม</option>
+                <option value="family">ครอบครัว</option>
+                <option value="partner">แฟน</option>
+                <option value="friend">เพื่อน</option>
+              </select>
+            </div>
             <form className="person-form" onSubmit={savePerson}>
               <div className="person-hero">
                 <span className="avatar person-avatar large">
@@ -6490,6 +6076,192 @@ function App() {
           </section>
         ) : viewMode === 'notes' ? (
           <section className="editor-panel" aria-label={activeNote ? 'แก้ไขโน้ต' : 'สร้างโน้ต'}>
+            {noteViewMode === 'grid' && !activeNote ? (
+              <div>
+                <div className="module-header-banner">
+                  <div className="banner-icon">📝</div>
+                  <div className="banner-info">
+                    <span className="eyebrow">Personal Notes</span>
+                    <h2 className="banner-title">โน้ตของฉัน</h2>
+                    <p className="banner-subtitle">
+                      {listTotal} รายการ · คลังความคิด บันทึกส่วนตัว และข้อมูลสำคัญ
+                    </p>
+                  </div>
+                  <div className="banner-actions">
+                    <button
+                      className="button button-primary"
+                      type="button"
+                      onClick={() => {
+                        startNewNote();
+                        setNoteViewMode('editor');
+                      }}
+                    >
+                      ＋ สร้างโน้ตใหม่
+                    </button>
+                  </div>
+                </div>
+
+                <div className="dash-card search-filter-card" style={{ padding: '16px 20px', marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                    <span style={{ fontSize: '18px' }}>🔍</span>
+                    <input
+                      id="note-search"
+                      type="search"
+                      value={searchInput}
+                      onChange={(event) => {
+                        setSearchInput(event.target.value);
+                        setPage(1);
+                        setNotesError('');
+                      }}
+                      maxLength={500}
+                      placeholder="ค้นหาจากหัวข้อหรือเนื้อหาในโน้ต…"
+                      style={{ flex: 1 }}
+                    />
+                    {searchInput && (
+                      <button className="button button-quiet search-clear" type="button" onClick={clearSearch}>
+                        ล้าง
+                      </button>
+                    )}
+                  </div>
+                  {shortSearch && (
+                    <p className="search-hint" role="note" style={{ margin: '6px 0 0', fontSize: '12px', color: 'var(--muted)' }}>
+                      คำค้นสั้น 1–2 อักขระอาจได้ผลลัพธ์กว้าง ระบบจะค้นทุกโน้ตที่ยังไม่อยู่ในถังขยะ
+                    </p>
+                  )}
+                </div>
+
+                {notesError && <p className="form-error editor-error" role="alert">{notesError}</p>}
+                {notice && <p className="form-notice" role="status">{notice}</p>}
+
+                {notesBusy || searchSettling ? (
+                  <p className="sidebar-hint" style={{ padding: '40px', textAlign: 'center' }}>กำลังค้นหาและโหลดโน้ต…</p>
+                ) : filteredNotes.length === 0 ? (
+                  <div className="empty-state" style={{ padding: '60px 20px', background: 'var(--paper)', borderRadius: '16px', border: '1px dashed var(--line)', textAlign: 'center' }}>
+                    <span className="empty-icon" style={{ fontSize: '40px', display: 'block', marginBottom: '12px' }}>📝</span>
+                    <strong style={{ fontSize: '18px', display: 'block', marginBottom: '6px' }}>ยังไม่มีโน้ตในมุมมองนี้</strong>
+                    <span style={{ color: 'var(--muted)', display: 'block', marginBottom: '18px' }}>
+                      {searchInput ? 'ไม่พบโน้ตที่ตรงกับคำค้นหา ลองค้นหาด้วยคำอื่น' : 'เริ่มจดบันทึกความคิดหรือข้อมูลชิ้นแรกของคุณ'}
+                    </span>
+                    <button
+                      className="button button-primary"
+                      type="button"
+                      onClick={() => {
+                        startNewNote();
+                        setNoteViewMode('editor');
+                      }}
+                    >
+                      ＋ สร้างโน้ตแรก
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="note-bento-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
+                      {filteredNotes.map((note) => {
+                        const cat = customCategories.find((c) => noteTaxonomyMap[note.id]?.categoryIds?.includes(c.id));
+                        return (
+                          <article
+                            key={note.id}
+                            className="dash-card note-bento-card"
+                            style={{ padding: '20px', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '160px' }}
+                            onClick={() => {
+                              selectNote(note);
+                              setNoteViewMode('editor');
+                            }}
+                          >
+                            <div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', marginBottom: '8px' }}>
+                                <strong style={{ fontSize: '16px', color: 'var(--ink)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                                  {note.title || 'ไม่มีหัวข้อ'}
+                                </strong>
+                                {favorites.some((f) => f.itemType === 'note' && f.itemId === note.id) && <span title="รายการโปรด">★</span>}
+                              </div>
+                              <p style={{ margin: '0 0 14px', fontSize: '13px', color: 'var(--muted)', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                                {note.content || 'ไม่มีเนื้อหา'}
+                              </p>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid var(--line)', fontSize: '12px', color: 'var(--muted)' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                {cat && (
+                                  <span className="category-badge" style={{ borderColor: cat.color }}>
+                                    {cat.icon} {cat.name}
+                                  </span>
+                                )}
+                                <time dateTime={new Date(note.updatedAt).toISOString()}>{formatDate(note.updatedAt)}</time>
+                              </div>
+                              <div style={{ display: 'flex', gap: '4px' }} onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  className="button button-quiet"
+                                  type="button"
+                                  style={{ padding: '2px 8px', minHeight: '26px' }}
+                                  title="รายการโปรด"
+                                  onClick={() => void toggleFavorite('note', note.id, favorites.some((f) => f.itemType === 'note' && f.itemId === note.id))}
+                                >
+                                  {favorites.some((f) => f.itemType === 'note' && f.itemId === note.id) ? '★' : '☆'}
+                                </button>
+                                <button
+                                  className="button button-danger-quiet"
+                                  type="button"
+                                  style={{ padding: '2px 8px', minHeight: '26px' }}
+                                  title="ย้ายไปถังขยะ"
+                                  onClick={() => void moveToTrash(note)}
+                                >
+                                  🗑️
+                                </button>
+                              </div>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+
+                    {pageCount > 1 && !searchSettling && (
+                      <div className="pagination" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px', marginTop: '28px' }}>
+                        <button
+                          className="button button-quiet"
+                          type="button"
+                          disabled={page <= 1 || sidebarBusy || searchSettling}
+                          onClick={() => {
+                            markListBusy();
+                            setNotesError('');
+                            setPage((currentPage) => currentPage - 1);
+                          }}
+                        >
+                          ก่อนหน้า
+                        </button>
+                        <span>{page} / {pageCount}</span>
+                        <button
+                          className="button button-quiet"
+                          type="button"
+                          disabled={page >= pageCount || sidebarBusy || searchSettling}
+                          onClick={() => {
+                            markListBusy();
+                            setNotesError('');
+                            setPage((currentPage) => currentPage + 1);
+                          }}
+                        >
+                          ถัดไป
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <button
+                    className="button button-quiet"
+                    type="button"
+                    onClick={() => {
+                      void flushAutosave();
+                      setActiveNote(null);
+                      setNoteViewMode('grid');
+                    }}
+                  >
+                    ← กลับไปหน้ารายการโน้ต
+                  </button>
+                </div>
+
             <div className="editor-toolbar">
               <div>
                 <span className="eyebrow">{activeNote ? 'บันทึกส่วนตัว' : 'โน้ตใหม่'}</span>
@@ -6767,6 +6539,8 @@ function App() {
                 onFilesChanged={() => setRefreshKey((key) => key + 1)}
               />
             )}
+              </div>
+            )}
           </section>
         ) : viewMode === 'bookmarks' ? (
           <section className="editor-panel" aria-label={activeBookmark ? 'แก้ไขบุ๊กมาร์ก' : 'เพิ่มบุ๊กมาร์ก'}>
@@ -6927,11 +6701,25 @@ function App() {
                 </dl>
               </article>
             ) : (
+              <>
+                <div style={{ marginBottom: '16px' }}>
+                <span className="eyebrow">{viewTitle} ({listLength} รายการ)</span>
+                {allEntries.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '10px' }}>
+                    {allEntries.slice(0, 5).map((entry) => (
+                      <button key={entry.id} className="button button-quiet" type="button" onClick={() => selectAllEntry(entry)}>
+                        {entry.title}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <div className="empty-state trash-empty">
                 <span className="empty-icon" aria-hidden="true">★</span>
                 <strong>เลือกรายการโปรด</strong>
                 <span>รายการที่คุณทำเครื่องหมายดาวจะแสดงที่นี่</span>
               </div>
+              </>
             )}
           </section>
         ) : viewMode === 'files' ? (
@@ -7013,13 +6801,83 @@ function App() {
                   ไฟล์ถูกเก็บในพื้นที่ส่วนตัวของคุณ ระบบตรวจชนิดไฟล์จากเนื้อหาและไม่แสดงไฟล์ที่อาจเป็นอันตรายแบบฝังในหน้าเว็บ
                 </p>
               </article>
-            ) : (
-              <div className="empty-state trash-empty">
-                <span className="empty-icon" aria-hidden="true">▤</span>
-                <strong>เลือกไฟล์</strong>
-                <span>อัปโหลดไฟล์แล้วเลือกจากรายการด้านซ้ายเพื่อดูรายละเอียด</span>
+            ) : null}
+
+            <div className="file-grid-section" style={{ marginTop: activeFile ? '28px' : '0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: 650, margin: 0, color: 'var(--ink)' }}>
+                  ไฟล์ทั้งหมดในระบบ ({files.length})
+                </h3>
+                <label className="button button-primary" style={{ cursor: 'pointer', margin: 0 }}>
+                  <span>＋ อัปโหลดไฟล์</span>
+                  <input
+                    type="file"
+                    multiple
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files.length > 0) {
+                        for (const file of Array.from(e.target.files)) {
+                          void uploadFile(file);
+                        }
+                        e.target.value = '';
+                      }
+                    }}
+                  />
+                </label>
               </div>
-            )}
+              {files.length === 0 ? (
+                <div className="empty-state" style={{ padding: '60px 20px', background: 'var(--paper)', borderRadius: '16px', border: '1px dashed var(--line)', textAlign: 'center' }}>
+                  <span className="empty-icon" style={{ fontSize: '40px', display: 'block', marginBottom: '12px' }}>📁</span>
+                  <strong>ยังไม่มีไฟล์ในคลัง</strong>
+                  <span style={{ color: 'var(--muted)', display: 'block' }}>อัปโหลดรูปภาพ เอกสาร หรือวิดีโอเพื่อจัดเก็บ</span>
+                </div>
+              ) : (
+                <div className="file-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px' }}>
+                  {files.map((file) => (
+                    <article className={`dash-card file-card${activeFile?.id === file.id ? ' is-active' : ''}`} key={file.id} style={{ padding: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                      <div style={{ cursor: 'pointer' }} onClick={() => setActiveFile(file)}>
+                        <div style={{ height: '120px', background: 'var(--canvas)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginBottom: '12px' }}>
+                          {file.mediaType.startsWith('image/') ? (
+                            <img src={file.downloadUrl} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          ) : (
+                            <span style={{ fontSize: '36px' }}>{fileIcon(file.mediaType, file.displayName)}</span>
+                          )}
+                        </div>
+                        <strong style={{ fontSize: '14px', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: '4px' }}>
+                          {file.displayName}
+                        </strong>
+                        <span style={{ fontSize: '12px', color: 'var(--muted)' }}>
+                          {formatBytes(file.sizeBytes)} · {file.mediaType}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--line)' }}>
+                        <button
+                          className="button button-quiet"
+                          type="button"
+                          style={{ padding: '2px 8px', minHeight: '26px', fontSize: '11px' }}
+                          onClick={() => setMediaLightboxFile(file)}
+                        >
+                          👁️ ดูตัวอย่าง
+                        </button>
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          <a className="button button-quiet" style={{ padding: '2px 8px', minHeight: '26px', fontSize: '11px' }} href={file.downloadUrl} download={file.displayName}>
+                            ดาวน์โหลด
+                          </a>
+                          <button
+                            className="button button-danger-quiet"
+                            type="button"
+                            style={{ padding: '2px 8px', minHeight: '26px', fontSize: '11px' }}
+                            onClick={() => void handleDeleteFile(file)}
+                          >
+                            ลบ
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </div>
           </section>
         ) : viewMode === 'all' ? (
           <section className="editor-panel" aria-label="ภาพรวมทั้งหมด">

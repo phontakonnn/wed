@@ -4259,3 +4259,303 @@ a.button {
   font-size: 11px;
   color: var(--text-muted, #94a3b8);
 }
+
+/* ==========================================================================
+   Dashboard Home View: 2-column wide layout & Responsive Polish
+   ========================================================================== */
+.workspace.is-home {
+  grid-template-columns: 240px minmax(0, 1fr);
+}
+
+.workspace.is-home .dashboard-panel {
+  max-width: 100%;
+}
+
+@media (max-width: 1100px) {
+  .workspace.is-home {
+    grid-template-columns: 210px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .workspace.is-home {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+
+/* ==========================================================================
+   PKH Modern SaaS & Bento UI 2-Column Redesign
+   ========================================================================== */
+
+:root {
+  --canvas: #f4f6f9;
+  --paper: #ffffff;
+  --line: #e2e8f0;
+  --ink: #0f172a;
+  --muted: #64748b;
+  --sidebar-w: 260px;
+}
+
+:root[data-mode='dark'] {
+  --canvas: #0f172a;
+  --paper: #1e293b;
+  --line: #334155;
+  --ink: #f8fafc;
+  --muted: #94a3b8;
+}
+
+body {
+  background: var(--canvas) !important;
+  color: var(--ink);
+}
+
+.workspace,
+.workspace.is-home {
+  display: grid !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-height: calc(100vh - 76px);
+  margin: 0;
+  grid-template-columns: 260px minmax(0, 1fr) !important;
+  background: var(--canvas, #f4f6f9) !important;
+}
+
+.app-sidebar {
+  width: 260px !important;
+  padding: 20px 16px;
+  border-right: 1px solid var(--line);
+  background: var(--paper, #fff) !important;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: sticky;
+  top: 76px;
+  height: calc(100vh - 76px);
+  overflow-y: auto;
+}
+
+.nav-item {
+  border-radius: 10px !important;
+  min-height: 42px !important;
+  padding: 0 14px !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  color: var(--ink) !important;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: none !important;
+  background: transparent !important;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.nav-item:hover {
+  background: rgba(0, 0, 0, 0.04) !important;
+  color: var(--ink) !important;
+}
+
+:root[data-mode='dark'] .nav-item:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+.nav-item.is-active {
+  background: linear-gradient(135deg, var(--green, #3f7658) 0%, var(--green-dark, #2f5942) 100%) !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  box-shadow: 0 4px 14px 0 rgba(63, 118, 88, 0.35) !important;
+}
+
+.nav-item.is-active .nav-icon,
+.nav-item.is-active .nav-count,
+.nav-item.is-active span {
+  color: #ffffff !important;
+}
+
+.detail-panel {
+  min-width: 0 !important;
+  height: calc(100vh - 76px);
+  overflow-y: auto;
+  background: var(--canvas, #f4f6f9) !important;
+  padding: 28px 36px 60px !important;
+}
+
+.detail-panel .editor-panel {
+  padding: 0 !important;
+  background: transparent !important;
+  min-height: auto;
+}
+
+/* Bento UI Floating Cards */
+.dash-card,
+.category-card,
+.note-bento-card,
+.file-card,
+.vault-card,
+.library-card,
+.bookmark-card,
+.goal-card,
+.project-card,
+.person-card,
+.work-row,
+.search-filter-card,
+.schedule-summary-card,
+.capture-form,
+.inline-form {
+  background: var(--paper, #fff) !important;
+  border-radius: 16px !important;
+  border: 1px solid var(--line, #e2e8f0) !important;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.02) !important;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease !important;
+}
+
+.dash-card:hover,
+.note-bento-card:hover,
+.file-card:hover,
+.vault-card:hover,
+.library-card:hover,
+.bookmark-card:hover,
+.project-card:hover,
+.goal-card:hover,
+.person-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px -4px rgba(0, 0, 0, 0.08), 0 4px 10px -2px rgba(0, 0, 0, 0.03) !important;
+  border-color: rgba(63, 118, 88, 0.3) !important;
+}
+
+/* Module Header Banner */
+.module-header-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding: 20px 24px;
+  background: var(--paper, #fff);
+  border-radius: 16px;
+  border: 1px solid var(--line, #e2e8f0);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+}
+
+.module-header-banner .banner-icon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  border-radius: 14px;
+  background: rgba(63, 118, 88, 0.12);
+  flex-shrink: 0;
+}
+
+.module-header-banner .banner-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.module-header-banner .banner-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.module-header-banner .banner-subtitle {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.module-header-banner .banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* Form Controls & Buttons */
+input, select, textarea {
+  border-radius: 10px !important;
+  border: 1px solid var(--line, #e2e8f0);
+  background: var(--paper, #fff);
+  color: var(--ink);
+  padding: 10px 14px;
+  font-size: 14px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: var(--green, #3f7658) !important;
+  box-shadow: 0 0 0 3px rgba(63, 118, 88, 0.2) !important;
+  outline: none;
+}
+
+.button {
+  border-radius: 10px !important;
+  font-weight: 600;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  padding: 8px 16px;
+}
+
+.button-primary {
+  background: linear-gradient(135deg, var(--green, #3f7658) 0%, var(--green-dark, #2f5942) 100%) !important;
+  color: #fff !important;
+  border: none;
+  box-shadow: 0 2px 8px rgba(63, 118, 88, 0.25);
+}
+
+.button-primary:hover:not(:disabled) {
+  box-shadow: 0 4px 14px rgba(63, 118, 88, 0.38) !important;
+  transform: translateY(-1px);
+}
+
+/* Topbar mobile menu button */
+.topbar-mobile-menu {
+  display: none;
+  margin-right: 12px;
+  font-size: 20px;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 900px) {
+  .workspace,
+  .workspace.is-home {
+    grid-template-columns: 1fr !important;
+  }
+  .app-sidebar {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 280px !important;
+    z-index: 1000 !important;
+    transform: translateX(-100%);
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+  }
+  .app-sidebar.is-open {
+    transform: translateX(0) !important;
+  }
+  .sidebar-close {
+    display: flex !important;
+  }
+  .topbar-mobile-menu {
+    display: flex !important;
+  }
+  .detail-panel {
+    padding: 16px 14px 40px !important;
+  }
+  .module-header-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 16px;
+  }
+  .module-header-banner .banner-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}

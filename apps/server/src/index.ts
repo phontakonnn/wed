@@ -3,7 +3,8 @@ import fastifyStatic from '@fastify/static';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, createReadStream, unlinkSync } from 'node:fs';
+import os from 'node:os';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createSession, hashPassword, hashSessionToken, resolveSession, verifyPassword } from './auth.js';
@@ -1471,6 +1472,73 @@ export function createApp(
     `).run(now, now, request.params.noteId, ownerId);
     if (result.changes === 0) return reply.code(404).send({ error: 'ไม่พบโน้ต' });
     return reply.code(204).send();
+  });
+
+  // One-click full SQLite database backup download
+  app.get('/api/backup/export', async (request, reply) => {
+    const ownerId = request.sessionUserId;
+    if (!ownerId) return reply.code(401).send({ error: 'กรุณาเข้าสู่ระบบ' });
+
+    const tmpBackupPath = resolve(os.tmpdir(), `pkh-backup-${randomUUID()}.sqlite3`);
+    try {
+      await database.backup(tmpBackupPath);
+      const filename = `pkh-database-backup-${new Date().toISOString().slice(0, 10)}.sqlite3`;
+      reply.header('content-disposition', `attachment; filename="${filename}"`);
+      reply.header('content-type', 'application/x-sqlite3');
+      const stream = createReadStream(tmpBackupPath);
+      stream.on('close', () => {
+        try { unlinkSync(tmpBackupPath); } catch {}
+      });
+      return reply.send(stream);
+    } catch (err) {
+      try { unlinkSync(tmpBackupPath); } catch {}
+      return reply.code(500).send({ error: 'ไม่สามารถสร้างไฟล์สำรองข้อมูลได้' });
+    }
+  });
+
+  // One-click human-readable JSON full export
+  app.get('/api/backup/export-json', async (request, reply) => {
+    const ownerId = request.sessionUserId;
+    if (!ownerId) return reply.code(401).send({ error: 'กรุณาเข้าสู่ระบบ' });
+
+    const notes = database.prepare('SELECT * FROM notes WHERE owner_id = ?').all(ownerId);
+    const tasks = database.prepare('SELECT * FROM tasks WHERE owner_id = ?').all(ownerId);
+    const bookmarks = database.prepare('SELECT * FROM bookmarks WHERE owner_id = ?').all(ownerId);
+    const vault = database.prepare('SELECT * FROM vault_items WHERE owner_id = ?').all(ownerId);
+    const library = database.prepare('SELECT * FROM library_items WHERE owner_id = ?').all(ownerId);
+    const categories = database.prepare('SELECT * FROM custom_categories WHERE owner_id = ?').all(ownerId);
+    const categoryItems = database.prepare('SELECT * FROM custom_category_items WHERE owner_id = ?').all(ownerId);
+    const files = database.prepare('SELECT id, display_name, size_bytes, media_type, created_at, custom_category_id FROM files WHERE owner_id = ?').all(ownerId);
+    const projects = database.prepare('SELECT * FROM projects WHERE owner_id = ?').all(ownerId);
+    const goals = database.prepare('SELECT * FROM goals WHERE owner_id = ?').all(ownerId);
+    const reminders = database.prepare('SELECT * FROM reminders WHERE owner_id = ?').all(ownerId);
+    const habits = database.prepare('SELECT * FROM habits WHERE owner_id = ?').all(ownerId);
+    const timeblocks = database.prepare('SELECT * FROM life_timeblocks WHERE owner_id = ?').all(ownerId);
+
+    const exportData = {
+      exportedAt: new Date().toISOString(),
+      ownerId,
+      data: {
+        custom_categories: categories,
+        custom_category_items: categoryItems,
+        notes,
+        tasks,
+        bookmarks,
+        vault_items: vault,
+        library_items: library,
+        files,
+        projects,
+        goals,
+        reminders,
+        habits,
+        timeblocks,
+      },
+    };
+
+    const filename = `pkh-export-${new Date().toISOString().slice(0, 10)}.json`;
+    reply.header('content-disposition', `attachment; filename="${filename}"`);
+    reply.header('content-type', 'application/json; charset=utf-8');
+    return reply.send(JSON.stringify(exportData, null, 2));
   });
 
   registerLifeOsRoutes(app, database);
