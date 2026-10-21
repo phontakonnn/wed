@@ -1553,8 +1553,8 @@ export function createApp(
 }
 
 export async function startServer() {
-  const dataDirectory = process.env.DATA_DIR;
-  if (!dataDirectory) throw new Error('DATA_DIR must be configured before starting the server');
+  const defaultDataDir = fileURLToPath(new URL('../../../data', import.meta.url));
+  const dataDirectory = process.env.DATA_DIR || defaultDataDir;
   const webRoot = fileURLToPath(new URL('../../web/dist/', import.meta.url));
   const hasWebBuild = existsSync(resolve(webRoot, 'index.html'));
   if (!hasWebBuild) {

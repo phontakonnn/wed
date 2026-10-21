@@ -3865,19 +3865,42 @@ function App() {
           </button>
 
           <nav className="primary-nav" aria-label="เมนูหลัก">
-            {sidebarNav.filter((item) => item.enabled).map((item) => (
-              <button
-                key={item.id}
-                className={`nav-item${viewMode === item.view ? ' is-active' : ''}`}
-                type="button"
-                aria-current={viewMode === item.view ? 'page' : undefined}
-                onClick={() => switchView(item.view)}
-              >
-                <span className="nav-icon" aria-hidden="true">{item.icon}</span>
-                <span>{item.label}</span>
-                {viewMode === item.view && <span className="nav-count">{listTotal}</span>}
-              </button>
-            ))}
+            {sidebarNav.filter((item) => item.enabled).map((item) => {
+              const navCount = item.view === 'notes'
+                ? listTotal
+                : item.view === 'tasks'
+                  ? tasks.length
+                  : item.view === 'inbox'
+                    ? inboxNewCount
+                    : item.view === 'projects'
+                      ? projects.length
+                      : item.view === 'goals'
+                        ? goals.length
+                        : item.view === 'vault'
+                          ? vaultItems.length
+                          : item.view === 'library'
+                            ? libraryItems.length
+                            : item.view === 'files'
+                              ? files.length
+                              : item.view === 'bookmarks'
+                                ? bookmarks.length
+                                : item.view === 'favorites'
+                                  ? favorites.length
+                                  : null;
+              return (
+                <button
+                  key={item.id}
+                  className={`nav-item${viewMode === item.view ? ' is-active' : ''}`}
+                  type="button"
+                  aria-current={viewMode === item.view ? 'page' : undefined}
+                  onClick={() => switchView(item.view)}
+                >
+                  <span className="nav-icon" aria-hidden="true">{item.icon}</span>
+                  <span className="nav-label">{item.label}</span>
+                  {navCount !== null && navCount > 0 && <span className="nav-count">{navCount}</span>}
+                </button>
+              );
+            })}
           </nav>
 
           <div className="nav-customize-wrap">
@@ -4420,23 +4443,31 @@ function App() {
           </section>
         ) : viewMode === 'home' ? (
           <section className="editor-panel dashboard-panel" aria-label="ภาพรวมวันนี้">
-            <div className="editor-toolbar">
-              <div>
-                <span className="eyebrow">Today</span>
-                <h2 className="panel-title">ภาพรวมวันนี้</h2>
-                <p className="updated-label">
+            <div className="module-header-banner">
+              <div className="banner-icon">📊</div>
+              <div className="banner-info">
+                <span className="eyebrow">Daily Overview</span>
+                <h2 className="banner-title">ภาพรวมวันนี้</h2>
+                <p className="banner-subtitle">
                   {dashboard ? dashboard.today : localToday()}
-                  {dashboardBusy ? ' · กำลังโหลด…' : ''}
+                  {dashboardBusy ? ' · กำลังโหลด…' : ' · ซิงค์ข้อมูลล่าสุดเรียบร้อย'}
                 </p>
               </div>
-              <div className="editor-actions">
+              <div className="banner-actions">
                 <button
                   className="button button-quiet"
                   type="button"
                   onClick={() => void refreshDashboard()}
                   disabled={dashboardBusy}
                 >
-                  {dashboardBusy ? 'กำลังโหลด…' : 'รีเฟรช'}
+                  🔄 {dashboardBusy ? 'กำลังโหลด…' : 'รีเฟรช'}
+                </button>
+                <button
+                  className="button button-primary"
+                  type="button"
+                  onClick={() => switchView('inbox')}
+                >
+                  ＋ จดด่วนเข้ากล่อง
                 </button>
               </div>
             </div>
@@ -4726,11 +4757,14 @@ function App() {
           </section>
         ) : viewMode === 'inbox' ? (
           <section className="editor-panel work-panel" aria-label="กล่องขาเข้า">
-            <div className="editor-toolbar">
-              <div>
+            <div className="module-header-banner">
+              <div className="banner-icon">📥</div>
+              <div className="banner-info">
                 <span className="eyebrow">Quick Capture</span>
-                <h2 className="panel-title">กล่องขาเข้า</h2>
-                <p className="updated-label">ยังไม่ได้จัดหมวด {inboxNewCount} รายการ</p>
+                <h2 className="banner-title">กล่องขาเข้า</h2>
+                <p className="banner-subtitle">
+                  ยังไม่ได้จัดหมวด {inboxNewCount} รายการ · จดบันทึกสิ่งที่คิดไว้ก่อน แล้วค่อยจัดหมวดหมู่ภายหลัง
+                </p>
               </div>
             </div>
             {inboxError && <p className="form-error editor-error" role="alert">{inboxError}</p>}
@@ -4791,39 +4825,38 @@ function App() {
           </section>
         ) : viewMode === 'vault' ? (
           <section className="editor-panel vault-panel" aria-label="แก้ไขข้อมูลคลังสำคัญ">
-            <div className="editor-toolbar">
-              <div>
+            <div className="module-header-banner">
+              <div className="banner-icon">🔐</div>
+              <div className="banner-info">
                 <span className="eyebrow">Personal Vault</span>
-                <h2 className="panel-title">{activeVault ? 'แก้ไขข้อมูลในคลัง' : 'เพิ่มรายการเข้าคลัง'}</h2>
+                <h2 className="banner-title">คลังสำคัญ &amp; ทรัพย์สิน</h2>
+                <p className="banner-subtitle">
+                  {vaultItems.length} รายการ · บันทึกเลขสำคัญ กรมธรรม์ ทรัพย์สิน และเอกสารลับที่ปลอดภัย
+                </p>
               </div>
-              <div className="editor-actions">
+              <div className="banner-actions">
                 <button className="button button-primary" type="button" onClick={startNewVaultItem}>
                   ＋ เพิ่มรายการเข้าคลัง
                 </button>
-                <p className="updated-label">
-                  {activeVault
-                    ? `แก้ไขล่าสุด ${formatDate(activeVault.updatedAt)}`
-                    : 'เก็บเลขสำคัญไว้ให้กดคัดลอกได้ทันทีเมื่อต้องใช้'}
-                </p>
+                {activeVault && (
+                  <>
+                    <button
+                      className="button button-quiet"
+                      type="button"
+                      onClick={() => void copyVaultKey(activeVault, vaultDraft.keyValue)}
+                    >
+                      📋 คัดลอกเลขสำคัญ
+                    </button>
+                    <button
+                      className="button button-quiet"
+                      type="button"
+                      onClick={() => void sendVaultItemToReminders(activeVault)}
+                    >
+                      📅 ส่งเข้าปฏิทิน
+                    </button>
+                  </>
+                )}
               </div>
-              {activeVault && (
-                <div className="editor-actions">
-                  <button
-                    className="button button-quiet"
-                    type="button"
-                    onClick={() => void copyVaultKey(activeVault, vaultDraft.keyValue)}
-                  >
-                    📋 คัดลอกเลขสำคัญ
-                  </button>
-                  <button
-                    className="button button-quiet"
-                    type="button"
-                    onClick={() => void sendVaultItemToReminders(activeVault)}
-                  >
-                    📅 ส่งวันครบกำหนดเข้าปฏิทินแจ้งเตือน
-                  </button>
-                </div>
-              )}
             </div>
             {vaultError && <p className="form-error editor-error" role="alert">{vaultError}</p>}
             {vaultNotice && <p className="form-notice" role="status">{vaultNotice}</p>}
@@ -5029,20 +5062,19 @@ function App() {
           </section>
         ) : viewMode === 'library' ? (
           <section className="editor-panel library-panel" aria-label="แก้ไขความรู้ในห้องสมุด">
-            <div className="editor-toolbar">
-              <div>
+            <div className="module-header-banner">
+              <div className="banner-icon">📚</div>
+              <div className="banner-info">
                 <span className="eyebrow">Knowledge Library &amp; SOPs</span>
-                <h2 className="panel-title">{activeLibrary ? 'แก้ไขความรู้' : 'เพิ่มความรู้ใหม่'}</h2>
+                <h2 className="banner-title">ห้องสมุดความรู้ &amp; คู่มือ</h2>
+                <p className="banner-subtitle">
+                  {libraryItems.length} รายการ · คู่มือ ขั้นตอนการทำงาน (SOP) และองค์ความรู้สำคัญ
+                </p>
               </div>
-              <div className="editor-actions">
+              <div className="banner-actions">
                 <button className="button button-primary" type="button" onClick={startNewLibraryItem}>
                   ＋ เพิ่มความรู้ใหม่
                 </button>
-                <p className="updated-label">
-                  {activeLibrary
-                    ? `แก้ไขล่าสุด ${formatDate(activeLibrary.updatedAt)}`
-                    : 'เก็บขั้นตอนไว้ให้หยิบใช้ได้ใน 10 วินาที'}
-                </p>
               </div>
             </div>
             {libraryError && <p className="form-error editor-error" role="alert">{libraryError}</p>}
@@ -5231,11 +5263,14 @@ function App() {
           </section>
         ) : viewMode === 'tasks' ? (
           <section className="editor-panel work-panel" aria-label="งานที่ต้องทำ">
-            <div className="editor-toolbar">
-              <div>
+            <div className="module-header-banner">
+              <div className="banner-icon">✅</div>
+              <div className="banner-info">
                 <span className="eyebrow">Tasks &amp; To-Do</span>
-                <h2 className="panel-title">งานที่ต้องทำ</h2>
-                <p className="updated-label">{tasks.length} รายการในตัวกรองนี้ · จัดการภารกิจให้เสร็จตรงเวลา</p>
+                <h2 className="banner-title">งานที่ต้องทำ</h2>
+                <p className="banner-subtitle">
+                  {tasks.length} รายการในตัวกรองนี้ · จัดการภารกิจและเป้าหมายประจำวันให้เสร็จตรงเวลา
+                </p>
               </div>
             </div>
             <div className="mode-toggle" role="group" aria-label="ตัวกรองงาน">
@@ -5391,11 +5426,14 @@ function App() {
           </section>
         ) : viewMode === 'projects' ? (
           <section className="editor-panel work-panel" aria-label="โปรเจกต์">
-            <div className="editor-toolbar">
-              <div>
-                <span className="eyebrow">Projects</span>
-                <h2 className="panel-title">โปรเจกต์</h2>
-                <p className="updated-label">{projects.length} โปรเจกต์ที่กำลังทำ</p>
+            <div className="module-header-banner">
+              <div className="banner-icon">🚀</div>
+              <div className="banner-info">
+                <span className="eyebrow">Projects &amp; Milestones</span>
+                <h2 className="banner-title">โปรเจกต์</h2>
+                <p className="banner-subtitle">
+                  {projects.length} โปรเจกต์ที่กำลังทำ · ติดตามแผนงานและความคืบหน้าให้สำเร็จตามเป้า
+                </p>
               </div>
             </div>
             {projectsError && <p className="form-error editor-error" role="alert">{projectsError}</p>}
@@ -5500,11 +5538,14 @@ function App() {
           </section>
         ) : viewMode === 'goals' ? (
           <section className="editor-panel work-panel" aria-label="เป้าหมาย">
-            <div className="editor-toolbar">
-              <div>
-                <span className="eyebrow">Goals</span>
-                <h2 className="panel-title">เป้าหมาย</h2>
-                <p className="updated-label">{goals.length} เป้าหมายที่กำลังติดตาม</p>
+            <div className="module-header-banner">
+              <div className="banner-icon">🎯</div>
+              <div className="banner-info">
+                <span className="eyebrow">Goals &amp; OKRs</span>
+                <h2 className="banner-title">เป้าหมาย</h2>
+                <p className="banner-subtitle">
+                  {goals.length} เป้าหมายที่กำลังติดตาม · มุ่งมั่นและวัดผลความสำเร็จในชีวิต
+                </p>
               </div>
             </div>
             {goalsError && <p className="form-error editor-error" role="alert">{goalsError}</p>}
@@ -5600,21 +5641,19 @@ function App() {
           </section>
         ) : viewMode === 'people' ? (
           <section className="editor-panel people-panel" aria-label="ข้อมูลบุคคลสำคัญ">
-            <div className="editor-toolbar">
-              <div>
+            <div className="module-header-banner">
+              <div className="banner-icon">👥</div>
+              <div className="banner-info">
                 <span className="eyebrow">Personal CRM</span>
-                <h2 className="panel-title">{activePerson ? activePerson.name : 'เพิ่มบุคคลสำคัญ'}</h2>
-                {activePerson?.birthdayOrAnniversary && (
-                  <p className="updated-label">
-                    {activePerson.birthdayOrAnniversary}
-                    {daysUntilNext(activePerson.birthdayOrAnniversary) !== null
-                      ? ` · อีก ${daysUntilNext(activePerson.birthdayOrAnniversary)} วัน`
-                      : ''}
-                  </p>
-                )}
+                <h2 className="banner-title">{activePerson ? activePerson.name : 'บุคคลสำคัญ'}</h2>
+                <p className="banner-subtitle">
+                  {activePerson?.birthdayOrAnniversary
+                    ? `${activePerson.birthdayOrAnniversary} · อีก ${daysUntilNext(activePerson.birthdayOrAnniversary)} วันถึงวันสำคัญ`
+                    : `${people.length} บุคคล · บันทึกความสัมพันธ์ วันสำคัญ และประวัติการติดต่อ`}
+                </p>
               </div>
-              <div className="editor-actions">
-                <button className="button button-quiet" type="button" onClick={startNewPerson}>
+              <div className="banner-actions">
+                <button className="button button-primary" type="button" onClick={startNewPerson}>
                   ＋ เพิ่มบุคคล
                 </button>
                 {activePerson && (
@@ -5812,15 +5851,18 @@ function App() {
           </section>
         ) : viewMode === 'schedule' ? (
           <section className="editor-panel schedule-panel" aria-label="ปฏิทินและตารางชีวิต">
-            <div className="editor-toolbar">
-              <div>
-                <span className="eyebrow">Life OS</span>
-                <h2 className="panel-title">ตารางชีวิต</h2>
-                <p className="updated-label">{scheduleDate}</p>
+            <div className="module-header-banner">
+              <div className="banner-icon">📅</div>
+              <div className="banner-info">
+                <span className="eyebrow">Life OS &amp; Calendar</span>
+                <h2 className="banner-title">ปฏิทินและตารางชีวิต</h2>
+                <p className="banner-subtitle">
+                  {scheduleDate} · ตารางกิจกรรม บันทึกนิสัย และการแจ้งเตือนวันสำคัญ
+                </p>
               </div>
-              <div className="editor-actions">
-                <button className="button button-quiet" type="button" onClick={() => setViewMode('notes')}>
-                  ไปที่โน้ต
+              <div className="banner-actions">
+                <button className="button button-quiet" type="button" onClick={() => switchView('notes')}>
+                  📝 ไปที่โน้ต
                 </button>
               </div>
             </div>
@@ -6544,35 +6586,53 @@ function App() {
           </section>
         ) : viewMode === 'bookmarks' ? (
           <section className="editor-panel" aria-label={activeBookmark ? 'แก้ไขบุ๊กมาร์ก' : 'เพิ่มบุ๊กมาร์ก'}>
-            <div className="editor-toolbar">
-              <div>
-                <span className="eyebrow">{activeBookmark ? 'ลิงก์ที่บันทึกไว้' : 'บุ๊กมาร์กใหม่'}</span>
-                {activeBookmark && <p className="updated-label">แก้ไขล่าสุด {formatDate(activeBookmark.updatedAt)}</p>}
+            <div className="module-header-banner">
+              <div className="banner-icon">🔖</div>
+              <div className="banner-info">
+                <span className="eyebrow">Web Bookmarks</span>
+                <h2 className="banner-title">{activeBookmark ? activeBookmark.title : 'ลิงก์และบุ๊กมาร์ก'}</h2>
+                <p className="banner-subtitle">
+                  {activeBookmark
+                    ? `แก้ไขล่าสุด ${formatDate(activeBookmark.updatedAt)}`
+                    : `${bookmarks.length} ลิงก์ · คลังเว็บ บุ๊กมาร์ก และแหล่งข้อมูลสำคัญ`}
+                </p>
               </div>
-              <div className="editor-actions">
+              <div className="banner-actions">
                 {activeBookmark && (
-                  <button
-                    className="button button-quiet favorite-toggle"
-                    type="button"
-                    aria-pressed={bookmarkFavorited}
-                    onClick={() => void toggleFavorite('bookmark', activeBookmark.id, bookmarkFavorited)}
-                    disabled={favoriteBusy || saveBusy}
-                  >
-                    {bookmarkFavorited ? '★ รายการโปรด' : '☆ เพิ่มในรายการโปรด'}
-                  </button>
-                )}
-                {activeBookmark && (
-                  <button
-                    className="button button-danger-quiet"
-                    type="button"
-                    onClick={handleDeleteBookmark}
-                    disabled={saveBusy}
-                  >
-                    ลบบุ๊กมาร์ก
-                  </button>
+                  <>
+                    <button
+                      className="button button-quiet"
+                      type="button"
+                      onClick={() => {
+                        setActiveBookmark(null);
+                        setBookmarkTitle('');
+                        setBookmarkUrl('');
+                        setBookmarkDescription('');
+                      }}
+                    >
+                      ← ดูลิงก์ทั้งหมด
+                    </button>
+                    <button
+                      className="button button-quiet favorite-toggle"
+                      type="button"
+                      aria-pressed={bookmarkFavorited}
+                      onClick={() => void toggleFavorite('bookmark', activeBookmark.id, bookmarkFavorited)}
+                      disabled={favoriteBusy || saveBusy}
+                    >
+                      {bookmarkFavorited ? '★ รายการโปรด' : '☆ เพิ่มในรายการโปรด'}
+                    </button>
+                    <button
+                      className="button button-danger-quiet"
+                      type="button"
+                      onClick={handleDeleteBookmark}
+                      disabled={saveBusy}
+                    >
+                      ลบ
+                    </button>
+                  </>
                 )}
                 <button className="button button-primary" type="submit" form="bookmark-editor" disabled={saveBusy}>
-                  {saveBusy ? 'กำลังบันทึก…' : 'บันทึกบุ๊กมาร์ก'}
+                  {saveBusy ? 'กำลังบันทึก…' : activeBookmark ? 'บันทึกการแก้ไข' : '＋ บันทึกบุ๊กมาร์ก'}
                 </button>
               </div>
             </div>
@@ -6651,20 +6711,86 @@ function App() {
                 onFilesChanged={() => setRefreshKey((key) => key + 1)}
               />
             )}
+
+            {!activeBookmark && bookmarks.length > 0 && (
+              <div style={{ marginTop: '28px' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '14px', color: 'var(--ink)' }}>
+                  ลิงก์ที่บันทึกไว้ ({bookmarks.length})
+                </h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
+                  {bookmarks.map((bm) => (
+                    <article
+                      key={bm.id}
+                      className="dash-card bookmark-card"
+                      style={{ padding: '16px', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}
+                      onClick={() => {
+                        setActiveBookmark(bm);
+                        setBookmarkTitle(bm.title);
+                        setBookmarkUrl(bm.url);
+                        setBookmarkDescription(bm.description || '');
+                        setActiveBookmarkCustomCatId((bm as any).customCategoryId || null);
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', marginBottom: '6px' }}>
+                          <strong style={{ fontSize: '15px', color: 'var(--ink)' }}>{bm.title}</strong>
+                          <a
+                            href={bm.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            style={{ fontSize: '12px', color: 'var(--green)', textDecoration: 'none' }}
+                            title="เปิดในแท็บใหม่"
+                          >
+                            ↗ เปิด
+                          </a>
+                        </div>
+                        <p style={{ margin: '0 0 10px', fontSize: '12px', color: 'var(--muted)', wordBreak: 'break-all' }}>
+                          {bm.url}
+                        </p>
+                        {bm.description && (
+                          <p style={{ margin: '0 0 10px', fontSize: '13px', color: 'var(--ink)', lineHeight: 1.4 }}>
+                            {bm.description}
+                          </p>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '8px', borderTop: '1px solid var(--line)', fontSize: '11px', color: 'var(--muted)' }}>
+                        <time dateTime={new Date(bm.updatedAt).toISOString()}>{formatDate(bm.updatedAt)}</time>
+                        <button
+                          className="button button-quiet"
+                          type="button"
+                          style={{ padding: '2px 8px', minHeight: '24px', fontSize: '11px' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveBookmark(bm);
+                            setBookmarkTitle(bm.title);
+                            setBookmarkUrl(bm.url);
+                            setBookmarkDescription(bm.description || '');
+                            setActiveBookmarkCustomCatId((bm as any).customCategoryId || null);
+                          }}
+                        >
+                          ✏️ แก้ไข
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
         ) : viewMode === 'favorites' ? (
           <section className="editor-panel" aria-label="รายละเอียดรายการโปรด">
-            <div className="editor-toolbar">
-              <div>
-                <span className="eyebrow">รายการโปรด</span>
-                {activeFavorite && (
-                  <p className="updated-label">
-                    {activeFavorite.itemType === 'note' ? 'โน้ต' : 'บุ๊กมาร์ก'} · เพิ่มเมื่อ {formatDate(activeFavorite.createdAt)}
-                  </p>
-                )}
+            <div className="module-header-banner">
+              <div className="banner-icon">⭐</div>
+              <div className="banner-info">
+                <span className="eyebrow">Starred Items</span>
+                <h2 className="banner-title">รายการโปรด</h2>
+                <p className="banner-subtitle">
+                  {favorites.length} รายการที่คุณติดดาวไว้ · เข้าถึงข้อมูลสำคัญได้อย่างรวดเร็ว
+                </p>
               </div>
               {activeFavorite && (
-                <div className="editor-actions">
+                <div className="banner-actions">
                   <button
                     className="button button-primary"
                     type="button"
@@ -6678,7 +6804,14 @@ function App() {
                     disabled={favoriteBusy}
                     onClick={() => void toggleFavorite(activeFavorite.itemType, activeFavorite.itemId, true)}
                   >
-                    นำออกจากรายการโปรด
+                    นำออก ★
+                  </button>
+                  <button
+                    className="button button-quiet"
+                    type="button"
+                    onClick={() => setActiveFavorite(null)}
+                  >
+                    ← ดูทั้งหมด
                   </button>
                 </div>
               )}
@@ -6714,42 +6847,114 @@ function App() {
                   </div>
                 )}
               </div>
-              <div className="empty-state trash-empty">
-                <span className="empty-icon" aria-hidden="true">★</span>
-                <strong>เลือกรายการโปรด</strong>
-                <span>รายการที่คุณทำเครื่องหมายดาวจะแสดงที่นี่</span>
-              </div>
+              {favorites.length === 0 ? (
+                <div className="empty-state trash-empty" style={{ padding: '60px 20px', background: 'var(--paper)', borderRadius: '16px', border: '1px dashed var(--line)', textAlign: 'center' }}>
+                  <span className="empty-icon" style={{ fontSize: '40px', display: 'block', marginBottom: '12px' }}>★</span>
+                  <strong style={{ fontSize: '18px', display: 'block', marginBottom: '6px' }}>ยังไม่มีรายการโปรด</strong>
+                  <span style={{ color: 'var(--muted)' }}>กดไอคอนดาวบนโน้ตหรือบุ๊กมาร์ก เพื่อปักหมุดไว้ที่นี่</span>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px', marginTop: '16px' }}>
+                  {favorites.map((fav) => (
+                    <article
+                      key={`${fav.itemType}-${fav.itemId}`}
+                      className="dash-card favorite-card"
+                      style={{ padding: '18px', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}
+                      onClick={() => void openFavorite(fav)}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                          <strong style={{ fontSize: '15px', color: 'var(--ink)' }}>{fav.title}</strong>
+                          <span className="category-badge" style={{ borderColor: 'var(--green)' }}>
+                            {fav.itemType === 'note' ? '📝 โน้ต' : '🔖 บุ๊กมาร์ก'}
+                          </span>
+                        </div>
+                        {fav.subtitle && (
+                          <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--muted)', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                            {fav.subtitle}
+                          </p>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '8px', borderTop: '1px solid var(--line)', fontSize: '11px', color: 'var(--muted)' }}>
+                        <time>{formatDate(fav.updatedAt)}</time>
+                        <button
+                          className="button button-quiet"
+                          type="button"
+                          style={{ padding: '2px 8px', minHeight: '24px', fontSize: '11px' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void toggleFavorite(fav.itemType, fav.itemId, true);
+                          }}
+                        >
+                          นำออก ★
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
               </>
             )}
           </section>
         ) : viewMode === 'files' ? (
           <section className="editor-panel" aria-label="รายละเอียดไฟล์">
-            <div className="editor-toolbar">
-              <div>
-                <span className="eyebrow">พื้นที่จัดเก็บไฟล์</span>
-                {activeFile && <p className="updated-label">อัปโหลดเมื่อ {formatDate(activeFile.createdAt)}</p>}
+            <div className="module-header-banner">
+              <div className="banner-icon">📁</div>
+              <div className="banner-info">
+                <span className="eyebrow">File Storage &amp; Media</span>
+                <h2 className="banner-title">{activeFile ? activeFile.displayName : 'คลังไฟล์และสื่อ'}</h2>
+                <p className="banner-subtitle">
+                  {activeFile
+                    ? `${formatBytes(activeFile.sizeBytes)} · ${activeFile.mediaType} · อัปโหลดเมื่อ ${formatDate(activeFile.createdAt)}`
+                    : `${files.length} รายการ · คลังไฟล์เอกสาร รูปภาพ และวิดีโอ (สตรีมมิ่งได้)`}
+                </p>
               </div>
-              {activeFile && (
-                <div className="editor-actions">
-                  <button
-                    className="button button-quiet"
-                    type="button"
-                    onClick={() => setMediaLightboxFile(activeFile)}
-                  >
-                    👁️ เล่น / ดูตัวอย่าง
-                  </button>
-                  <a className="button button-primary" href={activeFile.downloadUrl} download={activeFile.displayName}>
-                    ดาวน์โหลด
-                  </a>
-                  <button
-                    className="button button-danger-quiet"
-                    type="button"
-                    onClick={() => void handleDeleteFile(activeFile)}
-                  >
-                    ลบไฟล์
-                  </button>
-                </div>
-              )}
+              <div className="banner-actions">
+                {activeFile && (
+                  <>
+                    <button
+                      className="button button-quiet"
+                      type="button"
+                      onClick={() => setMediaLightboxFile(activeFile)}
+                    >
+                      👁️ ดูตัวอย่าง
+                    </button>
+                    <a className="button button-quiet" href={activeFile.downloadUrl} download={activeFile.displayName}>
+                      ⬇️ ดาวน์โหลด
+                    </a>
+                    <button
+                      className="button button-danger-quiet"
+                      type="button"
+                      onClick={() => void handleDeleteFile(activeFile)}
+                    >
+                      ลบ
+                    </button>
+                    <button
+                      className="button button-quiet"
+                      type="button"
+                      onClick={() => setActiveFile(null)}
+                    >
+                      ← ดูไฟล์ทั้งหมด
+                    </button>
+                  </>
+                )}
+                <label className="button button-primary" style={{ cursor: 'pointer', margin: 0 }}>
+                  <span>＋ อัปโหลดไฟล์</span>
+                  <input
+                    type="file"
+                    multiple
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files.length > 0) {
+                        for (const file of Array.from(e.target.files)) {
+                          void uploadFile(file);
+                        }
+                        e.target.value = '';
+                      }
+                    }}
+                  />
+                </label>
+              </div>
             </div>
             {notesError && <p className="form-error editor-error" role="alert">{notesError}</p>}
             {notice && <p className="form-notice" role="status">{notice}</p>}
@@ -6889,43 +7094,105 @@ function App() {
           </section>
         ) : (
           <section className="editor-panel trash-panel" aria-label="จัดการโน้ตในถังขยะ">
-            <p className="trash-retention" role="note">
-              หมายเหตุ: นโยบายเก็บถังขยะ 30 วันเป็นข้อมูลเตือนเท่านั้น ระบบไม่ลบโน้ตอัตโนมัติ
-            </p>
+            <div className="module-header-banner">
+              <div className="banner-icon">🗑️</div>
+              <div className="banner-info">
+                <span className="eyebrow">Trash &amp; Archive</span>
+                <h2 className="banner-title">ถังขยะ</h2>
+                <p className="banner-subtitle">
+                  {listTotal} รายการในถังขยะ · ระบบไม่ลบโน้ตอัตโนมัติ คุณสามารถกู้คืนหรือลบถาวรได้
+                </p>
+              </div>
+              {activeTrashNote && (
+                <div className="banner-actions">
+                  <button className="button button-primary" type="button" onClick={handleRestore} disabled={saveBusy}>
+                    {saveBusy ? 'กำลังดำเนินการ…' : 'กู้คืนโน้ต'}
+                  </button>
+                  <button
+                    className="button button-danger-quiet"
+                    type="button"
+                    onClick={() => setPermanentDeleteOpen(true)}
+                    disabled={saveBusy}
+                  >
+                    ลบถาวร
+                  </button>
+                  <button
+                    className="button button-quiet"
+                    type="button"
+                    onClick={() => setActiveTrashNote(null)}
+                  >
+                    ← ดูทั้งหมด
+                  </button>
+                </div>
+              )}
+            </div>
             {notesError && <p className="form-error editor-error" role="alert">{notesError}</p>}
             {notice && <p className="form-notice" role="status">{notice}</p>}
             {activeTrashNote ? (
-              <>
-                <div className="editor-toolbar">
-                  <div>
-                    <span className="eyebrow">รายการในถังขยะ</span>
-                    <p className="updated-label">ย้ายเมื่อ {formatDate(activeTrashNote.updatedAt)}</p>
-                  </div>
-                  <div className="editor-actions">
-                    <button className="button button-quiet" type="button" onClick={handleRestore} disabled={saveBusy}>
-                      {saveBusy ? 'กำลังดำเนินการ…' : 'กู้คืน'}
-                    </button>
-                    <button
-                      className="button button-danger-quiet"
-                      type="button"
-                      onClick={() => setPermanentDeleteOpen(true)}
-                      disabled={saveBusy}
-                    >
-                      ลบถาวร
-                    </button>
-                  </div>
-                </div>
-                <article className="trash-preview">
-                  <h2>{activeTrashNote.title}</h2>
-                  <p>{activeTrashNote.content || 'ไม่มีเนื้อหา'}</p>
-                </article>
-              </>
+              <article className="dash-card" style={{ padding: '24px' }}>
+                <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '8px' }}>{activeTrashNote.title}</h2>
+                <p style={{ color: 'var(--muted)', fontSize: '12px', marginBottom: '16px' }}>ย้ายเมื่อ {formatDate(activeTrashNote.updatedAt)}</p>
+                <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{activeTrashNote.content || 'ไม่มีเนื้อหา'}</div>
+              </article>
             ) : (
-              <div className="empty-state trash-empty">
-                <span className="empty-icon" aria-hidden="true">⌫</span>
-                <strong>เลือกโน้ตที่ต้องการจัดการ</strong>
-                <span>กู้คืนหรือเลือกลบถาวรได้จากรายการด้านซ้าย</span>
-              </div>
+              filteredNotes.length === 0 ? (
+                <div className="empty-state trash-empty" style={{ padding: '60px 20px', background: 'var(--paper)', borderRadius: '16px', border: '1px dashed var(--line)', textAlign: 'center' }}>
+                  <span className="empty-icon" style={{ fontSize: '40px', display: 'block', marginBottom: '12px' }}>🗑️</span>
+                  <strong style={{ fontSize: '18px', display: 'block', marginBottom: '6px' }}>ถังขยะว่างเปล่า</strong>
+                  <span style={{ color: 'var(--muted)' }}>ไม่มีโน้ตที่ถูกลบอยู่ในถังขยะ</span>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px', marginTop: '16px' }}>
+                  {filteredNotes.map((note) => (
+                    <article
+                      key={note.id}
+                      className="dash-card trash-card"
+                      style={{ padding: '18px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}
+                    >
+                      <div>
+                        <strong style={{ fontSize: '15px', color: 'var(--ink)', display: 'block', marginBottom: '8px' }}>
+                          {note.title || 'ไม่มีหัวข้อ'}
+                        </strong>
+                        <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--muted)', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                          {note.content || 'ไม่มีเนื้อหา'}
+                        </p>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid var(--line)', fontSize: '12px' }}>
+                        <span style={{ color: 'var(--muted)' }}>{formatDate(note.updatedAt)}</span>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button
+                            className="button button-quiet"
+                            type="button"
+                            style={{ padding: '3px 10px', minHeight: '26px' }}
+                            onClick={async () => {
+                              try {
+                                await restoreNote(note.id);
+                                pushToast('success', 'กู้คืนโน้ตเรียบร้อย');
+                                setRefreshKey((k) => k + 1);
+                              } catch (err) {
+                                pushToast('error', errorMessage(err));
+                              }
+                            }}
+                          >
+                            กู้คืน
+                          </button>
+                          <button
+                            className="button button-danger-quiet"
+                            type="button"
+                            style={{ padding: '3px 10px', minHeight: '26px' }}
+                            onClick={() => {
+                              setActiveTrashNote(note);
+                              setPermanentDeleteOpen(true);
+                            }}
+                          >
+                            ลบถาวร
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )
             )}
           </section>
         )}
