@@ -64,7 +64,7 @@ describe('safe database startup', () => {
       .toEqual([
         { version: 1 }, { version: 2 }, { version: 3 }, { version: 4 },
         { version: 5 }, { version: 6 }, { version: 7 }, { version: 8 }, { version: 9 },
-        { version: 10 }, { version: 11 }, { version: 12 }, { version: 13 },
+        { version: 10 }, { version: 11 }, { version: 12 }, { version: 13 }, { version: 14 },
       ]);
     expect(result.database.prepare('SELECT content FROM notes WHERE id = ?').get('prior-note'))
       .toEqual({ content: 'Preserve this record' });
@@ -134,7 +134,7 @@ describe('safe database startup', () => {
     expect(verification.manifest?.schemaVersions).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
 
     expect(result.database.prepare('SELECT MAX(version) AS version FROM schema_migrations').get())
-      .toEqual({ version: 13 });
+      .toEqual({ version: 14 });
     // Existing rows survive untouched.
     expect(result.database.prepare('SELECT title, content FROM notes WHERE id = ?').get('v8-note'))
       .toEqual({ title: 'โน้ตก่อนอัปเกรด', content: 'ต้องอยู่ต่อหลัง migration' });
@@ -250,7 +250,7 @@ describe('safe database startup', () => {
     expect(verification.manifest?.schemaVersions).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
 
     expect(result.database.prepare('SELECT MAX(version) AS version FROM schema_migrations').get())
-      .toEqual({ version: 13 });
+      .toEqual({ version: 14 });
     expect(result.database.prepare('SELECT entity_type, entity_id, file_id FROM entity_files').all())
       .toEqual([{ entity_type: 'note', entity_id: 'v11-note', file_id: 'v11-file' }]);
 

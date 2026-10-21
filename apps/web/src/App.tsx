@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useEffect, useRef, useState, lazy, Suspense, type ChangeEvent, type FormEvent } from 'react';
 import {
   ApiError,
   addFavorite,
@@ -67,9 +67,6 @@ import {
   updateReminder,
   updateTask,
   updateTimeblock,
-  linkEntityFile,
-  listEntityFiles,
-  unlinkEntityFile,
   uploadFile,
   listVaultItems,
   createVaultItem,
@@ -79,8 +76,6 @@ import {
   createLibraryItem,
   updateLibraryItem,
   deleteLibraryItem,
-  type AttachmentEntityType,
-  type EntityLinkedFile,
   type Note,
   type Bookmark,
   type DashboardData,
@@ -128,393 +123,72 @@ import {
 } from './sidebarNav';
 import './App.css';
 
-type AuthState = 'checking' | 'signed-out' | 'signed-in' | 'unavailable';
-// NotesView is imported from ./sidebarNav
-type ThemeName = 'emerald' | 'indigo' | 'rose' | 'amber' | 'violet';
-type ThemeMode = 'light' | 'dark';
-interface ProfileState {
-  name: string;
-  status: string;
-  avatarPreset: string;
-  avatarFileId: string | null;
-}
-type TaxonomyKind = 'categories' | 'tags';
+import type {
+  AuthState,
+  ThemeName,
+  ThemeMode,
+  ProfileState,
+  TaxonomyKind,
+  AllEntry,
+  VaultDraft,
+  LibraryDraft,
+} from './types';
+import {
+  ALL_SEARCH_TYPES,
+  VAULT_CATEGORIES,
+  LIBRARY_CATEGORIES,
+  LIBRARY_STATUSES,
+  emptyVaultDraft,
+  emptyLibraryDraft,
+} from './lib/constants';
+import {
+  formatBytes,
+  errorMessage,
+  localToday,
+  localDateAfter,
+  daysUntilNext,
+} from './lib/formatters';
+import { Topbar } from './components/Topbar';
+import { Sidebar } from './components/Sidebar';
+import { ToastStack } from './components/ToastStack';
+import { MobileBottomNav } from './components/MobileBottomNav';
+import { Skeleton } from './components/ui/Skeleton';
 
-type AllEntry =
-  | { kind: 'note'; id: string; title: string; subtitle: string; timestamp: number; note: Note }
-  | { kind: 'bookmark'; id: string; title: string; subtitle: string; timestamp: number; bookmark: Bookmark }
-  | { kind: 'file'; id: string; title: string; subtitle: string; timestamp: number; file: StoredFile };
+// Code-split feature views and heavy modals via React.lazy
+const MediaLightbox = lazy(() => import('./components/MediaLightbox').then((m) => ({ default: m.MediaLightbox })));
+const ThemeModal = lazy(() => import('./features/settings/ThemeModal').then((m) => ({ default: m.ThemeModal })));
+const ProfileModal = lazy(() => import('./features/settings/ProfileModal').then((m) => ({ default: m.ProfileModal })));
+const CommandSearchModal = lazy(() => import('./features/search/CommandSearchModal').then((m) => ({ default: m.CommandSearchModal })));
+const PermanentDeleteModal = lazy(() => import('./components/modals/PermanentDeleteModal').then((m) => ({ default: m.PermanentDeleteModal })));
+const SidebarNavModal = lazy(() => import('./components/modals/SidebarNavModal').then((m) => ({ default: m.SidebarNavModal })));
+const CategoryModal = lazy(() => import('./features/custom-categories/CategoryModal').then((m) => ({ default: m.CategoryModal })));
+const QuickAddCategoryModal = lazy(() => import('./features/custom-categories/QuickAddCategoryModal').then((m) => ({ default: m.QuickAddCategoryModal })));
+const CustomCategoryView = lazy(() => import('./features/custom-categories/CustomCategoryView').then((m) => ({ default: m.CustomCategoryView })));
+const DashboardView = lazy(() => import('./features/dashboard/DashboardView').then((m) => ({ default: m.DashboardView })));
+const InboxView = lazy(() => import('./features/inbox/InboxView').then((m) => ({ default: m.InboxView })));
+const VaultView = lazy(() => import('./features/vault/VaultView').then((m) => ({ default: m.VaultView })));
+const LibraryView = lazy(() => import('./features/library/LibraryView').then((m) => ({ default: m.LibraryView })));
+const TasksView = lazy(() => import('./features/tasks/TasksView').then((m) => ({ default: m.TasksView })));
+const ProjectsView = lazy(() => import('./features/tasks/ProjectsView').then((m) => ({ default: m.ProjectsView })));
+const GoalsView = lazy(() => import('./features/tasks/GoalsView').then((m) => ({ default: m.GoalsView })));
+const PeopleView = lazy(() => import('./features/people/PeopleView').then((m) => ({ default: m.PeopleView })));
+const HabitsView = lazy(() => import('./features/habits/HabitsView').then((m) => ({ default: m.HabitsView })));
+const NotesViewComponent = lazy(() => import('./features/notes/NotesView').then((m) => ({ default: m.NotesView })));
+const BookmarksView = lazy(() => import('./features/bookmarks/BookmarksView').then((m) => ({ default: m.BookmarksView })));
+const FavoritesView = lazy(() => import('./features/bookmarks/FavoritesView').then((m) => ({ default: m.FavoritesView })));
+const FilesView = lazy(() => import('./features/files/FilesView').then((m) => ({ default: m.FilesView })));
+const TrashView = lazy(() => import('./features/trash/TrashView').then((m) => ({ default: m.TrashView })));
 
-function fileIcon(mediaType: string, name: string): string {
-  if (mediaType.startsWith('image/')) return 'IMG';
-  if (mediaType === 'application/pdf') return 'PDF';
-  if (mediaType.startsWith('video/')) return 'VID';
-  if (mediaType.startsWith('audio/')) return 'AUD';
-  if (mediaType.startsWith('text/')) return 'TXT';
-  const extension = name.split('.').pop()?.toUpperCase() ?? '';
-  return extension.length > 0 && extension.length <= 4 ? extension : 'FILE';
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GiB`;
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ';
-}
-
-function localToday(): string {
-  const now = new Date();
-  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
-  return local.toISOString().slice(0, 10);
-}
-
-function localDateAfter(days: number): string {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-  return local.toISOString().slice(0, 10);
-}
-
-function daysUntilNext(iso: string): number | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
-  const [, month, day] = iso.split('-').map(Number);
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  let next = new Date(today.getFullYear(), month - 1, day);
-  if (next < today) next = new Date(today.getFullYear() + 1, month - 1, day);
-  return Math.round((next.getTime() - today.getTime()) / 86400000);
-}
-
-function taskPriorityLabel(priority: Task['priority']): string {
-  return priority === 'urgent' ? 'ด่วนมาก'
-    : priority === 'high' ? 'สำคัญ'
-      : priority === 'low' ? 'ไม่เร่ง' : 'ปกติ';
-}
-
-function taskStatusLabel(status: Task['status']): string {
-  return status === 'doing' ? 'กำลังทำ'
-    : status === 'waiting' ? 'รออยู่'
-      : status === 'done' ? 'เสร็จแล้ว'
-        : status === 'cancelled' ? 'ยกเลิก' : 'ต้องทำ';
-}
-
-function reminderCategoryLabel(category: ReminderCategory): string {
-  return category === 'birthday' ? 'วันเกิด'
-    : category === 'anniversary' ? 'วันครบรอบ'
-      : category === 'health' ? 'สุขภาพ'
-        : category === 'backup' ? 'แผนสำรอง'
-          : 'อื่น ๆ';
-}
-
-function lifeAreaLabel(area: LifeArea): string {
-  return area === 'health' ? 'สุขภาพ'
-    : area === 'focus_work' ? 'งานโฟกัส'
-      : area === 'family' ? 'ครอบครัว/แฟน'
-        : area === 'growth' ? 'พัฒนาตัวเอง'
-          : 'อื่น ๆ';
-}
-
-function formatDate(timestamp: number): string {
-  return new Intl.DateTimeFormat('th-TH', { dateStyle: 'medium', timeStyle: 'short' })
-    .format(new Date(timestamp));
-}
-
-const ALL_SEARCH_TYPES: SearchBucketType[] = [
-  'notes',
-  'tasks',
-  'projects',
-  'goals',
-  'people',
-  'reminders',
-  'bookmarks',
-  'files',
-  'vault',
-  'library',
-];
-
-const SEARCH_TYPE_LABELS: Array<{ type: SearchBucketType; label: string }> = [
-  { type: 'notes', label: 'โน้ต' },
-  { type: 'tasks', label: 'งาน' },
-  { type: 'projects', label: 'โปรเจกต์' },
-  { type: 'goals', label: 'เป้าหมาย' },
-  { type: 'people', label: 'บุคคล' },
-  { type: 'reminders', label: 'แจ้งเตือน' },
-  { type: 'bookmarks', label: 'บุ๊กมาร์ก' },
-  { type: 'files', label: 'ไฟล์' },
-  { type: 'vault', label: 'คลังสำคัญ' },
-  { type: 'library', label: 'ห้องสมุด' },
-];
-
-const VAULT_CATEGORIES: VaultCategory[] = ['เอกสาร & ประกัน', 'ทรัพย์สิน & บ้าน', 'รอบบิลรายเดือน'];
-const LIBRARY_CATEGORIES: LibraryCategory[] = ['คู่มือชีวิต & SOP', 'หนังสือ & คอร์สเรียน', 'โพยคำสั่ง & สูตร'];
-const LIBRARY_STATUSES: LibraryStatus[] = ['ใช้งานประจำ', 'กำลังศึกษา', 'สรุปจบแล้ว'];
-
-/** Category tint used by badges, so each kind of record is recognisable at a glance. */
-function vaultTone(category: VaultCategory): string {
-  if (category === 'ทรัพย์สิน & บ้าน') return 'asset';
-  if (category === 'รอบบิลรายเดือน') return 'bill';
-  return 'paper';
-}
-
-function libraryTone(category: LibraryCategory): string {
-  if (category === 'หนังสือ & คอร์สเรียน') return 'book';
-  if (category === 'โพยคำสั่ง & สูตร') return 'cheat';
-  return 'sop';
-}
-
-function libraryStatusTone(status: LibraryStatus): string {
-  if (status === 'กำลังศึกษา') return 'studying';
-  if (status === 'สรุปจบแล้ว') return 'done';
-  return 'active';
-}
-
-/** Whole days from today to an ISO date; negative means already past. */
-function daysUntilIso(iso: string | null): number | null {
-  if (!iso) return null;
-  const [year, month, day] = iso.split('-').map(Number);
-  if (!year || !month || !day) return null;
-  const target = new Date(year, month - 1, day);
-  const today = new Date();
-  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  return Math.round((target.getTime() - start.getTime()) / 86400000);
-}
-
-interface VaultDraft {
-  title: string;
-  category: VaultCategory;
-  keyValue: string;
-  physicalLocation: string;
-  renewalOrExpiryDate: string;
-  amountText: string;
-  notes: string;
-}
-
-const emptyVaultDraft: VaultDraft = {
-  title: '',
-  category: VAULT_CATEGORIES[0],
-  keyValue: '',
-  physicalLocation: '',
-  renewalOrExpiryDate: '',
-  amountText: '',
-  notes: '',
-};
-
-interface LibraryDraft {
-  title: string;
-  category: LibraryCategory;
-  status: LibraryStatus;
-  sourceUrlOrAuthor: string;
-  keyTakeaways: string;
-  content: string;
-}
-
-const emptyLibraryDraft: LibraryDraft = {
-  title: '',
-  category: LIBRARY_CATEGORIES[0],
-  status: LIBRARY_STATUSES[0],
-  sourceUrlOrAuthor: '',
-  keyTakeaways: '',
-  content: '',
-};
-
-function EntityAttachments({
-  entityType,
-  entityId,
-  availableFiles,
-  onFilesChanged,
-}: {
-  entityType: AttachmentEntityType;
-  entityId: string;
-  availableFiles: StoredFile[];
-  onFilesChanged: () => void;
-}) {
-  const [linkedFiles, setLinkedFiles] = useState<EntityLinkedFile[]>([]);
-  const [libraryFiles, setLibraryFiles] = useState<StoredFile[]>([]);
-  const [selectedFileId, setSelectedFileId] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
-  const uploadInputRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    // The parent only keeps its file list while the library view is open, so the picker
-    // loads the same library itself instead of depending on the current view.
-    let active = true;
-    listFiles(1, 100)
-      .then((page) => {
-        if (active) setLibraryFiles(page.files);
-      })
-      .catch((err: unknown) => {
-        if (active) setError(errorMessage(err));
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    listEntityFiles(entityType, entityId)
-      .then((items) => {
-        if (!active) return;
-        setLinkedFiles(items);
-        setSelectedFileId('');
-        setError('');
-        setNotice('');
-      })
-      .catch((err: unknown) => {
-        if (active) setError(errorMessage(err));
-      });
-    return () => {
-      active = false;
-    };
-  }, [entityType, entityId]);
-
-  const mergedFiles = [...availableFiles, ...libraryFiles].filter(
-    (file, index, all) => all.findIndex((item) => item.id === file.id) === index,
-  );
-  const attachableFiles = mergedFiles.filter(
-    (file) => !linkedFiles.some((linked) => linked.id === file.id),
-  );
-
-  async function handleLinkExisting() {
-    if (!selectedFileId) {
-      setError('กรุณาเลือกไฟล์ที่ต้องการแนบ');
-      return;
-    }
-    setBusy(true);
-    setError('');
-    setNotice('');
-    try {
-      const result = await linkEntityFile(entityType, entityId, selectedFileId);
-      setLinkedFiles(result.files);
-      setSelectedFileId('');
-      setNotice(result.created ? 'แนบไฟล์แล้ว' : 'ไฟล์นี้แนบอยู่แล้ว');
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleUploadAndLink(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
-    setBusy(true);
-    setError('');
-    setNotice('');
-    try {
-      const uploaded = await uploadFile(file);
-      const result = await linkEntityFile(entityType, entityId, uploaded.id);
-      setLibraryFiles((current) => (current.some((item) => item.id === uploaded.id) ? current : [...current, uploaded]));
-      setLinkedFiles(result.files);
-      setNotice('อัปโหลดและแนบไฟล์แล้ว');
-      onFilesChanged();
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleUnlink(fileId: string) {
-    setBusy(true);
-    setError('');
-    setNotice('');
-    try {
-      await unlinkEntityFile(entityType, entityId, fileId);
-      setLinkedFiles((current) => current.filter((item) => item.id !== fileId));
-      setNotice('เอาไฟล์แนบออกแล้ว (ไฟล์ในคลังยังอยู่ครบ)');
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <section className="entity-attachments" aria-label="ไฟล์แนบ">
-      <div className="entity-attachments-head">
-        <strong>ไฟล์แนบ ({linkedFiles.length})</strong>
-        <div className="entity-attachments-controls">
-          <select
-            aria-label="เลือกไฟล์ที่มีอยู่เพื่อแนบ"
-            value={selectedFileId}
-            disabled={busy || attachableFiles.length === 0}
-            onChange={(event) => setSelectedFileId(event.target.value)}
-          >
-            <option value="">
-              {attachableFiles.length === 0 ? 'ไม่มีไฟล์อื่นให้เลือกแนบ' : 'เลือกไฟล์จากคลัง…'}
-            </option>
-            {attachableFiles.map((file) => (
-              <option value={file.id} key={file.id}>
-                {file.displayName} ({formatBytes(file.sizeBytes)})
-              </option>
-            ))}
-          </select>
-          <button
-            className="button button-quiet"
-            type="button"
-            disabled={busy || !selectedFileId}
-            onClick={() => void handleLinkExisting()}
-          >
-            แนบไฟล์
-          </button>
-          <button
-            className="button button-quiet"
-            type="button"
-            disabled={busy}
-            onClick={() => uploadInputRef.current?.click()}
-          >
-            อัปโหลดแล้วแนบ
-          </button>
-          <input
-            ref={uploadInputRef}
-            className="visually-hidden"
-            type="file"
-            aria-label="อัปโหลดไฟล์เพื่อแนบ"
-            onChange={(event) => void handleUploadAndLink(event)}
-          />
-        </div>
-      </div>
-      {error && <p className="form-error" role="alert">{error}</p>}
-      {notice && <p className="form-notice" role="status">{notice}</p>}
-      {linkedFiles.length === 0 ? (
-        <p className="sidebar-hint entity-attachments-empty">ยังไม่มีไฟล์แนบกับรายการนี้</p>
-      ) : (
-        <ul className="entity-attachments-list" aria-label="รายการไฟล์แนบ">
-          {linkedFiles.map((file) => (
-            <li className="entity-attachment-item" key={file.id}>
-              <a
-                className="entity-attachment-link"
-                href={`/api/files/${encodeURIComponent(file.id)}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <span className="entry-kind file">{fileIcon(file.mediaType, file.displayName)}</span>
-                <span>{file.displayName}</span>
-                <small>({formatBytes(file.sizeBytes)})</small>
-              </a>
-              <button
-                className="text-button danger-text"
-                type="button"
-                disabled={busy}
-                onClick={() => void handleUnlink(file.id)}
-              >
-                เอาออก
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
+const ViewFallback = () => (
+  <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }} aria-busy="true">
+    <Skeleton variant="card" height={80} borderRadius={12} />
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
+      <Skeleton variant="card" height={160} borderRadius={12} />
+      <Skeleton variant="card" height={160} borderRadius={12} />
+      <Skeleton variant="card" height={160} borderRadius={12} />
+    </div>
+  </div>
+);
 
 function App() {
   const [authState, setAuthState] = useState<AuthState>('checking');
@@ -595,8 +269,6 @@ function App() {
   const [personError, setPersonError] = useState('');
   const [personNotice, setPersonNotice] = useState('');
   const [personAvatarBusy, setPersonAvatarBusy] = useState(false);
-  const personAvatarInputRef = useRef<HTMLInputElement | null>(null);
-  const profileAvatarInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedPersonIds, setSelectedPersonIds] = useState<string[]>([]);
   const [personPickerOpen, setPersonPickerOpen] = useState(false);
   const [reminders, setReminders] = useState<Reminder[]>([]);
@@ -2856,13 +2528,19 @@ function App() {
 
   function navigateCommand(
     kind: 'note' | 'task' | 'project' | 'goal' | 'person' | 'reminder' | 'bookmark' | 'file'
-      | 'vault' | 'library',
+      | 'vault' | 'library' | 'category',
     id: string,
   ) {
     setCommandOpen(false);
     setCommandQuery('');
     setCommandResults(null);
     setCommandError('');
+    if (kind === 'category') {
+      setSelectedCustomCategoryId(id);
+      setViewMode('custom-category');
+      setMobileDetailOpen(true);
+      return;
+    }
     if (kind === 'note') {
       void getNote(id).then((note) => {
         setViewMode('notes');
@@ -3745,361 +3423,78 @@ function App() {
 
   return (
     <main className={`app-shell${focusMode ? ' focus-mode' : ''}`}>
-      <header className="topbar">
-        <button
-          className="icon-button mobile-menu-button topbar-mobile-menu"
-          type="button"
-          aria-label="เปิดเมนู"
-          onClick={() => setMobileMenuOpen(true)}
-        >
-          ☰
-        </button>
-        <a className="brand" href="/" aria-label="PKH หน้าหลัก">
-          <span className="brand-mark" aria-hidden="true">P</span>
-          <span>
-            <strong>PKH</strong>
-            <small>Personal Knowledge Hub</small>
-          </span>
-        </a>
-        <div className="topbar-actions">
-          <span className="account-label">{user?.username}</span>
-          <button
-            className="icon-button topbar-icon"
-            type="button"
-            aria-label="ค้นหาด่วน (Ctrl+K)"
-            title="ค้นหาด่วน (Ctrl+K)"
-            onClick={() => setCommandOpen(true)}
-          >
-            ⌕
-          </button>
-          <div className="menu-wrap">
-            <button
-              className="icon-button topbar-icon"
-              type="button"
-              aria-label="แจ้งเตือนวันสำคัญ"
-              aria-expanded={notificationOpen}
-              onClick={() => setNotificationOpen((open) => !open)}
-            >
-              🔔
-              {upcomingReminders.length > 0 && (
-                <span className="notification-badge">{upcomingReminders.length}</span>
-              )}
-            </button>
-            {notificationOpen && (
-              <div className="notification-popover">
-                <div className="popover-head">
-                  <strong>แจ้งเตือนใกล้ถึงกำหนด</strong>
-                  <button className="text-button" type="button" onClick={() => setNotificationOpen(false)}>ปิด</button>
-                </div>
-                {upcomingReminders.length === 0 ? (
-                  <p className="sidebar-hint">ยังไม่มีรายการใกล้ถึงกำหนด</p>
-                ) : (
-                  upcomingReminders.slice(0, 6).map((reminder) => (
-                    <button
-                      className="notification-item"
-                      type="button"
-                      key={reminder.id}
-                      onClick={() => {
-                        setNotificationOpen(false);
-                        setViewMode('schedule');
-                        setScheduleDate(reminder.targetDate);
-                        setMobileDetailOpen(true);
-                      }}
-                    >
-                      <strong>{reminder.title}</strong>
-                      <span>{reminder.targetDate}{reminder.linkedPersonName ? ` · ${reminder.linkedPersonName}` : ''}</span>
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
-          <button
-            className="icon-button topbar-icon"
-            type="button"
-            aria-label="ธีมและสี"
-            title="ธีมและสี"
-            onClick={() => setThemeOpen(true)}
-          >
-            🎨
-          </button>
-          <button className="button button-quiet" type="button" onClick={handleLogout} disabled={authBusy}>
-            ออกจากระบบ
-          </button>
-        </div>
-      </header>
+      <Topbar
+        user={user}
+        onOpenMobileMenu={() => setMobileMenuOpen(true)}
+        onOpenCommand={() => setCommandOpen(true)}
+        notificationOpen={notificationOpen}
+        setNotificationOpen={setNotificationOpen}
+        upcomingReminders={upcomingReminders}
+        onSelectReminder={(targetDate) => {
+          setNotificationOpen(false);
+          setViewMode('schedule');
+          setScheduleDate(targetDate);
+          setMobileDetailOpen(true);
+        }}
+        onOpenTheme={() => setThemeOpen(true)}
+        onLogout={handleLogout}
+        authBusy={authBusy}
+        themeMode={themeMode}
+        onToggleThemeMode={() => setThemeMode((m) => (m === 'light' ? 'dark' : 'light'))}
+        onOpenProfile={() => setProfileOpen(true)}
+        profile={profile}
+      />
 
       <div className="workspace">
-        <aside className={`app-sidebar${mobileMenuOpen ? ' is-open' : ''}`} aria-label="เมนูหลัก">
-          <div className="sidebar-heading">
-            <div>
-              <span className="eyebrow">พื้นที่ส่วนตัว</span>
-              <h1>คลังความรู้</h1>
-            </div>
-            <button
-              className="icon-button sidebar-close"
-              type="button"
-              aria-label="ปิดเมนู"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              ×
-            </button>
-          </div>
-
-          <button className="profile-card" type="button" onClick={() => setProfileOpen(true)}>
-            <span className="avatar profile-avatar">
-              {profile.avatarFileId ? (
-                <img src={`/api/files/${profile.avatarFileId}`} alt="" loading="lazy" decoding="async" />
-              ) : (
-                profile.avatarPreset || (profile.name || user?.username || 'P').slice(0, 1)
-              )}
-            </span>
-            <span className="profile-copy">
-              <strong>{profile.name || user?.username}</strong>
-              <small>{profile.status}</small>
-            </span>
-            <span className="profile-progress" aria-hidden="true">
-              <span style={{ width: `${todayProgress}%` }} />
-            </span>
-            <small className="profile-meta">{todayDone}/{todayBlocks.length} ช่วงวันนี้</small>
-          </button>
-
-          <nav className="primary-nav" aria-label="เมนูหลัก">
-            {sidebarNav.filter((item) => item.enabled).map((item) => {
-              const navCount = item.view === 'notes'
-                ? listTotal
-                : item.view === 'tasks'
-                  ? tasks.length
-                  : item.view === 'inbox'
-                    ? inboxNewCount
-                    : item.view === 'projects'
-                      ? projects.length
-                      : item.view === 'goals'
-                        ? goals.length
-                        : item.view === 'vault'
-                          ? vaultItems.length
-                          : item.view === 'library'
-                            ? libraryItems.length
-                            : item.view === 'files'
-                              ? files.length
-                              : item.view === 'bookmarks'
-                                ? bookmarks.length
-                                : item.view === 'favorites'
-                                  ? favorites.length
-                                  : null;
-              return (
-                <button
-                  key={item.id}
-                  className={`nav-item${viewMode === item.view ? ' is-active' : ''}`}
-                  type="button"
-                  aria-current={viewMode === item.view ? 'page' : undefined}
-                  onClick={() => switchView(item.view)}
-                >
-                  <span className="nav-icon" aria-hidden="true">{item.icon}</span>
-                  <span className="nav-label">{item.label}</span>
-                  {navCount !== null && navCount > 0 && <span className="nav-count">{navCount}</span>}
-                </button>
-              );
-            })}
-          </nav>
-
-          <div className="nav-customize-wrap">
-            <button
-              className="nav-customize-btn"
-              type="button"
-              onClick={() => {
-                setTempNavConfig(sidebarNav.map((item) => ({ ...item })));
-                setCustomizeNavOpen(true);
-              }}
-              title="ปรับแต่งลำดับ เปลี่ยนชื่อ หรือซ่อนเมนู"
-            >
-              <span>⚙️</span>
-              <span>ตั้งค่าเมนู (Customize Sidebar)</span>
-            </button>
-          </div>
-
-          <div className="sidebar-section custom-categories-section">
-            <div className="sidebar-section-head">
-              <h2>หมวดหมู่ของฉัน</h2>
-              <button
-                className="text-button"
-                type="button"
-                onClick={() => openCreateCategoryModal(null)}
-                title="สร้างหมวดหมู่ใหม่"
-              >
-                ＋ เพิ่ม
-              </button>
-            </div>
-            {customCategoriesBusy ? (
-              <p className="sidebar-hint">กำลังโหลดหมวดหมู่…</p>
-            ) : customCategories.length === 0 ? (
-              <p className="sidebar-hint">ยังไม่มีหมวดหมู่ — กด + เพิ่ม เพื่อจัดหมวดหมู่ข้อมูล</p>
-            ) : (
-              <div className="custom-category-tree" aria-label="รายการหมวดหมู่ของฉัน">
-                {customCategories.filter((c) => !c.parentId).map((cat) => {
-                  const children = customCategories.filter((sub) => sub.parentId === cat.id);
-                  const isCatActive = viewMode === 'custom-category' && selectedCustomCategoryId === cat.id;
-                  return (
-                    <div key={cat.id}>
-                      <div className={`custom-category-row${isCatActive ? ' is-active' : ''}`}>
-                        <button
-                          className="custom-category-btn"
-                          type="button"
-                          onClick={() => selectCustomCategory(cat.id)}
-                        >
-                          <span className="category-icon">{cat.icon}</span>
-                          <span className="custom-color-dot" style={{ backgroundColor: cat.color }} />
-                          <span className="category-title">{cat.name}</span>
-                          <span className="category-badge-count">{cat.itemCount ?? 0}</span>
-                        </button>
-                        <div className="category-row-actions">
-                          <button
-                            className="category-mini-btn"
-                            type="button"
-                            title="สร้างหมวดย่อย"
-                            onClick={(e) => { e.stopPropagation(); openCreateCategoryModal(cat.id); }}
-                          >
-                            ＋
-                          </button>
-                          <button
-                            className="category-mini-btn"
-                            type="button"
-                            title="แก้ไขหมวดหมู่"
-                            onClick={(e) => openEditCategoryModal(cat, e)}
-                          >
-                            ✎
-                          </button>
-                          <button
-                            className="category-mini-btn danger"
-                            type="button"
-                            title="ลบหมวดหมู่"
-                            onClick={(e) => handleDeleteCategory(cat, e)}
-                          >
-                            ×
-                          </button>
-                        </div>
-                      </div>
-                      {children.length > 0 && (
-                        <div className="custom-category-sub">
-                          {children.map((sub) => {
-                            const isSubActive = viewMode === 'custom-category' && selectedCustomCategoryId === sub.id;
-                            return (
-                              <div key={sub.id} className={`custom-category-row${isSubActive ? ' is-active' : ''}`}>
-                                <button
-                                  className="custom-category-btn"
-                                  type="button"
-                                  onClick={() => selectCustomCategory(sub.id)}
-                                >
-                                  <span className="category-icon">{sub.icon}</span>
-                                  <span className="custom-color-dot" style={{ backgroundColor: sub.color }} />
-                                  <span className="category-title">{sub.name}</span>
-                                  <span className="category-badge-count">{sub.itemCount ?? 0}</span>
-                                </button>
-                                <div className="category-row-actions">
-                                  <button
-                                    className="category-mini-btn"
-                                    type="button"
-                                    title="แก้ไขหมวดย่อย"
-                                    onClick={(e) => openEditCategoryModal(sub, e)}
-                                  >
-                                    ✎
-                                  </button>
-                                  <button
-                                    className="category-mini-btn danger"
-                                    type="button"
-                                    title="ลบหมวดย่อย"
-                                    onClick={(e) => handleDeleteCategory(sub, e)}
-                                  >
-                                    ×
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          <div className="quick-add">
-            <span className="sidebar-hint">สร้างข้อมูลด่วน</span>
-            <div className="quick-add-grid">
-              <button className="button button-quiet" type="button" onClick={startNewNote}>＋ โน้ต</button>
-              <button className="button button-quiet" type="button" onClick={startNewPerson}>＋ บุคคล</button>
-              <button
-                className="button button-quiet"
-                type="button"
-                onClick={() => {
-                  setViewMode('schedule');
-                  setMobileDetailOpen(true);
-                }}
-              >
-                ＋ แจ้งเตือน
-              </button>
-            </div>
-          </div>
-
-          <div className="sidebar-actions">
-            {(viewMode === 'notes' || viewMode === 'all') && (
-              <button className="button button-primary" type="button" onClick={startNewNote}>
-                <span aria-hidden="true">＋</span> เขียนโน้ต
-              </button>
-            )}
-            {viewMode === 'bookmarks' && (
-              <button className="button button-primary" type="button" onClick={startNewBookmark}>
-                <span aria-hidden="true">＋</span> เพิ่มลิงก์
-              </button>
-            )}
-            {viewMode === 'files' && (
-              <>
-                <button
-                  className="button button-primary"
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadBusy}
-                >
-                  <span aria-hidden="true">＋</span> {uploadBusy ? 'กำลังอัปโหลด…' : 'อัปโหลดไฟล์'}
-                </button>
-                <input
-                  ref={fileInputRef}
-                  className="visually-hidden"
-                  type="file"
-                  onChange={(event) => void handleUpload(event)}
-                  disabled={uploadBusy}
-                />
-              </>
-            )}
-          </div>
-
-          <div className="sidebar-section">
-            <div className="sidebar-section-head">
-              <h2>ตัวกรอง</h2>
-              {activeFilterCount > 0 && (
-                <button className="text-button" type="button" onClick={clearFilters}>
-                  ล้าง
-                </button>
-              )}
-            </div>
-            <p className="sidebar-hint">เลือกหมวดหมู่หรือแท็กเพื่อกรองโน้ตที่โหลดอยู่</p>
-            {renderTaxonomyGroup('categories', 'filter')}
-            {renderTaxonomyGroup('tags', 'filter')}
-            {filterBusy && <p className="taxonomy-state" aria-live="polite">กำลังกรอง…</p>}
-          </div>
-        </aside>
-
-        {mobileMenuOpen && (
-          <button
-            className="sidebar-backdrop"
-            type="button"
-            aria-label="ปิดเมนู"
-            onClick={() => setMobileMenuOpen(false)}
-          />
-        )}
-
+        <Sidebar
+          mobileMenuOpen={mobileMenuOpen}
+          onCloseMobileMenu={() => setMobileMenuOpen(false)}
+          onOpenProfile={() => setProfileOpen(true)}
+          profile={profile}
+          user={user}
+          todayProgress={todayProgress}
+          todayDone={todayDone}
+          todayBlocksCount={todayBlocks.length}
+          sidebarNav={sidebarNav}
+          viewMode={viewMode}
+          onSwitchView={switchView}
+          listTotal={listTotal}
+          tasksCount={tasks.length}
+          inboxNewCount={inboxNewCount}
+          projectsCount={projects.length}
+          goalsCount={goals.length}
+          vaultCount={vaultItems.length}
+          libraryCount={libraryItems.length}
+          filesCount={files.length}
+          bookmarksCount={bookmarks.length}
+          favoritesCount={favorites.length}
+          onOpenCustomizeNav={() => {
+            setTempNavConfig(sidebarNav.map((item) => ({ ...item })));
+            setCustomizeNavOpen(true);
+          }}
+          customCategories={customCategories}
+          customCategoriesBusy={customCategoriesBusy}
+          selectedCustomCategoryId={selectedCustomCategoryId}
+          onSelectCustomCategory={selectCustomCategory}
+          onOpenCreateCategoryModal={openCreateCategoryModal}
+          onOpenEditCategoryModal={openEditCategoryModal}
+          onDeleteCategory={handleDeleteCategory}
+          onStartNewNote={startNewNote}
+          onStartNewPerson={startNewPerson}
+          onStartNewReminder={() => {
+            setViewMode('schedule');
+            setMobileDetailOpen(true);
+          }}
+          onStartNewBookmark={startNewBookmark}
+          onUploadFileClick={() => fileInputRef.current?.click()}
+          onFileInputChange={(event) => void handleUpload(event)}
+          uploadBusy={uploadBusy}
+          fileInputRef={fileInputRef}
+          activeFilterCount={activeFilterCount}
+          onClearFilters={clearFilters}
+          renderTaxonomyGroup={renderTaxonomyGroup}
+          filterBusy={filterBusy}
+        />
 
         <div className={`detail-panel${mobileDetailOpen ? ' is-open' : ''}`} aria-label={viewAriaLabel}>
           <div className="detail-mobile-bar">
@@ -4111,4183 +3506,582 @@ function App() {
               ← กลับ
             </button>
           </div>
+        <Suspense fallback={<ViewFallback />}>
         {viewMode === 'custom-category' ? (
-          <section className="editor-panel custom-category-panel" aria-label="หมวดหมู่ของฉัน">
-            {customCategoryDataBusy ? (
-              <p className="sidebar-hint">กำลังโหลดข้อมูลในหมวดหมู่…</p>
-            ) : !customCategoryData ? (
-              <p className="sidebar-hint">ไม่พบหมวดหมู่ที่เลือก</p>
-            ) : (
-              <div>
-                <div className="category-header-wrap">
-                  <div className="category-meta-info">
-                    <span className="category-large-icon" style={{ borderTop: `3px solid ${customCategoryData.category.color}` }}>
-                      {customCategoryData.category.icon}
-                    </span>
-                    <div>
-                      <span className="eyebrow" style={{ color: customCategoryData.category.color }}>
-                        หมวดหมู่ของฉัน {customCategoryData.category.parentId ? '· หมวดย่อย' : ''}
-                      </span>
-                      <h2 className="panel-title" style={{ margin: '2px 0 4px' }}>
-                        {customCategoryData.category.name}
-                      </h2>
-                      <p className="updated-label">
-                        รวม {customCategoryData.counts.total} รายการ · สร้างเมื่อ {formatDate(customCategoryData.category.createdAt)}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="category-actions-bar">
-                    <button
-                      className="button button-primary"
-                      type="button"
-                      onClick={() => setQuickAddCatOpen(true)}
-                    >
-                      ＋ เพิ่มข้อมูลในหมวดนี้
-                    </button>
-                    <button
-                      className="button button-quiet"
-                      type="button"
-                      onClick={() => openCreateCategoryModal(customCategoryData.category.id)}
-                    >
-                      ＋ หมวดย่อย
-                    </button>
-                    <button
-                      className="button button-quiet"
-                      type="button"
-                      onClick={() => openEditCategoryModal(customCategoryData.category)}
-                    >
-                      ✎ แก้ไขหมวด
-                    </button>
-                    <button
-                      className="button button-quiet danger-text"
-                      type="button"
-                      onClick={() => handleDeleteCategory(customCategoryData.category)}
-                    >
-                      ลบหมวด
-                    </button>
-                  </div>
-                </div>
-
-                {customCategoryData.subcategories.length > 0 && (
-                  <div style={{ marginBottom: '20px' }}>
-                    <h3 style={{ fontSize: '14px', marginBottom: '8px', color: 'var(--text-muted)' }}>
-                      หมวดหมู่ย่อย ({customCategoryData.subcategories.length})
-                    </h3>
-                    <div className="category-subcards">
-                      {customCategoryData.subcategories.map((sub) => (
-                        <div
-                          key={sub.id}
-                          className="category-subcard"
-                          onClick={() => selectCustomCategory(sub.id)}
-                        >
-                          <span style={{ fontSize: '20px' }}>{sub.icon}</span>
-                          <div style={{ minWidth: 0, flex: 1 }}>
-                            <strong style={{ display: 'block', fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {sub.name}
-                            </strong>
-                            <small style={{ color: 'var(--text-muted)' }}>{sub.itemCount ?? 0} รายการ</small>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="category-filter-tabs">
-                  <button
-                    className={`category-filter-tab${customCategoryFilter === 'all' ? ' is-active' : ''}`}
-                    type="button"
-                    onClick={() => setCustomCategoryFilter('all')}
-                  >
-                    ทั้งหมด ({customCategoryData.counts.total})
-                  </button>
-                  <button
-                    className={`category-filter-tab${customCategoryFilter === 'note' ? ' is-active' : ''}`}
-                    type="button"
-                    onClick={() => setCustomCategoryFilter('note')}
-                  >
-                    📝 โน้ต ({customCategoryData.counts.notes})
-                  </button>
-                  <button
-                    className={`category-filter-tab${customCategoryFilter === 'task' ? ' is-active' : ''}`}
-                    type="button"
-                    onClick={() => setCustomCategoryFilter('task')}
-                  >
-                    ☑️ งาน ({customCategoryData.counts.tasks})
-                  </button>
-                  <button
-                    className={`category-filter-tab${customCategoryFilter === 'bookmark' ? ' is-active' : ''}`}
-                    type="button"
-                    onClick={() => setCustomCategoryFilter('bookmark')}
-                  >
-                    ↗️ ลิงก์ ({customCategoryData.counts.bookmarks})
-                  </button>
-                  <button
-                    className={`category-filter-tab${customCategoryFilter === 'file' ? ' is-active' : ''}`}
-                    type="button"
-                    onClick={() => setCustomCategoryFilter('file')}
-                  >
-                    📁 ไฟล์ ({customCategoryData.counts.files})
-                  </button>
-                  <button
-                    className={`category-filter-tab${customCategoryFilter === 'vault' ? ' is-active' : ''}`}
-                    type="button"
-                    onClick={() => setCustomCategoryFilter('vault')}
-                  >
-                    🔐 คลังสำคัญ ({customCategoryData.counts.vault})
-                  </button>
-                  <button
-                    className={`category-filter-tab${customCategoryFilter === 'library' ? ' is-active' : ''}`}
-                    type="button"
-                    onClick={() => setCustomCategoryFilter('library')}
-                  >
-                    📚 คู่มือ ({customCategoryData.counts.library})
-                  </button>
-                </div>
-
-                {customCategoryData.counts.total === 0 ? (
-                  <div className="empty-state" style={{ padding: '40px 20px', border: '1px dashed var(--line)', borderRadius: '8px' }}>
-                    <span className="empty-icon">{customCategoryData.category.icon}</span>
-                    <strong>ยังไม่มีข้อมูลในหมวดหมู่นี้</strong>
-                    <span>กดปุ่ม "+ เพิ่มข้อมูลในหมวดนี้" เพื่อสร้างโน้ต งาน ลิงก์ หรือไฟล์ใหม่ลงในหมวดหมู่นี้โดยตรง</span>
-                  </div>
-                ) : (
-                  <div className="category-grid-container">
-                    {(customCategoryFilter === 'all' || customCategoryFilter === 'note') &&
-                      customCategoryData.notes.map((note) => (
-                        <div key={`cat-note-${note.id}`} className="category-card">
-                          <div>
-                            <div className="category-card-head">
-                              <span className="category-card-tag">📝 โน้ต</span>
-                              <button
-                                className="text-button danger-text"
-                                type="button"
-                                title="เอาออกจากหมวด"
-                                onClick={() => handleUnlinkCategoryItem('note', note.id)}
-                              >
-                                ถอดออก
-                              </button>
-                            </div>
-                            <strong style={{ display: 'block', fontSize: '15px', marginTop: '6px' }}>{note.title}</strong>
-                            <p className="category-card-body">{note.content || 'ไม่มีเนื้อหาข้อความ'}</p>
-                          </div>
-                          <div className="category-card-meta">
-                            <span>{formatDate(note.updatedAt)}</span>
-                            <button
-                              className="text-button"
-                              type="button"
-                              onClick={() => {
-                                setViewMode('notes');
-                                void openNoteById(note.id);
-                              }}
-                            >
-                              เปิดอ่าน/แก้ไข →
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-
-                    {(customCategoryFilter === 'all' || customCategoryFilter === 'task') &&
-                      customCategoryData.tasks.map((task) => (
-                        <div key={`cat-task-${task.id}`} className="category-card">
-                          <div>
-                            <div className="category-card-head">
-                              <span className="category-card-tag">☑️ งาน</span>
-                              <span style={{ fontSize: '12px', color: task.priority === 'urgent' ? 'var(--danger)' : 'var(--text-muted)' }}>
-                                {taskPriorityLabel(task.priority)}
-                              </span>
-                            </div>
-                            <strong style={{ display: 'block', fontSize: '15px', marginTop: '6px', textDecoration: task.status === 'done' ? 'line-through' : 'none' }}>
-                              {task.title}
-                            </strong>
-                            {task.detail && <p className="category-card-body">{task.detail}</p>}
-                          </div>
-                          <div className="category-card-meta">
-                            <span>{task.dueDate ? `กำหนด ${task.dueDate}` : taskStatusLabel(task.status)}</span>
-                            <button
-                              className="text-button danger-text"
-                              type="button"
-                              onClick={() => handleUnlinkCategoryItem('task', task.id)}
-                            >
-                              ถอดออก
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-
-                    {(customCategoryFilter === 'all' || customCategoryFilter === 'bookmark') &&
-                      customCategoryData.bookmarks.map((bm) => (
-                        <div key={`cat-bm-${bm.id}`} className="category-card">
-                          <div>
-                            <div className="category-card-head">
-                              <span className="category-card-tag">↗️ ลิงก์</span>
-                              <button
-                                className="text-button danger-text"
-                                type="button"
-                                onClick={() => handleUnlinkCategoryItem('bookmark', bm.id)}
-                              >
-                                ถอดออก
-                              </button>
-                            </div>
-                            <strong style={{ display: 'block', fontSize: '15px', marginTop: '6px' }}>{bm.title}</strong>
-                            {bm.description && <p className="category-card-body">{bm.description}</p>}
-                          </div>
-                          <div className="category-card-meta">
-                            <a href={bm.url} target="_blank" rel="noreferrer" className="text-button" style={{ overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '200px' }}>
-                              {bm.url} ↗
-                            </a>
-                          </div>
-                        </div>
-                      ))}
-
-                    {(customCategoryFilter === 'all' || customCategoryFilter === 'file') &&
-                      customCategoryData.files.map((file) => (
-                        <div key={`cat-file-${file.id}`} className="category-card">
-                          <div>
-                            <div className="category-card-head">
-                              <span className="category-card-tag">📁 {fileIcon(file.mediaType, file.displayName)}</span>
-                              <button
-                                className="text-button danger-text"
-                                type="button"
-                                onClick={() => handleUnlinkCategoryItem('file', file.id)}
-                              >
-                                ถอดออก
-                              </button>
-                            </div>
-                            {file.mediaType.startsWith('image/') && (
-                              <img
-                                src={`/api/files/${file.id}`}
-                                alt={file.displayName}
-                                loading="lazy"
-                                decoding="async"
-                                style={{ width: '100%', height: '110px', objectFit: 'cover', borderRadius: '4px', marginTop: '6px', cursor: 'pointer' }}
-                                onClick={() => setMediaLightboxFile(file)}
-                              />
-                            )}
-                            <strong
-                              style={{ display: 'block', fontSize: '14px', marginTop: '6px', wordBreak: 'break-all', cursor: 'pointer' }}
-                              onClick={() => setMediaLightboxFile(file)}
-                            >
-                              {file.displayName}
-                            </strong>
-                          </div>
-                          <div className="category-card-meta">
-                            <span>{formatBytes(file.sizeBytes)}</span>
-                            <button
-                              type="button"
-                              className="text-button"
-                              onClick={() => setMediaLightboxFile(file)}
-                            >
-                              เล่น/ดูตัวอย่าง →
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-
-                    {(customCategoryFilter === 'all' || customCategoryFilter === 'vault') &&
-                      customCategoryData.vault.map((v) => (
-                        <div key={`cat-vault-${v.id}`} className="category-card">
-                          <div>
-                            <div className="category-card-head">
-                              <span className="category-card-tag">🔐 {v.category}</span>
-                              <button
-                                className="text-button danger-text"
-                                type="button"
-                                onClick={() => handleUnlinkCategoryItem('vault', v.id)}
-                              >
-                                ถอดออก
-                              </button>
-                            </div>
-                            <strong style={{ display: 'block', fontSize: '15px', marginTop: '6px' }}>{v.title}</strong>
-                            {v.keyValue && <p style={{ fontSize: '13px', margin: '4px 0', fontFamily: 'monospace' }}>{v.keyValue}</p>}
-                            {v.notes && <p className="category-card-body">{v.notes}</p>}
-                          </div>
-                          <div className="category-card-meta">
-                            <span>{v.renewalOrExpiryDate ? `หมดอายุ ${v.renewalOrExpiryDate}` : ''}</span>
-                            <button className="text-button" type="button" onClick={() => navigateCommand('vault', v.id)}>
-                              ดูรายละเอียด →
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-
-                    {(customCategoryFilter === 'all' || customCategoryFilter === 'library') &&
-                      customCategoryData.library.map((lib) => (
-                        <div key={`cat-lib-${lib.id}`} className="category-card">
-                          <div>
-                            <div className="category-card-head">
-                              <span className="category-card-tag">📚 {lib.category}</span>
-                              <button
-                                className="text-button danger-text"
-                                type="button"
-                                onClick={() => handleUnlinkCategoryItem('library', lib.id)}
-                              >
-                                ถอดออก
-                              </button>
-                            </div>
-                            <strong style={{ display: 'block', fontSize: '15px', marginTop: '6px' }}>{lib.title}</strong>
-                            {lib.keyTakeaways && <p className="category-card-body">{lib.keyTakeaways}</p>}
-                          </div>
-                          <div className="category-card-meta">
-                            <span>{lib.status}</span>
-                            <button className="text-button" type="button" onClick={() => navigateCommand('library', lib.id)}>
-                              ดูรายละเอียด →
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </section>
+          <CustomCategoryView
+            customCategoryDataBusy={customCategoryDataBusy}
+            customCategoryData={customCategoryData}
+            customCategoryFilter={customCategoryFilter}
+            setCustomCategoryFilter={setCustomCategoryFilter}
+            onOpenQuickAdd={() => setQuickAddCatOpen(true)}
+            onOpenCreateCategoryModal={openCreateCategoryModal}
+            onOpenEditCategoryModal={openEditCategoryModal}
+            onDeleteCategory={handleDeleteCategory}
+            onSelectCustomCategory={selectCustomCategory}
+            onUnlinkCategoryItem={handleUnlinkCategoryItem}
+            onOpenNoteById={openNoteById}
+            onSwitchView={switchView}
+            onSetMediaLightboxFile={setMediaLightboxFile}
+            onNavigateCommand={navigateCommand}
+          />
         ) : viewMode === 'home' ? (
-          <section className="editor-panel dashboard-panel" aria-label="ภาพรวมวันนี้">
-            <div className="module-header-banner">
-              <div className="banner-icon">📊</div>
-              <div className="banner-info">
-                <span className="eyebrow">Daily Overview</span>
-                <h2 className="banner-title">ภาพรวมวันนี้</h2>
-                <p className="banner-subtitle">
-                  {dashboard ? dashboard.today : localToday()}
-                  {dashboardBusy ? ' · กำลังโหลด…' : ' · ซิงค์ข้อมูลล่าสุดเรียบร้อย'}
-                </p>
-              </div>
-              <div className="banner-actions">
-                <button
-                  className="button button-quiet"
-                  type="button"
-                  onClick={() => void refreshDashboard()}
-                  disabled={dashboardBusy}
-                >
-                  🔄 {dashboardBusy ? 'กำลังโหลด…' : 'รีเฟรช'}
-                </button>
-                <button
-                  className="button button-primary"
-                  type="button"
-                  onClick={() => switchView('inbox')}
-                >
-                  ＋ จดด่วนเข้ากล่อง
-                </button>
-              </div>
-            </div>
-            {dashboardError && <p className="form-error editor-error" role="alert">{dashboardError}</p>}
-            {!dashboard && !dashboardError && <p className="sidebar-hint">กำลังโหลดภาพรวม…</p>}
-            {dashboard && (
-              <div className="dash-grid">
-                <section className="dash-card dash-stats">
-                  <div className="dash-card-head">
-                    <h3>สถิติภาพรวม</h3>
-                    <span className="dash-stats-hint">ทุกโมดูล</span>
-                  </div>
-                  <div className="dash-stat-grid">
-                    <button className="dash-stat-tile" type="button" onClick={() => switchView('notes')}>
-                      <strong>{dashboard.totals.notes}</strong>
-                      <span>โน้ต</span>
-                    </button>
-                    <button className="dash-stat-tile" type="button" onClick={() => switchView('tasks')}>
-                      <strong>{dashboard.totals.tasks}</strong>
-                      <span>งานที่ยังเปิด</span>
-                    </button>
-                    <button className="dash-stat-tile" type="button" onClick={() => switchView('vault')}>
-                      <strong>{dashboard.totals.vault}</strong>
-                      <span>รายการในคลัง</span>
-                    </button>
-                    <button className="dash-stat-tile" type="button" onClick={() => switchView('library')}>
-                      <strong>{dashboard.totals.library}</strong>
-                      <span>คู่มือในห้องสมุด</span>
-                    </button>
-                  </div>
-                </section>
-
-                <section className="dash-card">
-                  <div className="dash-card-head">
-                    <h3>งานของวันนี้</h3>
-                    <button className="text-button" type="button" onClick={() => switchView('tasks')}>ดูทั้งหมด →</button>
-                  </div>
-                  {dashboard.tasks.dueToday.length === 0 && dashboard.tasks.overdue.length === 0 ? (
-                    <p className="dash-empty">ไม่มีงานครบกำหนดหรือเกินกำหนดวันนี้</p>
-                  ) : (
-                    <ul className="dash-list">
-                      {dashboard.tasks.overdue.map((task) => (
-                        <li key={`overdue-${task.id}`} className="is-warn">
-                          <strong>{task.title}</strong>
-                          <small>เกินกำหนด · {task.dueDate}</small>
-                        </li>
-                      ))}
-                      {dashboard.tasks.dueToday.map((task) => (
-                        <li key={`today-${task.id}`}>
-                          <strong>{task.title}</strong>
-                          <small>{taskStatusLabel(task.status)} · {taskPriorityLabel(task.priority)}</small>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-
-                <section className="dash-card">
-                  <div className="dash-card-head">
-                    <h3>แจ้งเตือนใกล้ถึง</h3>
-                    <button className="text-button" type="button" onClick={() => switchView('schedule')}>ไปที่ตารางชีวิต →</button>
-                  </div>
-                  {dashboard.reminders.length === 0 ? (
-                    <p className="dash-empty">ยังไม่มีรายการแจ้งเตือนในช่วง 60 วัน</p>
-                  ) : (
-                    <ul className="dash-list">
-                      {dashboard.reminders.slice(0, 4).map((reminder) => (
-                        <li key={reminder.id}>
-                          <strong>{reminder.title}</strong>
-                          <small>
-                            {reminder.snoozedUntil ? `เลื่อนไป ${reminder.snoozedUntil}` : reminder.targetDate}
-                            {' · '}{reminderCategoryLabel(reminder.category)}
-                            {reminder.recurrence && reminder.recurrence !== 'none' ? ' · ↻' : ''}
-                          </small>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-
-                <section className="dash-card">
-                  <div className="dash-card-head">
-                    <h3>ตารางชีวิตวันนี้</h3>
-                    <span className="note-count">{dashboard.timeblocks.done}/{dashboard.timeblocks.total}</span>
-                  </div>
-                  <div className="progress-track" aria-hidden="true">
-                    <span style={{
-                      width: `${dashboard.timeblocks.total === 0 ? 0 : Math.round((dashboard.timeblocks.done / dashboard.timeblocks.total) * 100)}%`,
-                    }} />
-                  </div>
-                  {dashboard.timeblocks.total === 0 ? (
-                    <p className="dash-empty">ยังไม่ได้วางช่วงเวลาไว้สำหรับวันนี้</p>
-                  ) : (
-                    <ul className="dash-list">
-                      {dashboard.timeblocks.blocks.slice(0, 4).map((block) => (
-                        <li key={block.id} className={block.isDone ? 'is-done' : ''}>
-                          <strong>{block.timeRange} · {block.title}</strong>
-                          <small>{lifeAreaLabel(block.lifeArea)}{block.isDone ? ' · ทำแล้ว' : ''}</small>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-
-                <section className="dash-card">
-                  <div className="dash-card-head">
-                    <h3>โปรเจกต์ที่กำลังทำ</h3>
-                    <button className="text-button" type="button" onClick={() => switchView('projects')}>ดูทั้งหมด →</button>
-                  </div>
-                  {dashboard.projects.length === 0 ? (
-                    <p className="dash-empty">ยังไม่มีโปรเจกต์ที่กำลังดำเนินการ</p>
-                  ) : (
-                    <ul className="dash-list">
-                      {dashboard.projects.slice(0, 4).map((project) => (
-                        <li key={project.id}>
-                          <strong>{project.name}</strong>
-                          <small>
-                            งานที่ปิดแล้ว {project.taskDone} จาก {project.taskTotal}
-                            {project.dueDate ? ` · กำหนด ${project.dueDate}` : ''}
-                          </small>
-                          <div className="progress-track" aria-hidden="true">
-                            <span style={{
-                              width: `${project.taskTotal === 0 ? 0 : Math.round((project.taskDone / project.taskTotal) * 100)}%`,
-                            }} />
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-
-                <section className="dash-card">
-                  <div className="dash-card-head">
-                    <h3>เป้าหมาย</h3>
-                    <button className="text-button" type="button" onClick={() => switchView('goals')}>ดูทั้งหมด →</button>
-                  </div>
-                  {dashboard.goals.length === 0 ? (
-                    <p className="dash-empty">ยังไม่มีเป้าหมายที่กำลังติดตาม</p>
-                  ) : (
-                    <ul className="dash-list">
-                      {dashboard.goals.slice(0, 4).map((goal) => (
-                        <li key={goal.id}>
-                          <strong>{goal.title}</strong>
-                          <small>
-                            {goal.progressPercent === null
-                              ? 'ยังไม่มีตัวชี้วัด'
-                              : `${goal.currentValue}/${goal.targetValue} ${goal.unit} · ${goal.progressPercent}%`}
-                          </small>
-                          {goal.progressPercent !== null && (
-                            <div className="progress-track" aria-hidden="true">
-                              <span style={{ width: `${goal.progressPercent}%` }} />
-                            </div>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-
-                <section className="dash-card">
-                  <div className="dash-card-head">
-                    <h3>กิจวัตรที่ยังไม่ครบ</h3>
-                    <button className="text-button" type="button" onClick={() => switchView('schedule')}>ไปที่ตารางชีวิต →</button>
-                  </div>
-                  {dashboard.habits.length === 0 ? (
-                    <p className="dash-empty">วันนี้ทำครบทุกกิจวัตรแล้ว</p>
-                  ) : (
-                    <ul className="dash-list">
-                      {dashboard.habits.slice(0, 4).map((habit) => (
-                        <li key={habit.id}>
-                          <strong>{habit.title}</strong>
-                          <small>
-                            {habit.currentCount}/{habit.dailyTarget} {habit.unit} · ต่อเนื่อง {habit.streakDays} วัน
-                            {typeof habit.weekMetTarget === 'number' ? ` · สัปดาห์นี้ ${habit.weekMetTarget}/7 วัน` : ''}
-                          </small>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-
-                <section className="dash-card">
-                  <div className="dash-card-head">
-                    <h3>กล่องขาเข้า</h3>
-                    <span className="note-count">{dashboard.inbox.newCount}</span>
-                  </div>
-                  {dashboard.inbox.items.length === 0 ? (
-                    <p className="dash-empty">ไม่มีอะไรค้างในกล่องขาเข้า</p>
-                  ) : (
-                    <ul className="dash-list">
-                      {dashboard.inbox.items.slice(0, 3).map((item) => (
-                        <li key={item.id}>
-                          <strong>{item.body.length > 60 ? `${item.body.slice(0, 60)}…` : item.body}</strong>
-                          <small>{item.kind === 'url' ? 'ลิงก์' : 'ข้อความ'}</small>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  <button className="button button-quiet" type="button" onClick={() => switchView('inbox')}>ไปจัดการ inbox</button>
-                </section>
-
-                <section className="dash-card">
-                  <div className="dash-card-head">
-                    <h3>โน้ตที่อัปเดตล่าสุด</h3>
-                    <button className="text-button" type="button" onClick={() => switchView('notes')}>ไปที่โน้ต →</button>
-                  </div>
-                  {dashboard.notes.length === 0 ? (
-                    <p className="dash-empty">ยังไม่มีโน้ต</p>
-                  ) : (
-                    <ul className="dash-list">
-                      {dashboard.notes.map((note) => (
-                        <li key={note.id}>
-                          <button className="text-button" type="button" onClick={() => void openNoteById(note.id)}>
-                            {note.title}
-                          </button>
-                          <small>{formatDate(note.updatedAt)}</small>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-                <section className="dash-card">
-                  <div className="dash-card-head">
-                    <h3>เอกสาร/ทรัพย์สินที่ใกล้หมดอายุ</h3>
-                    <button className="text-button" type="button" onClick={() => switchView('vault')}>ไปที่คลัง →</button>
-                  </div>
-                  {dashboard.vault.expiring.length === 0 ? (
-                    <p className="dash-empty">ยังไม่มีรายการที่ต้องต่ออายุภายใน 60 วัน</p>
-                  ) : (
-                    <ul className="dash-list">
-                      {dashboard.vault.expiring.map((item) => {
-                        const days = daysUntilIso(item.renewalOrExpiryDate);
-                        const urgent = days !== null && days <= 30;
-                        return (
-                          <li key={item.id} className={urgent ? 'is-warn' : undefined}>
-                            <button
-                              className="text-button"
-                              type="button"
-                              onClick={() => navigateCommand('vault', item.id)}
-                            >
-                              {item.title}
-                            </button>
-                            <small className={urgent ? 'dash-due is-urgent' : 'dash-due'}>
-                              {days !== null && days < 0
-                                ? `เกินกำหนด ${Math.abs(days)} วัน`
-                                : `อีก ${days ?? 0} วัน`}
-                              {' · '}
-                              {item.renewalOrExpiryDate}
-                            </small>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </section>
-
-                <section className="dash-card">
-                  <div className="dash-card-head">
-                    <h3>คู่มือที่ใช้งานประจำ</h3>
-                    <button className="text-button" type="button" onClick={() => switchView('library')}>ไปที่ห้องสมุด →</button>
-                  </div>
-                  {dashboard.library.active.length === 0 ? (
-                    <p className="dash-empty">ยังไม่มีคู่มือที่ตั้งสถานะเป็น “ใช้งานประจำ”</p>
-                  ) : (
-                    <ul className="dash-list">
-                      {dashboard.library.active.map((item) => (
-                        <li key={item.id}>
-                          <button
-                            className="text-button"
-                            type="button"
-                            onClick={() => navigateCommand('library', item.id)}
-                          >
-                            {item.title}
-                          </button>
-                          <small>
-                            {item.keyTakeaways
-                              ? item.keyTakeaways.split('\n').map((line) => line.trim()).filter(Boolean)[0]
-                              : item.category}
-                          </small>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-              </div>
-            )}
-          </section>
+          <DashboardView
+            dashboard={dashboard}
+            dashboardBusy={dashboardBusy}
+            dashboardError={dashboardError}
+            onRefreshDashboard={() => void refreshDashboard()}
+            onSwitchView={switchView}
+            onOpenNoteById={(id) => void openNoteById(id)}
+            onNavigateCommand={navigateCommand}
+            onCheckHabitToday={checkHabitToday}
+            onToggleTask={toggleTask}
+          />
         ) : viewMode === 'inbox' ? (
-          <section className="editor-panel work-panel" aria-label="กล่องขาเข้า">
-            <div className="module-header-banner">
-              <div className="banner-icon">📥</div>
-              <div className="banner-info">
-                <span className="eyebrow">Quick Capture</span>
-                <h2 className="banner-title">กล่องขาเข้า</h2>
-                <p className="banner-subtitle">
-                  ยังไม่ได้จัดหมวด {inboxNewCount} รายการ · จดบันทึกสิ่งที่คิดไว้ก่อน แล้วค่อยจัดหมวดหมู่ภายหลัง
-                </p>
-              </div>
-            </div>
-            {inboxError && <p className="form-error editor-error" role="alert">{inboxError}</p>}
-            {inboxNotice && <p className="form-notice" role="status">{inboxNotice}</p>}
-            <form className="capture-form" onSubmit={addInboxItem}>
-              <label>
-                จดอะไรก็ได้ก่อน
-                <textarea
-                  value={inboxDraft}
-                  onChange={(event) => setInboxDraft(event.target.value)}
-                  rows={4}
-                  maxLength={4000}
-                  placeholder="ไอเดีย ลิงก์ สิ่งที่ต้องทำ หรือเรื่องที่ต้องเตือนภายหลัง…"
-                />
-              </label>
-              <button className="button button-primary" type="submit" disabled={inboxBusy}>
-                {inboxBusy ? 'กำลังบันทึก…' : 'เก็บเข้ากล่อง'}
-              </button>
-            </form>
-            <p className="sidebar-hint">
-              รายการในกล่องจะยังไม่ถูกตีความเป็นโน้ตหรืองานจนกว่าจะแปลง — และแปลงได้ครั้งเดียวเท่านั้น ต้นฉบับยังอยู่ครบ
-            </p>
-            <div className="inbox-list-section" style={{ marginTop: '24px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: 650, marginBottom: '14px', color: 'var(--ink)' }}>
-                รายการในกล่องขาเข้า ({inboxItems.length})
-              </h3>
-              {inboxItems.length === 0 ? (
-                <div className="empty-state" style={{ padding: '40px 20px', background: 'var(--paper)', borderRadius: '16px', border: '1px dashed var(--line)', textAlign: 'center' }}>
-                  <span className="empty-icon" style={{ fontSize: '36px', display: 'block', marginBottom: '8px' }}>📥</span>
-                  <strong>กล่องขาเข้าว่าง</strong>
-                  <span style={{ color: 'var(--muted)', display: 'block', marginTop: '4px' }}>จดอะไรก็ได้ก่อน แล้วค่อยจัดหมวดทีหลัง</span>
-                </div>
-              ) : (
-                <div className="work-list">
-                  {inboxItems.map((item) => (
-                    <div className="work-row inbox-row" key={item.id}>
-                      <div className="work-row-head">
-                        <strong>{item.body.length > 90 ? `${item.body.slice(0, 90)}…` : item.body}</strong>
-                      </div>
-                      <div className="work-row-meta">
-                        <span>{item.kind === 'url' ? 'ลิงก์' : 'ข้อความ'}</span>
-                        <span>{formatDate(item.createdAt)}</span>
-                      </div>
-                      <div className="work-actions">
-                        <button className="text-button" type="button" disabled={inboxBusy} onClick={() => void convertItem(item, 'note')}>เป็นโน้ต</button>
-                        <button className="text-button" type="button" disabled={inboxBusy} onClick={() => void convertItem(item, 'task')}>เป็นงาน</button>
-                        <button className="text-button" type="button" disabled={inboxBusy} onClick={() => void convertItem(item, 'project')}>เป็นโปรเจกต์</button>
-                        <button className="text-button" type="button" disabled={inboxBusy} onClick={() => void convertItem(item, 'bookmark')}>เป็นลิงก์</button>
-                        <button className="text-button" type="button" disabled={inboxBusy} onClick={() => void convertItem(item, 'reminder')}>เป็นแจ้งเตือน</button>
-                        <button className="text-button" type="button" disabled={inboxBusy} onClick={() => void archiveInboxItem(item)}>เก็บเข้าคลัง</button>
-                        <button className="text-button danger-text" type="button" disabled={inboxBusy} onClick={() => void removeInboxItem(item)}>ลบ</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
+          <InboxView
+            inboxNewCount={inboxNewCount}
+            inboxError={inboxError}
+            inboxNotice={inboxNotice}
+            inboxDraft={inboxDraft}
+            setInboxDraft={setInboxDraft}
+            onAddInboxItem={addInboxItem}
+            inboxBusy={inboxBusy}
+            inboxItems={inboxItems}
+            onConvertItem={(item, kind) => void convertItem(item, kind)}
+            onArchiveInboxItem={(item) => void archiveInboxItem(item)}
+            onRemoveInboxItem={(item) => void removeInboxItem(item)}
+          />
         ) : viewMode === 'vault' ? (
-          <section className="editor-panel vault-panel" aria-label="แก้ไขข้อมูลคลังสำคัญ">
-            <div className="module-header-banner">
-              <div className="banner-icon">🔐</div>
-              <div className="banner-info">
-                <span className="eyebrow">Personal Vault</span>
-                <h2 className="banner-title">คลังสำคัญ &amp; ทรัพย์สิน</h2>
-                <p className="banner-subtitle">
-                  {vaultItems.length} รายการ · บันทึกเลขสำคัญ กรมธรรม์ ทรัพย์สิน และเอกสารลับที่ปลอดภัย
-                </p>
-              </div>
-              <div className="banner-actions">
-                <button className="button button-primary" type="button" onClick={startNewVaultItem}>
-                  ＋ เพิ่มรายการเข้าคลัง
-                </button>
-                {activeVault && (
-                  <>
-                    <button
-                      className="button button-quiet"
-                      type="button"
-                      onClick={() => void copyVaultKey(activeVault, vaultDraft.keyValue)}
-                    >
-                      📋 คัดลอกเลขสำคัญ
-                    </button>
-                    <button
-                      className="button button-quiet"
-                      type="button"
-                      onClick={() => void sendVaultItemToReminders(activeVault)}
-                    >
-                      📅 ส่งเข้าปฏิทิน
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-            {vaultError && <p className="form-error editor-error" role="alert">{vaultError}</p>}
-            {vaultNotice && <p className="form-notice" role="status">{vaultNotice}</p>}
-            <form className="vault-form" onSubmit={saveVaultItem}>
-              <label>
-                ชื่อรายการ
-                <input
-                  value={vaultDraft.title}
-                  onChange={(event) => setVaultDraft({ ...vaultDraft, title: event.target.value })}
-                  maxLength={200}
-                  placeholder="เช่น กรมธรรม์รถยนต์, โฉนดที่ดิน, ค่าเน็ตรายเดือน"
-                />
-              </label>
-              <label>
-                หมวดหมู่
-                <select
-                  value={vaultDraft.category}
-                  onChange={(event) => setVaultDraft({
-                    ...vaultDraft,
-                    category: event.target.value as VaultCategory,
-                  })}
-                >
-                  {VAULT_CATEGORIES.map((category) => (
-                    <option value={category} key={category}>{category}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                หมวดหมู่ของฉัน (Custom Space)
-                <select
-                  value={vaultCustomCatId}
-                  onChange={(event) => setVaultCustomCatId(event.target.value)}
-                >
-                  <option value="">-- ไม่ระบุหมวดหมู่ --</option>
-                  {customCategories.map((category) => (
-                    <option value={category.id} key={category.id}>
-                      {category.parentId ? '  ↳ ' : ''}{category.icon} {category.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                รหัส / เลขสำคัญ
-                <input
-                  value={vaultDraft.keyValue}
-                  onChange={(event) => setVaultDraft({ ...vaultDraft, keyValue: event.target.value })}
-                  maxLength={200}
-                  placeholder="เลขกรมธรรม์ Serial หรือรหัสที่ต้องใช้บ่อย"
-                />
-              </label>
-              <label>
-                สถานที่เก็บตัวจริง
-                <input
-                  value={vaultDraft.physicalLocation}
-                  onChange={(event) => setVaultDraft({ ...vaultDraft, physicalLocation: event.target.value })}
-                  maxLength={200}
-                  placeholder="เช่น ลิ้นชักชั้น 2, ตู้เซฟธนาคาร"
-                />
-              </label>
-              <label>
-                วันหมดอายุ / วันต่ออายุ
-                <input
-                  type="date"
-                  value={vaultDraft.renewalOrExpiryDate}
-                  onChange={(event) => setVaultDraft({ ...vaultDraft, renewalOrExpiryDate: event.target.value })}
-                />
-              </label>
-              <label>
-                ยอดเงิน / ค่าใช้จ่าย
-                <input
-                  value={vaultDraft.amountText}
-                  onChange={(event) => setVaultDraft({ ...vaultDraft, amountText: event.target.value })}
-                  maxLength={120}
-                  placeholder="เช่น 18,500 บาท/ปี"
-                />
-              </label>
-              <label className="span-2">
-                บันทึกเพิ่มเติม
-                <textarea
-                  value={vaultDraft.notes}
-                  onChange={(event) => setVaultDraft({ ...vaultDraft, notes: event.target.value })}
-                  rows={4}
-                  maxLength={5000}
-                  placeholder="เงื่อนไข เบอร์ติดต่อเจ้าหน้าที่ หรือขั้นตอนต่ออายุ"
-                />
-              </label>
-              <div className="editor-actions">
-                <button className="button button-primary" type="submit" disabled={vaultBusy}>
-                  {vaultBusy ? 'กำลังบันทึก…' : activeVault ? 'บันทึกการแก้ไข' : 'เพิ่มเข้าคลัง'}
-                </button>
-                {activeVault && (
-                  <button
-                    className="button button-danger-quiet"
-                    type="button"
-                    disabled={vaultBusy}
-                    onClick={() => void removeVaultItem(activeVault)}
-                  >
-                    ลบรายการ
-                  </button>
-                )}
-              </div>
-            </form>
-            {activeVault ? (
-              <EntityAttachments
-                entityType="vault"
-                entityId={activeVault.id}
-                availableFiles={files}
-                onFilesChanged={() => setRefreshKey((key) => key + 1)}
-              />
-            ) : (
-              <p className="sidebar-hint">บันทึกรายการก่อน แล้วจึงแนบไฟล์กรมธรรม์หรือใบเสร็จได้</p>
-            )}
-
-            <div className="vault-items-section" style={{ marginTop: '28px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: 650, margin: 0, color: 'var(--ink)' }}>
-                  รายการทั้งหมดในคลัง ({vaultItems.length})
-                </h3>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <input
-                    type="search"
-                    placeholder="ค้นหาในคลัง..."
-                    value={vaultQuery}
-                    onChange={(e) => setVaultQuery(e.target.value)}
-                    style={{ fontSize: '12px', padding: '4px 10px' }}
-                  />
-                  <select
-                    value={vaultCategory}
-                    onChange={(e) => setVaultCategory(e.target.value as VaultCategory | 'all')}
-                    style={{ fontSize: '12px', padding: '4px 8px' }}
-                  >
-                    <option value="all">ทุกหมวด</option>
-                  </select>
-                  <select
-                    value={libraryStatus}
-                    onChange={(e) => setLibraryStatus(e.target.value as LibraryStatus | 'all')}
-                    style={{ fontSize: '12px', padding: '4px 8px' }}
-                  >
-                    <option value="all">ทุกสถานะ</option>
-                    {LIBRARY_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                    {VAULT_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-              </div>
-              {vaultItems.length === 0 ? (
-                <div className="empty-state" style={{ padding: '40px 20px', background: 'var(--paper)', borderRadius: '16px', border: '1px dashed var(--line)', textAlign: 'center' }}>
-                  <span className="empty-icon" style={{ fontSize: '36px', display: 'block', marginBottom: '8px' }}>🔐</span>
-                  <strong>ยังไม่มีรายการในคลัง</strong>
-                  <span style={{ color: 'var(--muted)', display: 'block', marginTop: '4px' }}>เริ่มจากเอกสารสำคัญหรือทรัพย์สินชิ้นแรก</span>
-                </div>
-              ) : (
-                <div className="vault-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
-                  {vaultItems.map((item) => {
-                    const days = daysUntilIso(item.renewalOrExpiryDate);
-                    const urgent = days !== null && days <= 30;
-                    return (
-                      <div
-                        className={`dash-card vault-card${activeVault?.id === item.id ? ' is-active' : ''}`}
-                        key={item.id}
-                        style={{ padding: '18px', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}
-                        onClick={() => selectVaultItem(item)}
-                      >
-                        <div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                            <strong style={{ fontSize: '15px', color: 'var(--ink)' }}>{item.title}</strong>
-                            <span className={`category-badge tone-${vaultTone(item.category)}`}>{item.category}</span>
-                          </div>
-                          {item.keyValue && (
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--canvas)', padding: '6px 10px', borderRadius: '8px', marginBottom: '8px', fontSize: '13px' }}>
-                              <code>🔑 {item.keyValue}</code>
-                              <button
-                                className="button button-quiet"
-                                type="button"
-                                style={{ padding: '2px 8px', minHeight: '24px', fontSize: '11px' }}
-                                onClick={(e) => { e.stopPropagation(); void copyVaultKey(item, item.keyValue); }}
-                              >
-                                คัดลอก
-                              </button>
-                            </div>
-                          )}
-                          <div style={{ fontSize: '12px', color: 'var(--muted)', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                            {item.renewalOrExpiryDate && (
-                              <span style={{ color: urgent ? 'var(--danger)' : undefined }}>
-                                📅 {item.renewalOrExpiryDate}
-                                {days !== null && days < 0 ? ' (เกินกำหนด)' : ''}
-                                {days !== null && days >= 0 && days <= 30 ? ` (อีก ${days} วัน)` : ''}
-                              </span>
-                            )}
-                            {item.amountText && <span>💰 {item.amountText}</span>}
-                          </div>
-                          {item.physicalLocation && <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '4px' }}>📍 {item.physicalLocation}</div>}
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px', marginTop: '12px', paddingTop: '8px', borderTop: '1px solid var(--line)' }}>
-                          <button className="text-button" type="button" onClick={(e) => { e.stopPropagation(); selectVaultItem(item); }}>แก้ไข</button>
-                          <button className="text-button danger-text" type="button" onClick={(e) => { e.stopPropagation(); void removeVaultItem(item); }}>ลบ</button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </section>
+          <VaultView
+            vaultItems={vaultItems}
+            activeVault={activeVault}
+            vaultDraft={vaultDraft}
+            setVaultDraft={setVaultDraft}
+            vaultError={vaultError}
+            vaultNotice={vaultNotice}
+            vaultBusy={vaultBusy}
+            vaultQuery={vaultQuery}
+            setVaultQuery={setVaultQuery}
+            vaultCategory={vaultCategory}
+            setVaultCategory={setVaultCategory}
+            vaultCustomCatId={vaultCustomCatId}
+            setVaultCustomCatId={setVaultCustomCatId}
+            customCategories={customCategories}
+            onStartNewVaultItem={startNewVaultItem}
+            onCopyVaultKey={(item, key) => void copyVaultKey(item, key)}
+            onSendVaultItemToReminders={(item) => void sendVaultItemToReminders(item)}
+            onSaveVaultItem={saveVaultItem}
+            onRemoveVaultItem={(item) => void removeVaultItem(item)}
+            onSelectVaultItem={selectVaultItem}
+            files={files}
+            onFilesChanged={() => setRefreshKey((k) => k + 1)}
+          />
         ) : viewMode === 'library' ? (
-          <section className="editor-panel library-panel" aria-label="แก้ไขความรู้ในห้องสมุด">
-            <div className="module-header-banner">
-              <div className="banner-icon">📚</div>
-              <div className="banner-info">
-                <span className="eyebrow">Knowledge Library &amp; SOPs</span>
-                <h2 className="banner-title">ห้องสมุดความรู้ &amp; คู่มือ</h2>
-                <p className="banner-subtitle">
-                  {libraryItems.length} รายการ · คู่มือ ขั้นตอนการทำงาน (SOP) และองค์ความรู้สำคัญ
-                </p>
-              </div>
-              <div className="banner-actions">
-                <button className="button button-primary" type="button" onClick={startNewLibraryItem}>
-                  ＋ เพิ่มความรู้ใหม่
-                </button>
-              </div>
-            </div>
-            {libraryError && <p className="form-error editor-error" role="alert">{libraryError}</p>}
-            {libraryNotice && <p className="form-notice" role="status">{libraryNotice}</p>}
-            <form className="library-form" onSubmit={saveLibraryItem}>
-              <label>
-                ชื่อเรื่อง
-                <input
-                  value={libraryDraft.title}
-                  onChange={(event) => setLibraryDraft({ ...libraryDraft, title: event.target.value })}
-                  maxLength={200}
-                  placeholder="เช่น วิธีปิดน้ำ-แก๊สก่อนออกจากบ้าน"
-                />
-              </label>
-              <label>
-                หมวดหมู่
-                <select
-                  value={libraryDraft.category}
-                  onChange={(event) => setLibraryDraft({
-                    ...libraryDraft,
-                    category: event.target.value as LibraryCategory,
-                  })}
-                >
-                  {LIBRARY_CATEGORIES.map((category) => (
-                    <option value={category} key={category}>{category}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                สถานะ
-                <select
-                  value={libraryDraft.status}
-                  onChange={(event) => setLibraryDraft({
-                    ...libraryDraft,
-                    status: event.target.value as LibraryStatus,
-                  })}
-                >
-                  {LIBRARY_STATUSES.map((status) => (
-                    <option value={status} key={status}>{status}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                หมวดหมู่ของฉัน (Custom Space)
-                <select
-                  value={libraryCustomCatId}
-                  onChange={(event) => setLibraryCustomCatId(event.target.value)}
-                >
-                  <option value="">-- ไม่ระบุหมวดหมู่ --</option>
-                  {customCategories.map((category) => (
-                    <option value={category.id} key={category.id}>
-                      {category.parentId ? '  ↳ ' : ''}{category.icon} {category.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="span-2">
-                แหล่งที่มา / ผู้แต่ง
-                <input
-                  value={libraryDraft.sourceUrlOrAuthor}
-                  onChange={(event) => setLibraryDraft({ ...libraryDraft, sourceUrlOrAuthor: event.target.value })}
-                  maxLength={500}
-                  placeholder="ลิงก์ ชื่อหนังสือ หรือชื่อผู้สอน"
-                />
-              </label>
-
-              <div className="takeaway-box span-2">
-                <div className="takeaway-head">
-                  <span aria-hidden="true">💡</span>
-                  <strong>แก่นสำคัญ 3 ข้อ (Key Takeaways)</strong>
-                </div>
-                {libraryDraft.keyTakeaways.trim() && (
-                  <ul className="takeaway-list" aria-label="แก่นสำคัญที่บันทึกไว้">
-                    {libraryDraft.keyTakeaways
-                      .split('\n')
-                      .map((line) => line.trim())
-                      .filter(Boolean)
-                      .map((line, index) => <li key={`${index}-${line}`}>{line}</li>)}
-                  </ul>
-                )}
-                <label>
-                  เขียนแก่นสำคัญ (บรรทัดละข้อ)
-                  <textarea
-                    value={libraryDraft.keyTakeaways}
-                    onChange={(event) => setLibraryDraft({ ...libraryDraft, keyTakeaways: event.target.value })}
-                    rows={3}
-                    maxLength={2000}
-                    placeholder={'1) …\n2) …\n3) …'}
-                  />
-                </label>
-              </div>
-
-              <label className="span-2">
-                เนื้อหาขั้นตอน (SOP) หรือสรุปละเอียด
-                <textarea
-                  value={libraryDraft.content}
-                  onChange={(event) => setLibraryDraft({ ...libraryDraft, content: event.target.value })}
-                  rows={10}
-                  maxLength={20000}
-                  placeholder={'ขั้นตอนที่ 1 …\nขั้นตอนที่ 2 …'}
-                />
-              </label>
-              <div className="editor-actions">
-                <button className="button button-primary" type="submit" disabled={libraryBusy}>
-                  {libraryBusy ? 'กำลังบันทึก…' : activeLibrary ? 'บันทึกการแก้ไข' : 'เพิ่มเข้าห้องสมุด'}
-                </button>
-                {activeLibrary && (
-                  <button
-                    className="button button-danger-quiet"
-                    type="button"
-                    disabled={libraryBusy}
-                    onClick={() => void removeLibraryItem(activeLibrary)}
-                  >
-                    ลบรายการ
-                  </button>
-                )}
-              </div>
-            </form>
-            {activeLibrary ? (
-              <EntityAttachments
-                entityType="library"
-                entityId={activeLibrary.id}
-                availableFiles={files}
-                onFilesChanged={() => setRefreshKey((key) => key + 1)}
-              />
-            ) : (
-              <p className="sidebar-hint">บันทึกความรู้ก่อน แล้วจึงแนบไฟล์คู่มือหรือเอกสารประกอบได้</p>
-            )}
-
-            <div className="library-items-section" style={{ marginTop: '28px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: 650, margin: 0, color: 'var(--ink)' }}>
-                  คู่มือและ SOPs ทั้งหมด ({libraryItems.length})
-                </h3>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <input
-                    type="search"
-                    placeholder="ค้นหาคู่มือ..."
-                    value={libraryQuery}
-                    onChange={(e) => setLibraryQuery(e.target.value)}
-                    style={{ fontSize: '12px', padding: '4px 10px' }}
-                  />
-                  <select
-                    value={libraryCategory}
-                    onChange={(e) => setLibraryCategory(e.target.value as LibraryCategory | 'all')}
-                    style={{ fontSize: '12px', padding: '4px 8px' }}
-                  >
-                    <option value="all">ทุกหมวด</option>
-                    {LIBRARY_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-              </div>
-              {libraryItems.length === 0 ? (
-                <div className="empty-state" style={{ padding: '40px 20px', background: 'var(--paper)', borderRadius: '16px', border: '1px dashed var(--line)', textAlign: 'center' }}>
-                  <span className="empty-icon" style={{ fontSize: '36px', display: 'block', marginBottom: '8px' }}>📚</span>
-                  <strong>ยังไม่มีคู่มือในห้องสมุด</strong>
-                  <span style={{ color: 'var(--muted)', display: 'block', marginTop: '4px' }}>เก็บ SOP แรกที่อยากจำให้ขึ้นใจ</span>
-                </div>
-              ) : (
-                <div className="library-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
-                  {libraryItems.map((item) => (
-                    <div
-                      className={`dash-card library-card${activeLibrary?.id === item.id ? ' is-active' : ''}`}
-                        key={item.id}
-                      style={{ padding: '18px', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}
-                      onClick={() => selectLibraryItem(item)}
-                    >
-                      <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                          <strong style={{ fontSize: '15px', color: 'var(--ink)' }}>{item.title}</strong>
-                          <span className={`status-badge tone-${libraryStatusTone(item.status)}`}>{item.status}</span>
-                        </div>
-                        <span className={`category-badge tone-${libraryTone(item.category)}`}>{item.category}</span>
-                        {item.keyTakeaways && <p style={{ fontSize: '13px', color: 'var(--muted)', margin: '8px 0', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.keyTakeaways}</p>}
-                        {item.sourceUrlOrAuthor && <div style={{ fontSize: '12px', color: 'var(--green, #3f7658)' }}>↗ {item.sourceUrlOrAuthor}</div>}
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px', marginTop: '12px', paddingTop: '8px', borderTop: '1px solid var(--line)' }}>
-                        <button className="text-button" type="button" onClick={(e) => { e.stopPropagation(); selectLibraryItem(item); }}>แก้ไข</button>
-                        <button className="text-button danger-text" type="button" onClick={(e) => { e.stopPropagation(); void removeLibraryItem(item); }}>ลบ</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
+          <LibraryView
+            libraryItems={libraryItems}
+            activeLibrary={activeLibrary}
+            libraryDraft={libraryDraft}
+            setLibraryDraft={setLibraryDraft}
+            libraryError={libraryError}
+            libraryNotice={libraryNotice}
+            libraryBusy={libraryBusy}
+            libraryQuery={libraryQuery}
+            setLibraryQuery={setLibraryQuery}
+            libraryCategory={libraryCategory}
+            setLibraryCategory={setLibraryCategory}
+            libraryStatus={libraryStatus}
+            setLibraryStatus={setLibraryStatus}
+            libraryCustomCatId={libraryCustomCatId}
+            setLibraryCustomCatId={setLibraryCustomCatId}
+            customCategories={customCategories}
+            onStartNewLibraryItem={startNewLibraryItem}
+            onSaveLibraryItem={saveLibraryItem}
+            onRemoveLibraryItem={(item) => void removeLibraryItem(item)}
+            onSelectLibraryItem={selectLibraryItem}
+            files={files}
+            onFilesChanged={() => setRefreshKey((k) => k + 1)}
+          />
         ) : viewMode === 'tasks' ? (
-          <section className="editor-panel work-panel" aria-label="งานที่ต้องทำ">
-            <div className="module-header-banner">
-              <div className="banner-icon">✅</div>
-              <div className="banner-info">
-                <span className="eyebrow">Tasks &amp; To-Do</span>
-                <h2 className="banner-title">งานที่ต้องทำ</h2>
-                <p className="banner-subtitle">
-                  {tasks.length} รายการในตัวกรองนี้ · จัดการภารกิจและเป้าหมายประจำวันให้เสร็จตรงเวลา
-                </p>
-              </div>
-            </div>
-            <div className="mode-toggle" role="group" aria-label="ตัวกรองงาน">
-              {([
-                ['open', 'ยังไม่เสร็จ'],
-                ['today', 'วันนี้'],
-                ['overdue', 'เกินกำหนด'],
-                ['done', 'เสร็จแล้ว'],
-              ] as const).map(([value, label]) => (
-                <button
-                  key={value}
-                  className={`button ${taskFilter === value ? 'button-primary' : 'button-quiet'}`}
-                  type="button"
-                  onClick={() => setTaskFilter(value)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            {tasksError && <p className="form-error editor-error" role="alert">{tasksError}</p>}
-            {tasksNotice && <p className="form-notice" role="status">{tasksNotice}</p>}
-            <form className="inline-form" onSubmit={addTask}>
-              <input
-                id="quick-task-title"
-                required
-                value={taskDraft.title}
-                onChange={(event) => setTaskDraft({ ...taskDraft, title: event.target.value })}
-                placeholder="ชื่องาน"
-                maxLength={200}
-              />
-              <input
-                type="date"
-                value={taskDraft.dueDate}
-                onChange={(event) => setTaskDraft({ ...taskDraft, dueDate: event.target.value })}
-                aria-label="กำหนดเสร็จ"
-              />
-              <select
-                value={taskDraft.priority}
-                onChange={(event) => setTaskDraft({ ...taskDraft, priority: event.target.value as Task['priority'] })}
-                aria-label="ความสำคัญ"
-              >
-                <option value="low">ไม่เร่ง</option>
-                <option value="normal">ปกติ</option>
-                <option value="high">สำคัญ</option>
-                <option value="urgent">ด่วนมาก</option>
-              </select>
-              <select
-                value={taskDraft.projectId}
-                onChange={(event) => setTaskDraft({ ...taskDraft, projectId: event.target.value })}
-                aria-label="โปรเจกต์"
-              >
-                <option value="">ไม่ผูกโปรเจกต์</option>
-                {projects.map((project) => (
-                  <option value={project.id} key={project.id}>{project.name}</option>
-                ))}
-              </select>
-              <select
-                value={taskDraft.recurrence}
-                onChange={(event) => setTaskDraft({ ...taskDraft, recurrence: event.target.value as Task['recurrence'] })}
-                aria-label="การทำซ้ำ"
-              >
-                <option value="none">ไม่ซ้ำ</option>
-                <option value="daily">ทุกวัน</option>
-                <option value="weekly">ทุกสัปดาห์</option>
-                <option value="monthly">ทุกเดือน</option>
-                <option value="yearly">ทุกปี</option>
-              </select>
-              <select
-                value={taskDraftCustomCatId}
-                onChange={(event) => setTaskDraftCustomCatId(event.target.value)}
-                aria-label="หมวดหมู่ของฉัน"
-              >
-                <option value="">📁 ไม่ผูกหมวดหมู่</option>
-                {customCategories.map((c) => (
-                  <option value={c.id} key={c.id}>{c.parentId ? '  ↳ ' : ''}{c.icon} {c.name}</option>
-                ))}
-              </select>
-              <button className="button button-primary" type="submit" disabled={tasksBusy}>เพิ่ม</button>
-            </form>
-            <p className="sidebar-hint">
-              งานที่ตั้งให้ทำซ้ำจะสร้างรอบถัดไปเมื่อปิดรอบปัจจุบัน และเก็บรอบที่ปิดแล้วไว้เป็นประวัติ
-            </p>
-            <div className="task-list-section" style={{ marginTop: '24px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: 650, marginBottom: '14px', color: 'var(--ink)' }}>
-                รายการงาน ({tasks.length})
-              </h3>
-              {tasks.length === 0 ? (
-                <div className="empty-state" style={{ padding: '40px 20px', background: 'var(--paper)', borderRadius: '16px', border: '1px dashed var(--line)', textAlign: 'center' }}>
-                  <span className="empty-icon" style={{ fontSize: '36px', display: 'block', marginBottom: '8px' }}>☑️</span>
-                  <strong>ยังไม่มีงานในตัวกรองนี้</strong>
-                  <span style={{ color: 'var(--muted)', display: 'block', marginTop: '4px' }}>
-                    เพิ่มงานใหม่จากฟอร์มด้านบนเพื่อเริ่มวางแผนงานของคุณ
-                  </span>
-                </div>
-              ) : (
-                <div className="work-list">
-                  {tasks.map((task) => (
-                    <div className={`work-row${task.status === 'done' ? ' is-done' : ''}`} key={task.id}>
-                      <label className="work-check">
-                        <input
-                          type="checkbox"
-                          checked={task.status === 'done'}
-                          disabled={tasksBusy}
-                          onChange={() => void toggleTask(task)}
-                        />
-                        <span>
-                          <strong>{task.title}</strong>
-                          <span className="work-row-meta">
-                            <span>{taskStatusLabel(task.status)}</span>
-                            <span>{taskPriorityLabel(task.priority)}</span>
-                            {task.dueDate && <span>กำหนด {task.dueDate}</span>}
-                            {task.projectName && <span>▣ {task.projectName}</span>}
-                            {task.recurrence !== 'none' && <span>↻ {task.recurrence}</span>}
-                            {task.checklistTotal > 0 && <span>☑ {task.checklistDone}/{task.checklistTotal}</span>}
-                          </span>
-                        </span>
-                      </label>
-                      <div className="work-actions">
-                        <select
-                          className="task-cat-select"
-                          style={{ fontSize: '11px', padding: '2px 4px', borderRadius: '4px', border: '1px solid var(--border)' }}
-                          aria-label="เปลี่ยนหมวดหมู่"
-                          onChange={async (e) => {
-                            const val = e.target.value || null;
-                            try {
-                              await setItemCustomCategory('task', task.id, val);
-                              pushToast('success', 'อัปเดตหมวดหมู่ของงานแล้ว');
-                              setRefreshKey((k) => k + 1);
-                            } catch (err) {
-                              pushToast('error', errorMessage(err));
-                            }
-                          }}
-                          defaultValue=""
-                        >
-                          <option value="">📁 ย้ายหมวด</option>
-                          {customCategories.map((c) => (
-                            <option value={c.id} key={c.id}>{c.parentId ? '↳ ' : ''}{c.icon} {c.name}</option>
-                          ))}
-                        </select>
-                        <button className="text-button danger-text" type="button" disabled={tasksBusy} onClick={() => void removeTask(task)}>ลบ</button>
-                      </div>
-                      <EntityAttachments
-                        entityType="task"
-                        entityId={task.id}
-                        availableFiles={files}
-                        onFilesChanged={() => setRefreshKey((key) => key + 1)}
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
+          <TasksView
+            tasks={tasks}
+            taskFilter={taskFilter}
+            setTaskFilter={setTaskFilter}
+            tasksError={tasksError}
+            tasksNotice={tasksNotice}
+            taskDraft={taskDraft}
+            setTaskDraft={setTaskDraft}
+            taskDraftCustomCatId={taskDraftCustomCatId}
+            setTaskDraftCustomCatId={setTaskDraftCustomCatId}
+            customCategories={customCategories}
+            projects={projects}
+            tasksBusy={tasksBusy}
+            onAddTask={addTask}
+            onToggleTask={toggleTask}
+            onRemoveTask={removeTask}
+            onUpdateTaskCustomCategory={async (task, catId) => {
+              try {
+                await setItemCustomCategory('task', task.id, catId);
+                pushToast('success', 'อัปเดตหมวดหมู่ของงานแล้ว');
+                setRefreshKey((k) => k + 1);
+              } catch (err) {
+                pushToast('error', errorMessage(err));
+              }
+            }}
+            files={files}
+            onFilesChanged={() => setRefreshKey((k) => k + 1)}
+          />
         ) : viewMode === 'projects' ? (
-          <section className="editor-panel work-panel" aria-label="โปรเจกต์">
-            <div className="module-header-banner">
-              <div className="banner-icon">🚀</div>
-              <div className="banner-info">
-                <span className="eyebrow">Projects &amp; Milestones</span>
-                <h2 className="banner-title">โปรเจกต์</h2>
-                <p className="banner-subtitle">
-                  {projects.length} โปรเจกต์ที่กำลังทำ · ติดตามแผนงานและความคืบหน้าให้สำเร็จตามเป้า
-                </p>
-              </div>
-            </div>
-            {projectsError && <p className="form-error editor-error" role="alert">{projectsError}</p>}
-            {projectsNotice && <p className="form-notice" role="status">{projectsNotice}</p>}
-            <form className="person-form" onSubmit={addProject}>
-              <div className="form-grid">
-                <label>
-                  ชื่อโปรเจกต์
-                  <input
-                    required
-                    value={projectDraft.name}
-                    onChange={(event) => setProjectDraft({ ...projectDraft, name: event.target.value })}
-                    maxLength={160}
-                  />
-                </label>
-                <label>
-                  กำหนดเสร็จ
-                  <input
-                    type="date"
-                    value={projectDraft.dueDate}
-                    onChange={(event) => setProjectDraft({ ...projectDraft, dueDate: event.target.value })}
-                  />
-                </label>
-                <label className="span-2">
-                  ผลลัพธ์ที่ต้องการ (นิยามคำว่าเสร็จ)
-                  <textarea
-                    value={projectDraft.outcome}
-                    onChange={(event) => setProjectDraft({ ...projectDraft, outcome: event.target.value })}
-                    rows={2}
-                    maxLength={2000}
-                  />
-                </label>
-                <label className="span-2">
-                  เป้าหมายที่เกี่ยวข้อง
-                  <select
-                    value={projectDraft.goalId}
-                    onChange={(event) => setProjectDraft({ ...projectDraft, goalId: event.target.value })}
-                  >
-                    <option value="">ไม่ผูกเป้าหมาย</option>
-                    {goals.map((goal) => (
-                      <option value={goal.id} key={goal.id}>{goal.title}</option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <div className="editor-actions">
-                <button className="button button-primary" type="submit" disabled={projectsBusy}>
-                  {projectsBusy ? 'กำลังบันทึก…' : 'สร้างโปรเจกต์'}
-                </button>
-              </div>
-            </form>
-            <p className="sidebar-hint">
-              เปอร์เซ็นต์ที่แสดงคือจำนวนงานที่ปิดแล้วหารด้วยงานทั้งหมดในโปรเจกต์ ไม่มีการถ่วงน้ำหนัก
-            </p>
-            <div className="projects-grid-section" style={{ marginTop: '24px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: 650, marginBottom: '14px', color: 'var(--ink)' }}>
-                โปรเจกต์ที่กำลังดำเนินการ ({projects.length})
-              </h3>
-              {projects.length === 0 ? (
-                <div className="empty-state" style={{ padding: '40px 20px', background: 'var(--paper)', borderRadius: '16px', border: '1px dashed var(--line)', textAlign: 'center' }}>
-                  <span className="empty-icon" style={{ fontSize: '36px', display: 'block', marginBottom: '8px' }}>▣</span>
-                  <strong>ยังไม่มีโปรเจกต์</strong>
-                  <span style={{ color: 'var(--muted)', display: 'block', marginTop: '4px' }}>
-                    สร้างโปรเจกต์แรกเพื่อรวบรวมงานที่มีจุดหมายเดียวกัน
-                  </span>
-                </div>
-              ) : (
-                <div className="project-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
-                  {projects.map((project) => {
-                    const percent = project.taskTotal === 0
-                      ? 0
-                      : Math.round((project.taskDone / project.taskTotal) * 100);
-                    return (
-                      <div className="dash-card project-card" key={project.id} style={{ padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                        <div>
-                          <strong style={{ fontSize: '16px', color: 'var(--ink)', display: 'block', marginBottom: '6px' }}>{project.name}</strong>
-                          <span className="work-row-meta" style={{ display: 'flex', gap: '8px', fontSize: '12px', color: 'var(--muted)', marginBottom: '12px' }}>
-                            <span>{project.taskDone}/{project.taskTotal} งานเสร็จ</span>
-                            {project.dueDate && <span>กำหนด {project.dueDate}</span>}
-                            {project.goalTitle && <span>◎ {project.goalTitle}</span>}
-                          </span>
-                          <div className="progress-track" aria-hidden="true" style={{ height: '6px', borderRadius: '3px', background: 'var(--line)', overflow: 'hidden' }}>
-                            <span style={{ display: 'block', height: '100%', width: `${percent}%`, background: 'var(--green, #3f7658)', borderRadius: '3px' }} />
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '14px', paddingTop: '10px', borderTop: '1px solid var(--line)' }}>
-                          <button className="button button-quiet" type="button" disabled={projectsBusy} onClick={() => void finishProject(project)}>ปิดโปรเจกต์</button>
-                          <button className="button button-danger-quiet" type="button" disabled={projectsBusy} onClick={() => void removeProject(project)}>ลบ</button>
-                        </div>
-                        <EntityAttachments
-                          entityType="project"
-                          entityId={project.id}
-                          availableFiles={files}
-                          onFilesChanged={() => setRefreshKey((key) => key + 1)}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </section>
+          <ProjectsView
+            projects={projects}
+            projectDraft={projectDraft}
+            setProjectDraft={setProjectDraft}
+            goals={goals}
+            projectsBusy={projectsBusy}
+            projectsError={projectsError}
+            projectsNotice={projectsNotice}
+            onAddProject={addProject}
+            onFinishProject={finishProject}
+            onRemoveProject={removeProject}
+            files={files}
+            onFilesChanged={() => setRefreshKey((k) => k + 1)}
+          />
         ) : viewMode === 'goals' ? (
-          <section className="editor-panel work-panel" aria-label="เป้าหมาย">
-            <div className="module-header-banner">
-              <div className="banner-icon">🎯</div>
-              <div className="banner-info">
-                <span className="eyebrow">Goals &amp; OKRs</span>
-                <h2 className="banner-title">เป้าหมาย</h2>
-                <p className="banner-subtitle">
-                  {goals.length} เป้าหมายที่กำลังติดตาม · มุ่งมั่นและวัดผลความสำเร็จในชีวิต
-                </p>
-              </div>
-            </div>
-            {goalsError && <p className="form-error editor-error" role="alert">{goalsError}</p>}
-            {goalsNotice && <p className="form-notice" role="status">{goalsNotice}</p>}
-            <form className="person-form" onSubmit={addGoal}>
-              <div className="form-grid">
-                <label>
-                  ชื่อเป้าหมาย
-                  <input
-                    required
-                    value={goalDraft.title}
-                    onChange={(event) => setGoalDraft({ ...goalDraft, title: event.target.value })}
-                    maxLength={200}
-                  />
-                </label>
-                <label>
-                  หน่วยวัด
-                  <input
-                    value={goalDraft.unit}
-                    onChange={(event) => setGoalDraft({ ...goalDraft, unit: event.target.value })}
-                    placeholder="เล่ม / ครั้ง / บาท"
-                    maxLength={20}
-                  />
-                </label>
-                <label className="span-2">
-                  วัดความสำเร็จอย่างไร
-                  <input
-                    value={goalDraft.metric}
-                    onChange={(event) => setGoalDraft({ ...goalDraft, metric: event.target.value })}
-                    placeholder="เช่น จำนวนเล่มที่อ่านจบในปีนี้"
-                    maxLength={500}
-                  />
-                </label>
-                <label>
-                  ค่าเป้าหมาย (เว้นว่างได้)
-                  <input
-                    type="number"
-                    value={goalDraft.targetValue}
-                    onChange={(event) => setGoalDraft({ ...goalDraft, targetValue: event.target.value })}
-                  />
-                </label>
-              </div>
-              <div className="editor-actions">
-                <button className="button button-primary" type="submit" disabled={goalsBusy}>
-                  {goalsBusy ? 'กำลังบันทึก…' : 'เพิ่มเป้าหมาย'}
-                </button>
-              </div>
-            </form>
-            <p className="sidebar-hint">
-              ถ้าไม่ใส่ค่าเป้าหมาย ระบบจะไม่แสดงเปอร์เซ็นต์เลย เพราะไม่มีข้อมูลรองรับการคำนวณ
-            </p>
-
-            <div className="goals-grid-section" style={{ marginTop: '24px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: 650, marginBottom: '14px', color: 'var(--ink)' }}>
-                เป้าหมายทั้งหมด ({goals.length})
-              </h3>
-              {goals.length === 0 ? (
-                <div className="empty-state" style={{ padding: '40px 20px', background: 'var(--paper)', borderRadius: '16px', border: '1px dashed var(--line)', textAlign: 'center' }}>
-                  <span className="empty-icon" style={{ fontSize: '36px', display: 'block', marginBottom: '8px' }}>🎯</span>
-                  <strong>ยังไม่มีเป้าหมาย</strong>
-                  <span style={{ color: 'var(--muted)', display: 'block', marginTop: '4px' }}>
-                    กำหนดเป้าหมายแรกเพื่อสร้างแรงผลักดันและเห็นผลลัพธ์ที่ชัดเจน
-                  </span>
-                </div>
-              ) : (
-                <div className="goal-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
-                  {goals.map((goal) => (
-                    <div className="dash-card goal-card" key={goal.id} style={{ padding: '20px' }}>
-                      <strong style={{ fontSize: '16px', color: 'var(--ink)', display: 'block', marginBottom: '6px' }}>{goal.title}</strong>
-                      <span className="work-row-meta" style={{ display: 'flex', gap: '8px', fontSize: '12px', color: 'var(--muted)', marginBottom: '10px' }}>
-                        {goal.progressPercent === null
-                          ? <span>ยังไม่มีตัวชี้วัด</span>
-                          : <span>{goal.currentValue}/{goal.targetValue} {goal.unit} · {goal.progressPercent}%</span>}
-                        {goal.activeProjects > 0 && <span>▣ {goal.activeProjects} โปรเจกต์</span>}
-                      </span>
-                      {goal.progressPercent !== null && (
-                        <div className="progress-track" aria-hidden="true" style={{ height: '6px', borderRadius: '3px', background: 'var(--line)', overflow: 'hidden', marginBottom: '12px' }}>
-                          <span style={{ display: 'block', height: '100%', width: `${goal.progressPercent}%`, background: 'var(--green, #3f7658)', borderRadius: '3px' }} />
-                        </div>
-                      )}
-                      <div className="work-actions" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid var(--line)' }}>
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          <button className="button button-quiet" style={{ padding: '2px 10px', minHeight: '28px' }} type="button" disabled={goalsBusy} onClick={() => void bumpGoal(goal, 1)}>+1</button>
-                          <button className="button button-quiet" style={{ padding: '2px 10px', minHeight: '28px' }} type="button" disabled={goalsBusy} onClick={() => void bumpGoal(goal, -1)}>−1</button>
-                        </div>
-                        <button className="text-button danger-text" type="button" disabled={goalsBusy} onClick={() => void removeGoal(goal)}>ลบ</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
+          <GoalsView
+            goals={goals}
+            goalDraft={goalDraft}
+            setGoalDraft={setGoalDraft}
+            goalsBusy={goalsBusy}
+            goalsError={goalsError}
+            goalsNotice={goalsNotice}
+            onAddGoal={addGoal}
+            onBumpGoal={bumpGoal}
+            onRemoveGoal={removeGoal}
+          />
         ) : viewMode === 'people' ? (
-          <section className="editor-panel people-panel" aria-label="ข้อมูลบุคคลสำคัญ">
-            <div className="module-header-banner">
-              <div className="banner-icon">👥</div>
-              <div className="banner-info">
-                <span className="eyebrow">Personal CRM</span>
-                <h2 className="banner-title">{activePerson ? activePerson.name : 'บุคคลสำคัญ'}</h2>
-                <p className="banner-subtitle">
-                  {activePerson?.birthdayOrAnniversary
-                    ? `${activePerson.birthdayOrAnniversary} · อีก ${daysUntilNext(activePerson.birthdayOrAnniversary)} วันถึงวันสำคัญ`
-                    : `${people.length} บุคคล · บันทึกความสัมพันธ์ วันสำคัญ และประวัติการติดต่อ`}
-                </p>
-              </div>
-              <div className="banner-actions">
-                <button className="button button-primary" type="button" onClick={startNewPerson}>
-                  ＋ เพิ่มบุคคล
-                </button>
-                {activePerson && (
-                  <button
-                    className="button button-danger-quiet"
-                    type="button"
-                    onClick={() => void deleteActivePerson()}
-                    disabled={personBusy}
-                  >
-                    ลบ
-                  </button>
-                )}
-              </div>
-            </div>
-            {personError && <p className="form-error editor-error" role="alert">{personError}</p>}
-            {personNotice && <p className="form-notice" role="status">{personNotice}</p>}
-            <div className="dash-card" style={{ padding: '12px 18px', marginBottom: '18px', display: 'flex', gap: '10px', alignItems: 'center' }}>
-              <input type="search" placeholder="ค้นหาบุคคลจากชื่อหรือบทบาท..." value={peopleQuery} onChange={(e) => setPeopleQuery(e.target.value)} style={{ flex: 1 }} />
-              <select value={peopleGroup} onChange={(e) => setPeopleGroup(e.target.value as RelationshipGroup | '')}>
-                <option value="">ทุกกลุ่ม</option>
-                <option value="family">ครอบครัว</option>
-                <option value="partner">แฟน</option>
-                <option value="friend">เพื่อน</option>
-              </select>
-            </div>
-            <form className="person-form" onSubmit={savePerson}>
-              <div className="person-hero">
-                <span className="avatar person-avatar large">
-                  {personDraft.avatarFileId ? (
-                    <img src={`/api/files/${personDraft.avatarFileId}`} alt="" loading="lazy" decoding="async" />
-                  ) : (
-                    personDraft.avatarPreset || (personDraft.name || '?').slice(0, 1)
-                  )}
-                </span>
-                <div className="person-hero-controls">
-                  <label>
-                    อวตาร
-                    <select
-                      value={personDraft.avatarPreset ?? ''}
-                      onChange={(event) => setPersonDraft({ ...personDraft, avatarPreset: event.target.value })}
-                    >
-                      <option value="">ใช้ตัวอักษรแรก</option>
-                      {['🌿', '🌙', '☀️', '🦊', '🐼', '🌸', '💙', '⭐'].map((preset) => (
-                        <option value={preset} key={preset}>{preset}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <button
-                    className="button button-quiet"
-                    type="button"
-                    onClick={() => personAvatarInputRef.current?.click()}
-                    disabled={personAvatarBusy}
-                  >
-                    {personAvatarBusy ? 'กำลังอัปโหลด…' : 'อัปโหลดรูป'}
-                  </button>
-                  <input
-                    ref={personAvatarInputRef}
-                    className="visually-hidden"
-                    type="file"
-                    accept="image/*"
-                    onChange={(event) => void handlePersonAvatarUpload(event)}
-                  />
-                </div>
-              </div>
-              <div className="form-grid">
-                <label>
-                  ชื่อ
-                  <input
-                    required
-                    value={personDraft.name}
-                    onChange={(event) => setPersonDraft({ ...personDraft, name: event.target.value })}
-                    maxLength={120}
-                  />
-                </label>
-                <label>
-                  กลุ่มความสัมพันธ์
-                  <select
-                    value={personDraft.relationshipGroup}
-                    onChange={(event) => setPersonDraft({
-                      ...personDraft,
-                      relationshipGroup: event.target.value as RelationshipGroup,
-                    })}
-                  >
-                    <option value="family">ครอบครัว</option>
-                    <option value="partner">แฟน / คนพิเศษ</option>
-                    <option value="friend">เพื่อน</option>
-                  </select>
-                </label>
-                <label>
-                  บทบาท
-                  <input
-                    value={personDraft.roleLabel ?? ''}
-                    onChange={(event) => setPersonDraft({ ...personDraft, roleLabel: event.target.value })}
-                    placeholder="เช่น คุณพ่อ, คุณแม่, พี่ชาย"
-                    maxLength={80}
-                  />
-                </label>
-                <label>
-                  วันเกิด / วันครบรอบ
-                  <input
-                    type="date"
-                    value={personDraft.birthdayOrAnniversary ?? ''}
-                    onChange={(event) => setPersonDraft({ ...personDraft, birthdayOrAnniversary: event.target.value })}
-                  />
-                </label>
-                <label>
-                  เบอร์โทร
-                  <input
-                    value={personDraft.phone ?? ''}
-                    onChange={(event) => setPersonDraft({ ...personDraft, phone: event.target.value })}
-                    maxLength={40}
-                  />
-                </label>
-                <label className="span-2">
-                  ของที่ชอบ / อาหารโปรด / สีที่ชอบ
-                  <textarea
-                    value={personDraft.favoritesAndLikes ?? ''}
-                    onChange={(event) => setPersonDraft({ ...personDraft, favoritesAndLikes: event.target.value })}
-                    rows={3}
-                  />
-                </label>
-                <label className="span-2">
-                  แพ้อะไร / โรคประจำตัว / ยาที่ต้องทาน
-                  <textarea
-                    value={personDraft.allergiesAndMedical ?? ''}
-                    onChange={(event) => setPersonDraft({ ...personDraft, allergiesAndMedical: event.target.value })}
-                    rows={3}
-                  />
-                </label>
-                <label className="span-2">
-                  ไซส์เสื้อผ้า/รองเท้า/แหวน และของขวัญที่เล็งไว้
-                  <textarea
-                    value={personDraft.giftIdeasAndSizes ?? ''}
-                    onChange={(event) => setPersonDraft({ ...personDraft, giftIdeasAndSizes: event.target.value })}
-                    rows={3}
-                  />
-                </label>
-                <label className="span-2">
-                  บันทึกเพิ่มเติม
-                  <textarea
-                    value={personDraft.memo ?? ''}
-                    onChange={(event) => setPersonDraft({ ...personDraft, memo: event.target.value })}
-                    rows={3}
-                  />
-                </label>
-              </div>
-              <div className="editor-actions">
-                <button className="button button-primary" type="submit" disabled={personBusy}>
-                  {personBusy ? 'กำลังบันทึก…' : 'บันทึก'}
-                </button>
-                {activePerson && (
-                  <button className="button button-quiet" type="button" onClick={() => void createReminderForPerson()}>
-                    ตั้งแจ้งเตือนวันสำคัญ
-                  </button>
-                )}
-                {activePerson && (
-                  <button className="button button-quiet" type="button" onClick={startNoteForPerson}>
-                    สร้างโน้ตถึงบุคคลนี้
-                  </button>
-                )}
-              </div>
-            </form>
-            {activePerson && (
-              <section className="linked-notes">
-                <h3>โน้ตที่เชื่อมโยง</h3>
-                {personNotes.length === 0 ? (
-                  <p className="sidebar-hint">ยังไม่มีโน้ตที่เชื่อมโยงกับบุคคลนี้</p>
-                ) : (
-                  personNotes.map((note) => (
-                    <button
-                      className="note-list-item"
-                      key={note.id}
-                      type="button"
-                      onClick={() => {
-                        setViewMode('notes');
-                        activateNote(note);
-                        isNewNoteRef.current = true;
-                      }}
-                    >
-                      <strong>{note.title}</strong>
-                      <span>{note.content || 'ไม่มีเนื้อหา'}</span>
-                    </button>
-                  ))
-                )}
-              </section>
-            )}
-            {activePerson && (
-              <EntityAttachments
-                entityType="person"
-                entityId={activePerson.id}
-                availableFiles={files}
-                onFilesChanged={() => setRefreshKey((key) => key + 1)}
-              />
-            )}
-          </section>
+          <PeopleView
+            people={people}
+            activePerson={activePerson}
+            peopleQuery={peopleQuery}
+            setPeopleQuery={setPeopleQuery}
+            peopleGroup={peopleGroup}
+            setPeopleGroup={setPeopleGroup}
+            personDraft={personDraft}
+            setPersonDraft={setPersonDraft}
+            personBusy={personBusy}
+            personError={personError}
+            personNotice={personNotice}
+            personAvatarBusy={personAvatarBusy}
+            personNotes={personNotes}
+            onStartNewPerson={startNewPerson}
+            onSelectPerson={selectPerson}
+            onSavePerson={savePerson}
+            onDeletePerson={deleteActivePerson}
+            onAvatarUpload={handlePersonAvatarUpload}
+            onCreateReminderForPerson={createReminderForPerson}
+            onStartNoteForPerson={startNoteForPerson}
+            onOpenPersonNote={(note) => {
+              setViewMode('notes');
+              activateNote(note);
+              isNewNoteRef.current = true;
+            }}
+            onSwitchView={switchView}
+            files={files}
+            onFilesChanged={() => setRefreshKey((k) => k + 1)}
+          />
         ) : viewMode === 'schedule' ? (
-          <section className="editor-panel schedule-panel" aria-label="ปฏิทินและตารางชีวิต">
-            <div className="module-header-banner">
-              <div className="banner-icon">📅</div>
-              <div className="banner-info">
-                <span className="eyebrow">Life OS &amp; Calendar</span>
-                <h2 className="banner-title">ปฏิทินและตารางชีวิต</h2>
-                <p className="banner-subtitle">
-                  {scheduleDate} · ตารางกิจกรรม บันทึกนิสัย และการแจ้งเตือนวันสำคัญ
-                </p>
-              </div>
-              <div className="banner-actions">
-                <button className="button button-quiet" type="button" onClick={() => switchView('notes')}>
-                  📝 ไปที่โน้ต
-                </button>
-              </div>
-            </div>
-            {scheduleError && <p className="form-error editor-error" role="alert">{scheduleError}</p>}
-            {scheduleNotice && <p className="form-notice" role="status">{scheduleNotice}</p>}
-            <div className="schedule-grid">
-              <section className="life-card">
-                <div className="life-card-head">
-                  <h3>แจ้งเตือนวันสำคัญ</h3>
-                  <span className="note-count">{reminders.filter((reminder) => reminder.isCompleted === 0).length}</span>
-                </div>
-                <form className="inline-form" onSubmit={addReminder}>
-                  <input
-                    required
-                    placeholder="ชื่อแจ้งเตือน"
-                    value={reminderDraft.title}
-                    onChange={(event) => setReminderDraft({ ...reminderDraft, title: event.target.value })}
-                    maxLength={200}
-                  />
-                  <input
-                    type="date"
-                    required
-                    value={reminderDraft.targetDate}
-                    onChange={(event) => setReminderDraft({ ...reminderDraft, targetDate: event.target.value })}
-                  />
-                  <select
-                    value={reminderDraft.category}
-                    onChange={(event) => setReminderDraft({
-                      ...reminderDraft,
-                      category: event.target.value as ReminderCategory,
-                    })}
-                  >
-                    <option value="birthday">วันเกิด</option>
-                    <option value="anniversary">วันครบรอบ</option>
-                    <option value="health">สุขภาพ</option>
-                    <option value="backup">แผนสำรอง</option>
-                    <option value="other">อื่น ๆ</option>
-                  </select>
-                  <select
-                    value={reminderDraft.linkedPersonId}
-                    onChange={(event) => setReminderDraft({ ...reminderDraft, linkedPersonId: event.target.value })}
-                  >
-                    <option value="">ไม่ผูกกับบุคคล</option>
-                    {people.map((person) => (
-                      <option value={person.id} key={person.id}>{person.name}</option>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    min={0}
-                    max={365}
-                    value={reminderDraft.notifyDaysBefore}
-                    onChange={(event) => setReminderDraft({ ...reminderDraft, notifyDaysBefore: event.target.value })}
-                    aria-label="แจ้งล่วงหน้ากี่วัน"
-                  />
-                  <select
-                    value={reminderDraft.recurrence}
-                    onChange={(event) => setReminderDraft({
-                      ...reminderDraft,
-                      recurrence: event.target.value as NonNullable<Reminder['recurrence']>,
-                    })}
-                    aria-label="การเกิดซ้ำของแจ้งเตือน"
-                  >
-                    <option value="none">ไม่ซ้ำ</option>
-                    <option value="daily">ทุกวัน</option>
-                    <option value="weekly">ทุกสัปดาห์</option>
-                    <option value="monthly">ทุกเดือน</option>
-                    <option value="yearly">ทุกปี</option>
-                  </select>
-                  <button className="button button-primary" type="submit" disabled={scheduleBusy}>เพิ่ม</button>
-                </form>
-                <ul className="life-list">
-                  {reminders.map((reminder) => (
-                    <li className={reminder.isCompleted ? 'is-done' : ''} key={reminder.id}>
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={reminder.isCompleted === 1}
-                          onChange={() => void toggleReminder(reminder)}
-                        />
-                        <span>
-                          <strong>{reminder.title}</strong>
-                          <small>
-                            {reminder.snoozedUntil
-                              ? `เลื่อนไป ${reminder.snoozedUntil} (เดิม ${reminder.targetDate})`
-                              : reminder.targetDate}
-                            {' · '}{reminderCategoryLabel(reminder.category)}
-                            {reminder.recurrence && reminder.recurrence !== 'none' ? ` · ↻ ${reminder.recurrence}` : ''}
-                            {reminder.linkedPersonName ? ` · ${reminder.linkedPersonName}` : ''}
-                          </small>
-                        </span>
-                      </label>
-                      {reminder.isCompleted !== 1 && (
-                        <span className="snooze-group">
-                          <button className="text-button" type="button" disabled={scheduleBusy} onClick={() => void snooze(reminder, 1)}>+1 วัน</button>
-                          <button className="text-button" type="button" disabled={scheduleBusy} onClick={() => void snooze(reminder, 3)}>+3 วัน</button>
-                          <button className="text-button" type="button" disabled={scheduleBusy} onClick={() => void snooze(reminder, 7)}>+1 สัปดาห์</button>
-                        </span>
-                      )}
-                      <button className="text-button danger-text" type="button" onClick={() => void removeReminder(reminder)}>
-                        ลบ
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-
-              <section className="life-card">
-                <div className="life-card-head">
-                  <h3>ตารางชีวิต {scheduleDate}</h3>
-                  <span className="note-count">
-                    {timeblocks.filter((block) => block.isDone === 1).length}/{timeblocks.length}
-                  </span>
-                </div>
-                <div className="progress-track" aria-hidden="true">
-                  <span style={{ width: `${timeblocks.length === 0 ? 0 : Math.round((timeblocks.filter((block) => block.isDone === 1).length / timeblocks.length) * 100)}%` }} />
-                </div>
-                <form className="inline-form" onSubmit={addTimeblock}>
-                  <input
-                    required
-                    placeholder="06:30 - 07:30"
-                    value={blockDraft.timeRange}
-                    onChange={(event) => setBlockDraft({ ...blockDraft, timeRange: event.target.value })}
-                    maxLength={40}
-                  />
-                  <input
-                    required
-                    placeholder="ชื่อกิจกรรม"
-                    value={blockDraft.title}
-                    onChange={(event) => setBlockDraft({ ...blockDraft, title: event.target.value })}
-                    maxLength={200}
-                  />
-                  <select
-                    value={blockDraft.lifeArea}
-                    onChange={(event) => setBlockDraft({ ...blockDraft, lifeArea: event.target.value as LifeArea })}
-                  >
-                    <option value="health">สุขภาพ</option>
-                    <option value="focus_work">งานโฟกัส</option>
-                    <option value="family">ครอบครัว/แฟน</option>
-                    <option value="growth">พัฒนาตัวเอง</option>
-                    <option value="other">อื่น ๆ</option>
-                  </select>
-                  <button className="button button-primary" type="submit" disabled={scheduleBusy}>เพิ่ม</button>
-                </form>
-                <ul className="life-list">
-                  {timeblocks.map((block) => (
-                    <li className={block.isDone ? 'is-done' : ''} key={block.id}>
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={block.isDone === 1}
-                          onChange={() => void toggleTimeblock(block)}
-                        />
-                        <span>
-                          <strong>{block.timeRange} · {block.title}</strong>
-                          <small>{lifeAreaLabel(block.lifeArea)}</small>
-                        </span>
-                      </label>
-                      <button className="text-button danger-text" type="button" onClick={() => void removeTimeblock(block)}>
-                        ลบ
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-
-              <section className="life-card">
-                <div className="life-card-head">
-                  <h3>กิจวัตรประจำวัน</h3>
-                  <span className="note-count">{habits.length}</span>
-                </div>
-                <form className="inline-form" onSubmit={addHabit}>
-                  <input
-                    required
-                    placeholder="ชื่อกิจวัตร"
-                    value={habitDraft.title}
-                    onChange={(event) => setHabitDraft({ ...habitDraft, title: event.target.value })}
-                    maxLength={120}
-                  />
-                  <input
-                    type="number"
-                    min={1}
-                    max={1000}
-                    value={habitDraft.dailyTarget}
-                    onChange={(event) => setHabitDraft({ ...habitDraft, dailyTarget: event.target.value })}
-                    aria-label="เป้าหมายต่อวัน"
-                  />
-                  <input
-                    value={habitDraft.unit}
-                    onChange={(event) => setHabitDraft({ ...habitDraft, unit: event.target.value })}
-                    placeholder="หน่วย"
-                    maxLength={20}
-                  />
-                  <button className="button button-primary" type="submit" disabled={scheduleBusy}>เพิ่ม</button>
-                </form>
-                <ul className="habit-list">
-                  {habits.map((habit) => (
-                    <li key={habit.id}>
-                      <div className="habit-copy">
-                        <strong>{habit.title}</strong>
-                        <small>
-                          {habit.currentCount}/{habit.dailyTarget} {habit.unit} · ต่อเนื่อง {habit.streakDays} วัน
-                          {(() => {
-                            const week = habitWeek?.habits.find((entry) => entry.habitId === habit.id);
-                            return week ? ` · สัปดาห์นี้ ${week.weekMetTarget}/${week.days.length} วัน` : '';
-                          })()}
-                        </small>
-                        <div className="progress-track" aria-hidden="true">
-                          <span style={{ width: `${Math.min(100, Math.round((habit.currentCount / habit.dailyTarget) * 100))}%` }} />
-                        </div>
-                        {(() => {
-                          const week = habitWeek?.habits.find((entry) => entry.habitId === habit.id);
-                          if (!week) return null;
-                          return (
-                            <div className="habit-dots" aria-label={`ประวัติ 7 วันของ ${habit.title}`}>
-                              {week.days.map((day) => (
-                                <button
-                                  key={day.date}
-                                  className={`habit-dot${day.metTarget === true ? ' is-met' : ''}${day.count !== null && day.count > 0 && day.metTarget !== true ? ' is-partial' : ''}${day.count === null ? ' is-untracked' : ''}`}
-                                  type="button"
-                                  disabled={scheduleBusy || day.count === null}
-                                  title={day.count === null
-                                    ? `${day.date} · ไม่มีข้อมูล (ก่อนเริ่มเก็บประวัติ)`
-                                    : `${day.date} · ${day.count} ${habit.unit}`}
-                                  aria-label={day.count === null
-                                    ? `${day.date} ไม่มีข้อมูล`
-                                    : `${day.date} ${day.count} ${habit.unit}`}
-                                  onClick={() => void correctHabitDay(habit, day.date, day.count)}
-                                >
-                                  {day.date.slice(8)}
-                                </button>
-                              ))}
-                            </div>
-                          );
-                        })()}
-                        {habit.legacyStreakDays ? (
-                          <small className="habit-legacy">
-                            ก่อนเริ่มเก็บประวัติ: {habit.legacyStreakDays} วัน (ตรวจสอบย้อนหลังไม่ได้)
-                          </small>
-                        ) : null}
-                      </div>
-                      <button className="button button-primary" type="button" onClick={() => void checkHabitToday(habit)}>
-                        +1
-                      </button>
-                      <button className="text-button danger-text" type="button" onClick={() => void removeHabit(habit)}>
-                        ลบ
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            </div>
-          </section>
+          <HabitsView
+            scheduleDate={scheduleDate}
+            scheduleBusy={scheduleBusy}
+            scheduleError={scheduleError}
+            scheduleNotice={scheduleNotice}
+            reminders={reminders}
+            reminderDraft={reminderDraft}
+            setReminderDraft={setReminderDraft}
+            people={people}
+            onAddReminder={addReminder}
+            onToggleReminder={toggleReminder}
+            onSnoozeReminder={snooze}
+            onRemoveReminder={removeReminder}
+            timeblocks={timeblocks}
+            blockDraft={blockDraft}
+            setBlockDraft={setBlockDraft}
+            onAddTimeblock={addTimeblock}
+            onToggleTimeblock={toggleTimeblock}
+            onRemoveTimeblock={removeTimeblock}
+            habits={habits}
+            habitWeek={habitWeek}
+            habitDraft={habitDraft}
+            setHabitDraft={setHabitDraft}
+            onAddHabit={addHabit}
+            onCheckHabitToday={checkHabitToday}
+            onCorrectHabitDay={correctHabitDay}
+            onRemoveHabit={removeHabit}
+            onSwitchView={switchView}
+          />
         ) : viewMode === 'notes' ? (
-          <section className="editor-panel" aria-label={activeNote ? 'แก้ไขโน้ต' : 'สร้างโน้ต'}>
-            {noteViewMode === 'grid' && !activeNote ? (
-              <div>
-                <div className="module-header-banner">
-                  <div className="banner-icon">📝</div>
-                  <div className="banner-info">
-                    <span className="eyebrow">Personal Notes</span>
-                    <h2 className="banner-title">โน้ตของฉัน</h2>
-                    <p className="banner-subtitle">
-                      {listTotal} รายการ · คลังความคิด บันทึกส่วนตัว และข้อมูลสำคัญ
-                    </p>
-                  </div>
-                  <div className="banner-actions">
-                    <button
-                      className="button button-primary"
-                      type="button"
-                      onClick={() => {
-                        startNewNote();
-                        setNoteViewMode('editor');
-                      }}
-                    >
-                      ＋ สร้างโน้ตใหม่
-                    </button>
-                  </div>
-                </div>
-
-                <div className="dash-card search-filter-card" style={{ padding: '16px 20px', marginBottom: '20px' }}>
-                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                    <span style={{ fontSize: '18px' }}>🔍</span>
-                    <input
-                      id="note-search"
-                      type="search"
-                      value={searchInput}
-                      onChange={(event) => {
-                        setSearchInput(event.target.value);
-                        setPage(1);
-                        setNotesError('');
-                      }}
-                      maxLength={500}
-                      placeholder="ค้นหาจากหัวข้อหรือเนื้อหาในโน้ต…"
-                      style={{ flex: 1 }}
-                    />
-                    {searchInput && (
-                      <button className="button button-quiet search-clear" type="button" onClick={clearSearch}>
-                        ล้าง
-                      </button>
-                    )}
-                  </div>
-                  {shortSearch && (
-                    <p className="search-hint" role="note" style={{ margin: '6px 0 0', fontSize: '12px', color: 'var(--muted)' }}>
-                      คำค้นสั้น 1–2 อักขระอาจได้ผลลัพธ์กว้าง ระบบจะค้นทุกโน้ตที่ยังไม่อยู่ในถังขยะ
-                    </p>
-                  )}
-                </div>
-
-                {notesError && <p className="form-error editor-error" role="alert">{notesError}</p>}
-                {notice && <p className="form-notice" role="status">{notice}</p>}
-
-                {notesBusy || searchSettling ? (
-                  <p className="sidebar-hint" style={{ padding: '40px', textAlign: 'center' }}>กำลังค้นหาและโหลดโน้ต…</p>
-                ) : filteredNotes.length === 0 ? (
-                  <div className="empty-state" style={{ padding: '60px 20px', background: 'var(--paper)', borderRadius: '16px', border: '1px dashed var(--line)', textAlign: 'center' }}>
-                    <span className="empty-icon" style={{ fontSize: '40px', display: 'block', marginBottom: '12px' }}>📝</span>
-                    <strong style={{ fontSize: '18px', display: 'block', marginBottom: '6px' }}>ยังไม่มีโน้ตในมุมมองนี้</strong>
-                    <span style={{ color: 'var(--muted)', display: 'block', marginBottom: '18px' }}>
-                      {searchInput ? 'ไม่พบโน้ตที่ตรงกับคำค้นหา ลองค้นหาด้วยคำอื่น' : 'เริ่มจดบันทึกความคิดหรือข้อมูลชิ้นแรกของคุณ'}
-                    </span>
-                    <button
-                      className="button button-primary"
-                      type="button"
-                      onClick={() => {
-                        startNewNote();
-                        setNoteViewMode('editor');
-                      }}
-                    >
-                      ＋ สร้างโน้ตแรก
-                    </button>
-                  </div>
-                ) : (
-                  <div>
-                    <div className="note-bento-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
-                      {filteredNotes.map((note) => {
-                        const cat = customCategories.find((c) => noteTaxonomyMap[note.id]?.categoryIds?.includes(c.id));
-                        return (
-                          <article
-                            key={note.id}
-                            className="dash-card note-bento-card"
-                            style={{ padding: '20px', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '160px' }}
-                            onClick={() => {
-                              selectNote(note);
-                              setNoteViewMode('editor');
-                            }}
-                          >
-                            <div>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', marginBottom: '8px' }}>
-                                <strong style={{ fontSize: '16px', color: 'var(--ink)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                                  {note.title || 'ไม่มีหัวข้อ'}
-                                </strong>
-                                {favorites.some((f) => f.itemType === 'note' && f.itemId === note.id) && <span title="รายการโปรด">★</span>}
-                              </div>
-                              <p style={{ margin: '0 0 14px', fontSize: '13px', color: 'var(--muted)', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                                {note.content || 'ไม่มีเนื้อหา'}
-                              </p>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid var(--line)', fontSize: '12px', color: 'var(--muted)' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                {cat && (
-                                  <span className="category-badge" style={{ borderColor: cat.color }}>
-                                    {cat.icon} {cat.name}
-                                  </span>
-                                )}
-                                <time dateTime={new Date(note.updatedAt).toISOString()}>{formatDate(note.updatedAt)}</time>
-                              </div>
-                              <div style={{ display: 'flex', gap: '4px' }} onClick={(e) => e.stopPropagation()}>
-                                <button
-                                  className="button button-quiet"
-                                  type="button"
-                                  style={{ padding: '2px 8px', minHeight: '26px' }}
-                                  title="รายการโปรด"
-                                  onClick={() => void toggleFavorite('note', note.id, favorites.some((f) => f.itemType === 'note' && f.itemId === note.id))}
-                                >
-                                  {favorites.some((f) => f.itemType === 'note' && f.itemId === note.id) ? '★' : '☆'}
-                                </button>
-                                <button
-                                  className="button button-danger-quiet"
-                                  type="button"
-                                  style={{ padding: '2px 8px', minHeight: '26px' }}
-                                  title="ย้ายไปถังขยะ"
-                                  onClick={() => void moveToTrash(note)}
-                                >
-                                  🗑️
-                                </button>
-                              </div>
-                            </div>
-                          </article>
-                        );
-                      })}
-                    </div>
-
-                    {pageCount > 1 && !searchSettling && (
-                      <div className="pagination" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px', marginTop: '28px' }}>
-                        <button
-                          className="button button-quiet"
-                          type="button"
-                          disabled={page <= 1 || sidebarBusy || searchSettling}
-                          onClick={() => {
-                            markListBusy();
-                            setNotesError('');
-                            setPage((currentPage) => currentPage - 1);
-                          }}
-                        >
-                          ก่อนหน้า
-                        </button>
-                        <span>{page} / {pageCount}</span>
-                        <button
-                          className="button button-quiet"
-                          type="button"
-                          disabled={page >= pageCount || sidebarBusy || searchSettling}
-                          onClick={() => {
-                            markListBusy();
-                            setNotesError('');
-                            setPage((currentPage) => currentPage + 1);
-                          }}
-                        >
-                          ถัดไป
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div>
-                <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <button
-                    className="button button-quiet"
-                    type="button"
-                    onClick={() => {
-                      void flushAutosave();
-                      setActiveNote(null);
-                      setNoteViewMode('grid');
-                    }}
-                  >
-                    ← กลับไปหน้ารายการโน้ต
-                  </button>
-                </div>
-
-            <div className="editor-toolbar">
-              <div>
-                <span className="eyebrow">{activeNote ? 'บันทึกส่วนตัว' : 'โน้ตใหม่'}</span>
-                {activeNote && <p className="updated-label">แก้ไขล่าสุด {formatDate(activeNote.updatedAt)}</p>}
-              </div>
-              <div className="editor-actions note-actions">
-                {activeNote && (
-                  <button
-                    className={`icon-button star-button${noteFavorited ? ' is-on' : ''}`}
-                    type="button"
-                    aria-label={noteFavorited ? 'นำออกจากรายการโปรด' : 'เพิ่มในรายการโปรด'}
-                    aria-pressed={noteFavorited}
-                    title={noteFavorited ? 'นำออกจากรายการโปรด' : 'เพิ่มในรายการโปรด'}
-                    onClick={() => void toggleFavorite('note', activeNote.id, noteFavorited)}
-                    disabled={favoriteBusy || saveBusy}
-                  >
-                    {noteFavorited ? '★' : '☆'}
-                  </button>
-                )}
-                {activeNote && (
-                  <div className="menu-wrap">
-                    <button
-                      className="icon-button"
-                      type="button"
-                      aria-haspopup="menu"
-                      aria-expanded={noteMenuOpen}
-                      aria-label="ตัวเลือกโน้ต"
-                      onClick={() => setNoteMenuOpen((open) => !open)}
-                      disabled={saveBusy}
-                    >
-                      ⋯
-                    </button>
-                    {noteMenuOpen && (
-                      <div className="menu-popover" role="menu">
-                        <button
-                          className="menu-item is-danger"
-                          type="button"
-                          role="menuitem"
-                          onClick={() => void handleDelete()}
-                        >
-                          ย้ายไปถังขยะ
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-                <button
-                  className="icon-button"
-                  type="button"
-                  aria-label={focusMode ? 'ออกจากโหมดโฟกัส' : 'โหมดโฟกัส'}
-                  title={focusMode ? 'ออกจากโหมดโฟกัส' : 'โหมดโฟกัส'}
-                  onClick={() => setFocusMode((value) => !value)}
-                >
-                  ⛶
-                </button>
-                <span
-                  className={`save-state save-state-${saveState}`}
-                  role="status"
-                  aria-live="polite"
-                >
-                  {saveState === 'saving' ? 'กำลังบันทึก…'
-                    : saveState === 'saved' ? 'บันทึกแล้ว'
-                      : saveState === 'error' ? 'บันทึกไม่สำเร็จ' : ''}
-                </span>
-                {saveState === 'error' && (
-                  <button className="button button-quiet" type="button" onClick={() => void flushAutosave()}>
-                    ลองอีกครั้ง
-                  </button>
-                )}
-                <button
-                  className="button button-primary"
-                  type="submit"
-                  form="note-editor"
-                  disabled={saveBusy || taxonomyRelationsBusy || taxonomyRelationsUnavailable}
-                >
-                  {saveBusy ? 'กำลังบันทึก…' : 'บันทึก'}
-                </button>
-              </div>
-            </div>
-
-            {notesError && <p className="form-error editor-error" role="alert">{notesError}</p>}
-            {notice && <p className="form-notice" role="status">{notice}</p>}
-            <form id="note-editor" className="note-editor" onSubmit={handleSave}>
-              <input
-                className="title-input"
-                aria-label="หัวข้อโน้ต"
-                placeholder="ตั้งชื่อโน้ต…"
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                required
-                maxLength={200}
-              />
-              <div className="note-chips" aria-label="หมวดหมู่และแท็กของโน้ต">
-                {selectedCategoryNames.map((item) => (
-                  <span className="chip" key={`cat-${item.id}`}>
-                    <span className="chip-kind">หมวด</span>
-                    {item.name}
-                    <button
-                      className="chip-remove"
-                      type="button"
-                      aria-label={`นำ ${item.name} ออก`}
-                      onClick={() => toggleRelation('categories', item.id)}
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-                {selectedTagNames.map((item) => (
-                  <span className="chip" key={`tag-${item.id}`}>
-                    <span className="chip-kind">แท็ก</span>
-                    {item.name}
-                    <button
-                      className="chip-remove"
-                      type="button"
-                      aria-label={`นำ ${item.name} ออก`}
-                      onClick={() => toggleRelation('tags', item.id)}
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-                {selectedPeople.map((person) => (
-                  <span className="chip person-chip" key={`person-${person.id}`}>
-                    <span className="chip-kind">บุคคล</span>
-                    {person.name}
-                    <button
-                      className="chip-remove"
-                      type="button"
-                      aria-label={`นำ ${person.name} ออก`}
-                      onClick={() => setSelectedPersonIds((current) => current.filter((id) => id !== person.id))}
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-                <div className="chip-add-wrap">
-                  <button
-                    className={`chip-add${chipPicker === 'categories' ? ' is-open' : ''}`}
-                    type="button"
-                    onClick={() => setChipPicker(chipPicker === 'categories' ? null : 'categories')}
-                  >
-                    ＋ หมวดหมู่
-                  </button>
-                  <button
-                    className={`chip-add${chipPicker === 'tags' ? ' is-open' : ''}`}
-                    type="button"
-                    onClick={() => {
-                      setPersonPickerOpen(false);
-                      setChipPicker(chipPicker === 'tags' ? null : 'tags');
-                    }}
-                  >
-                    ＋ แท็ก
-                  </button>
-                  <button
-                    className={`chip-add${personPickerOpen ? ' is-open' : ''}`}
-                    type="button"
-                    onClick={() => {
-                      setChipPicker(null);
-                      setPersonPickerOpen((open) => !open);
-                    }}
-                  >
-                    ＋ บุคคล
-                  </button>
-                </div>
-                <div className="custom-category-select-wrap" style={{ margin: '6px 0', width: '100%' }}>
-                  <label className="custom-cat-label">
-                    <span>📁 หมวดหมู่ของฉัน:</span>
-                    <select
-                      value={activeNoteCustomCatId || ''}
-                      onChange={async (e) => {
-                        const newCatId = e.target.value || null;
-                        setActiveNoteCustomCatId(newCatId);
-                        if (activeNote) {
-                          try {
-                            await setItemCustomCategory('note', activeNote.id, newCatId);
-                            pushToast('success', 'อัปเดตหมวดหมู่ของโน้ตแล้ว');
-                          } catch (err) {
-                            pushToast('error', errorMessage(err));
-                          }
-                        }
-                      }}
-                    >
-                      <option value="">-- ไม่ระบุหมวดหมู่ (None) --</option>
-                      {customCategories.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.parentId ? '  ↳ ' : ''}{c.icon} {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-                {chipPicker && (
-                  <div className="chip-popover">
-                    <div className="chip-popover-head">
-                      <strong>{chipPicker === 'categories' ? 'เลือกหมวดหมู่' : 'เลือกแท็ก'}</strong>
-                      <button
-                        className="icon-button"
-                        type="button"
-                        aria-label="ปิด"
-                        onClick={() => setChipPicker(null)}
-                      >
-                        ×
-                      </button>
-                    </div>
-                    {renderTaxonomyGroup(chipPicker, 'select')}
-                  </div>
-                )}
-                {personPickerOpen && (
-                  <div className="chip-popover">
-                    <div className="chip-popover-head">
-                      <strong>เลือกบุคคลที่เกี่ยวข้อง</strong>
-                      <button
-                        className="icon-button"
-                        type="button"
-                        aria-label="ปิด"
-                        onClick={() => setPersonPickerOpen(false)}
-                      >
-                        ×
-                      </button>
-                    </div>
-                    {people.length === 0 ? (
-                      <p className="sidebar-hint">ยังไม่มีบุคคลสำคัญ</p>
-                    ) : (
-                      <ul className="taxonomy-list">
-                        {people.map((person) => (
-                          <li key={person.id}>
-                            <label className="taxonomy-choice">
-                              <input
-                                type="checkbox"
-                                checked={selectedPersonIds.includes(person.id)}
-                                onChange={() => {
-                                  setSelectedPersonIds((current) => (
-                                    current.includes(person.id)
-                                      ? current.filter((id) => id !== person.id)
-                                      : [...current, person.id]
-                                  ));
-                                }}
-                              />
-                              <span>{person.name}{person.roleLabel ? ` · ${person.roleLabel}` : ''}</span>
-                            </label>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
-              </div>
-              {taxonomyRelationsUnavailable && (
-                <p className="form-error chip-error" role="alert">
-                  โหลดหมวดหมู่และแท็กของโน้ตไม่สำเร็จ{' '}
-                  <button className="button button-quiet" type="button" onClick={retryTaxonomyLoad}>
-                    ลองอีกครั้ง
-                  </button>
-                </p>
-              )}
-              {taxonomyError && <p className="form-error chip-error" role="alert">{taxonomyError}</p>}
-              {taxonomyNotice && <p className="form-notice chip-error" role="status">{taxonomyNotice}</p>}
-              <textarea
-                aria-label="เนื้อหาโน้ต"
-                placeholder="เริ่มเขียนความคิดของคุณที่นี่…"
-                value={content}
-                onChange={(event) => setContent(event.target.value)}
-                maxLength={100000}
-              />
-              <div className="editor-footer">
-                <span>บันทึกเฉพาะในพื้นที่ส่วนตัวของคุณ</span>
-                <span>{content.length.toLocaleString('th-TH')} / 100,000</span>
-              </div>
-            </form>
-            {activeNote && (
-              <EntityAttachments
-                entityType="note"
-                entityId={activeNote.id}
-                availableFiles={files}
-                onFilesChanged={() => setRefreshKey((key) => key + 1)}
-              />
-            )}
-              </div>
-            )}
-          </section>
+          <NotesViewComponent
+            noteViewMode={noteViewMode}
+            setNoteViewMode={setNoteViewMode}
+            activeNote={activeNote}
+            setActiveNote={setActiveNote}
+            listTotal={listTotal}
+            onStartNewNote={() => {
+              startNewNote();
+              setNoteViewMode('editor');
+            }}
+            searchInput={searchInput}
+            setSearchInput={setSearchInput}
+            shortSearch={shortSearch}
+            setPage={setPage}
+            setNotesError={setNotesError}
+            onClearSearch={clearSearch}
+            notesBusy={notesBusy}
+            notesError={notesError}
+            notice={notice}
+            filteredNotes={filteredNotes}
+            onSelectNote={(note) => {
+              selectNote(note);
+              setNoteViewMode('editor');
+            }}
+            favorites={favorites}
+            onToggleFavorite={toggleFavorite}
+            onMoveToTrash={moveToTrash}
+            page={page}
+            pageCount={pageCount}
+            sidebarBusy={sidebarBusy}
+            searchSettling={searchSettling}
+            markListBusy={markListBusy}
+            noteFavorited={noteFavorited}
+            favoriteBusy={favoriteBusy}
+            saveBusy={saveBusy}
+            saveState={saveState}
+            noteMenuOpen={noteMenuOpen}
+            setNoteMenuOpen={setNoteMenuOpen}
+            onDelete={handleDelete}
+            focusMode={focusMode}
+            setFocusMode={setFocusMode}
+            onFlushAutosave={flushAutosave}
+            taxonomyRelationsBusy={taxonomyRelationsBusy}
+            taxonomyRelationsUnavailable={taxonomyRelationsUnavailable}
+            taxonomyError={taxonomyError}
+            taxonomyNotice={taxonomyNotice}
+            onSave={handleSave}
+            title={title}
+            setTitle={setTitle}
+            selectedCategoryNames={selectedCategoryNames}
+            selectedTagNames={selectedTagNames}
+            selectedPeople={selectedPeople}
+            onToggleRelation={toggleRelation}
+            setSelectedPersonIds={setSelectedPersonIds}
+            chipPicker={chipPicker}
+            setChipPicker={setChipPicker}
+            personPickerOpen={personPickerOpen}
+            setPersonPickerOpen={setPersonPickerOpen}
+            activeNoteCustomCatId={activeNoteCustomCatId}
+            onNoteCustomCatChange={async (newCatId) => {
+              if (!activeNote) return;
+              try {
+                await setItemCustomCategory('note', activeNote.id, newCatId);
+                setActiveNoteCustomCatId(newCatId);
+                pushToast('success', 'อัปเดตหมวดหมู่ของโน้ตแล้ว');
+                setRefreshKey((k) => k + 1);
+              } catch (err) {
+                pushToast('error', errorMessage(err));
+              }
+            }}
+            customCategories={customCategories}
+            categories={categories}
+            tags={tags}
+            people={people}
+            selectedPersonIds={selectedPersonIds}
+            onRetryTaxonomyLoad={retryTaxonomyLoad}
+            content={content}
+            setContent={setContent}
+            files={files}
+            onFilesChanged={() => setRefreshKey((k) => k + 1)}
+          />
         ) : viewMode === 'bookmarks' ? (
-          <section className="editor-panel" aria-label={activeBookmark ? 'แก้ไขบุ๊กมาร์ก' : 'เพิ่มบุ๊กมาร์ก'}>
-            <div className="module-header-banner">
-              <div className="banner-icon">🔖</div>
-              <div className="banner-info">
-                <span className="eyebrow">Web Bookmarks</span>
-                <h2 className="banner-title">{activeBookmark ? activeBookmark.title : 'ลิงก์และบุ๊กมาร์ก'}</h2>
-                <p className="banner-subtitle">
-                  {activeBookmark
-                    ? `แก้ไขล่าสุด ${formatDate(activeBookmark.updatedAt)}`
-                    : `${bookmarks.length} ลิงก์ · คลังเว็บ บุ๊กมาร์ก และแหล่งข้อมูลสำคัญ`}
-                </p>
-              </div>
-              <div className="banner-actions">
-                {activeBookmark && (
-                  <>
-                    <button
-                      className="button button-quiet"
-                      type="button"
-                      onClick={() => {
-                        setActiveBookmark(null);
-                        setBookmarkTitle('');
-                        setBookmarkUrl('');
-                        setBookmarkDescription('');
-                      }}
-                    >
-                      ← ดูลิงก์ทั้งหมด
-                    </button>
-                    <button
-                      className="button button-quiet favorite-toggle"
-                      type="button"
-                      aria-pressed={bookmarkFavorited}
-                      onClick={() => void toggleFavorite('bookmark', activeBookmark.id, bookmarkFavorited)}
-                      disabled={favoriteBusy || saveBusy}
-                    >
-                      {bookmarkFavorited ? '★ รายการโปรด' : '☆ เพิ่มในรายการโปรด'}
-                    </button>
-                    <button
-                      className="button button-danger-quiet"
-                      type="button"
-                      onClick={handleDeleteBookmark}
-                      disabled={saveBusy}
-                    >
-                      ลบ
-                    </button>
-                  </>
-                )}
-                <button className="button button-primary" type="submit" form="bookmark-editor" disabled={saveBusy}>
-                  {saveBusy ? 'กำลังบันทึก…' : activeBookmark ? 'บันทึกการแก้ไข' : '＋ บันทึกบุ๊กมาร์ก'}
-                </button>
-              </div>
-            </div>
-
-            {notesError && <p className="form-error editor-error" role="alert">{notesError}</p>}
-            {notice && <p className="form-notice" role="status">{notice}</p>}
-            <form id="bookmark-editor" className="note-editor" onSubmit={handleSaveBookmark}>
-              <input
-                className="title-input"
-                aria-label="ชื่อบุ๊กมาร์ก"
-                placeholder="ตั้งชื่อบุ๊กมาร์ก…"
-                value={bookmarkTitle}
-                onChange={(event) => setBookmarkTitle(event.target.value)}
-                required
-                maxLength={200}
-              />
-              <input
-                className="title-input"
-                type="url"
-                aria-label="URL"
-                placeholder="https://example.com"
-                value={bookmarkUrl}
-                onChange={(event) => setBookmarkUrl(event.target.value)}
-                required
-                maxLength={2048}
-              />
-              <textarea
-                aria-label="คำอธิบายบุ๊กมาร์ก"
-                placeholder="บันทึกคำอธิบายสั้น ๆ…"
-                value={bookmarkDescription}
-                onChange={(event) => setBookmarkDescription(event.target.value)}
-                maxLength={5000}
-              />
-              {activeBookmark && (
-                <a href={activeBookmark.url} target="_blank" rel="noreferrer">
-                  เปิดลิงก์ในแท็บใหม่
-                </a>
-              )}
-              <div className="custom-category-select-wrap">
-                <label className="custom-cat-label">
-                  <span>📁 หมวดหมู่ของฉัน:</span>
-                  <select
-                    value={activeBookmarkCustomCatId || ''}
-                    onChange={async (e) => {
-                      const newCatId = e.target.value || null;
-                      setActiveBookmarkCustomCatId(newCatId);
-                      if (activeBookmark) {
-                        try {
-                          await setItemCustomCategory('bookmark', activeBookmark.id, newCatId);
-                          pushToast('success', 'อัปเดตหมวดหมู่ของลิงก์แล้ว');
-                        } catch (err) {
-                          pushToast('error', errorMessage(err));
-                        }
-                      }
-                    }}
-                  >
-                    <option value="">-- ไม่ระบุหมวดหมู่ (None) --</option>
-                    {customCategories.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.parentId ? '  ↳ ' : ''}{c.icon} {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <div className="editor-footer">
-                <span>ข้อมูลลิงก์กรอกและจัดเก็บในเครื่องนี้เท่านั้น</span>
-                <span>{bookmarkDescription.length.toLocaleString('th-TH')} / 5,000</span>
-              </div>
-            </form>
-            {activeBookmark && (
-              <EntityAttachments
-                entityType="bookmark"
-                entityId={activeBookmark.id}
-                availableFiles={files}
-                onFilesChanged={() => setRefreshKey((key) => key + 1)}
-              />
-            )}
-
-            {!activeBookmark && bookmarks.length > 0 && (
-              <div style={{ marginTop: '28px' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '14px', color: 'var(--ink)' }}>
-                  ลิงก์ที่บันทึกไว้ ({bookmarks.length})
-                </h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
-                  {bookmarks.map((bm) => (
-                    <article
-                      key={bm.id}
-                      className="dash-card bookmark-card"
-                      style={{ padding: '16px', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}
-                      onClick={() => {
-                        setActiveBookmark(bm);
-                        setBookmarkTitle(bm.title);
-                        setBookmarkUrl(bm.url);
-                        setBookmarkDescription(bm.description || '');
-                        setActiveBookmarkCustomCatId((bm as any).customCategoryId || null);
-                      }}
-                    >
-                      <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', marginBottom: '6px' }}>
-                          <strong style={{ fontSize: '15px', color: 'var(--ink)' }}>{bm.title}</strong>
-                          <a
-                            href={bm.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            style={{ fontSize: '12px', color: 'var(--green)', textDecoration: 'none' }}
-                            title="เปิดในแท็บใหม่"
-                          >
-                            ↗ เปิด
-                          </a>
-                        </div>
-                        <p style={{ margin: '0 0 10px', fontSize: '12px', color: 'var(--muted)', wordBreak: 'break-all' }}>
-                          {bm.url}
-                        </p>
-                        {bm.description && (
-                          <p style={{ margin: '0 0 10px', fontSize: '13px', color: 'var(--ink)', lineHeight: 1.4 }}>
-                            {bm.description}
-                          </p>
-                        )}
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '8px', borderTop: '1px solid var(--line)', fontSize: '11px', color: 'var(--muted)' }}>
-                        <time dateTime={new Date(bm.updatedAt).toISOString()}>{formatDate(bm.updatedAt)}</time>
-                        <button
-                          className="button button-quiet"
-                          type="button"
-                          style={{ padding: '2px 8px', minHeight: '24px', fontSize: '11px' }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveBookmark(bm);
-                            setBookmarkTitle(bm.title);
-                            setBookmarkUrl(bm.url);
-                            setBookmarkDescription(bm.description || '');
-                            setActiveBookmarkCustomCatId((bm as any).customCategoryId || null);
-                          }}
-                        >
-                          ✏️ แก้ไข
-                        </button>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              </div>
-            )}
-          </section>
+          <BookmarksView
+            bookmarks={bookmarks}
+            activeBookmark={activeBookmark}
+            setActiveBookmark={setActiveBookmark}
+            bookmarkTitle={bookmarkTitle}
+            setBookmarkTitle={setBookmarkTitle}
+            bookmarkUrl={bookmarkUrl}
+            setBookmarkUrl={setBookmarkUrl}
+            bookmarkDescription={bookmarkDescription}
+            setBookmarkDescription={setBookmarkDescription}
+            bookmarkFavorited={bookmarkFavorited}
+            saveBusy={saveBusy}
+            favoriteBusy={favoriteBusy}
+            notesError={notesError}
+            notice={notice}
+            onToggleFavorite={toggleFavorite}
+            onDeleteBookmark={handleDeleteBookmark}
+            onSaveBookmark={handleSaveBookmark}
+            activeBookmarkCustomCatId={activeBookmarkCustomCatId}
+            onBookmarkCustomCatChange={async (newCatId) => {
+              if (!activeBookmark) return;
+              try {
+                await setItemCustomCategory('bookmark', activeBookmark.id, newCatId);
+                setActiveBookmarkCustomCatId(newCatId);
+                pushToast('success', 'อัปเดตหมวดหมู่ของบุ๊กมาร์กแล้ว');
+                setRefreshKey((k) => k + 1);
+              } catch (err) {
+                pushToast('error', errorMessage(err));
+              }
+            }}
+            customCategories={customCategories}
+            onSelectBookmark={(bm) => {
+              setActiveBookmark(bm);
+              setBookmarkTitle(bm.title);
+              setBookmarkUrl(bm.url);
+              setBookmarkDescription(bm.description || '');
+              setActiveBookmarkCustomCatId((bm as any).customCategoryId || null);
+            }}
+          />
         ) : viewMode === 'favorites' ? (
-          <section className="editor-panel" aria-label="รายละเอียดรายการโปรด">
-            <div className="module-header-banner">
-              <div className="banner-icon">⭐</div>
-              <div className="banner-info">
-                <span className="eyebrow">Starred Items</span>
-                <h2 className="banner-title">รายการโปรด</h2>
-                <p className="banner-subtitle">
-                  {favorites.length} รายการที่คุณติดดาวไว้ · เข้าถึงข้อมูลสำคัญได้อย่างรวดเร็ว
-                </p>
-              </div>
-              {activeFavorite && (
-                <div className="banner-actions">
-                  <button
-                    className="button button-primary"
-                    type="button"
-                    onClick={() => void openFavorite(activeFavorite)}
-                  >
-                    เปิดรายการ
-                  </button>
-                  <button
-                    className="button button-danger-quiet"
-                    type="button"
-                    disabled={favoriteBusy}
-                    onClick={() => void toggleFavorite(activeFavorite.itemType, activeFavorite.itemId, true)}
-                  >
-                    นำออก ★
-                  </button>
-                  <button
-                    className="button button-quiet"
-                    type="button"
-                    onClick={() => setActiveFavorite(null)}
-                  >
-                    ← ดูทั้งหมด
-                  </button>
-                </div>
-              )}
-            </div>
-            {notesError && <p className="form-error editor-error" role="alert">{notesError}</p>}
-            {notice && <p className="form-notice" role="status">{notice}</p>}
-            {activeFavorite ? (
-              <article className="favorite-preview">
-                <h2>{activeFavorite.title}</h2>
-                <p className="favorite-subtitle">{activeFavorite.subtitle || 'ไม่มีรายละเอียด'}</p>
-                <dl className="file-facts">
-                  <div>
-                    <dt>ประเภท</dt>
-                    <dd>{activeFavorite.itemType === 'note' ? 'โน้ต' : 'บุ๊กมาร์ก'}</dd>
-                  </div>
-                  <div>
-                    <dt>แก้ไขล่าสุด</dt>
-                    <dd>{formatDate(activeFavorite.updatedAt)}</dd>
-                  </div>
-                </dl>
-              </article>
-            ) : (
-              <>
-                <div style={{ marginBottom: '16px' }}>
-                <span className="eyebrow">{viewTitle} ({listLength} รายการ)</span>
-                {allEntries.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '10px' }}>
-                    {allEntries.slice(0, 5).map((entry) => (
-                      <button key={entry.id} className="button button-quiet" type="button" onClick={() => selectAllEntry(entry)}>
-                        {entry.title}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              {favorites.length === 0 ? (
-                <div className="empty-state trash-empty" style={{ padding: '60px 20px', background: 'var(--paper)', borderRadius: '16px', border: '1px dashed var(--line)', textAlign: 'center' }}>
-                  <span className="empty-icon" style={{ fontSize: '40px', display: 'block', marginBottom: '12px' }}>★</span>
-                  <strong style={{ fontSize: '18px', display: 'block', marginBottom: '6px' }}>ยังไม่มีรายการโปรด</strong>
-                  <span style={{ color: 'var(--muted)' }}>กดไอคอนดาวบนโน้ตหรือบุ๊กมาร์ก เพื่อปักหมุดไว้ที่นี่</span>
-                </div>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px', marginTop: '16px' }}>
-                  {favorites.map((fav) => (
-                    <article
-                      key={`${fav.itemType}-${fav.itemId}`}
-                      className="dash-card favorite-card"
-                      style={{ padding: '18px', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}
-                      onClick={() => void openFavorite(fav)}
-                    >
-                      <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                          <strong style={{ fontSize: '15px', color: 'var(--ink)' }}>{fav.title}</strong>
-                          <span className="category-badge" style={{ borderColor: 'var(--green)' }}>
-                            {fav.itemType === 'note' ? '📝 โน้ต' : '🔖 บุ๊กมาร์ก'}
-                          </span>
-                        </div>
-                        {fav.subtitle && (
-                          <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--muted)', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                            {fav.subtitle}
-                          </p>
-                        )}
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '8px', borderTop: '1px solid var(--line)', fontSize: '11px', color: 'var(--muted)' }}>
-                        <time>{formatDate(fav.updatedAt)}</time>
-                        <button
-                          className="button button-quiet"
-                          type="button"
-                          style={{ padding: '2px 8px', minHeight: '24px', fontSize: '11px' }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void toggleFavorite(fav.itemType, fav.itemId, true);
-                          }}
-                        >
-                          นำออก ★
-                        </button>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              )}
-              </>
-            )}
-          </section>
+          <FavoritesView
+            favorites={favorites}
+            activeFavorite={activeFavorite}
+            setActiveFavorite={setActiveFavorite}
+            onOpenFavorite={openFavorite}
+            onToggleFavorite={toggleFavorite}
+            favoriteBusy={favoriteBusy}
+            notesError={notesError}
+            notice={notice}
+            viewTitle={viewTitle}
+            listLength={listLength}
+            allEntries={allEntries}
+            onSelectAllEntry={selectAllEntry}
+          />
         ) : viewMode === 'files' ? (
-          <section className="editor-panel" aria-label="รายละเอียดไฟล์">
-            <div className="module-header-banner">
-              <div className="banner-icon">📁</div>
-              <div className="banner-info">
-                <span className="eyebrow">File Storage &amp; Media</span>
-                <h2 className="banner-title">{activeFile ? activeFile.displayName : 'คลังไฟล์และสื่อ'}</h2>
-                <p className="banner-subtitle">
-                  {activeFile
-                    ? `${formatBytes(activeFile.sizeBytes)} · ${activeFile.mediaType} · อัปโหลดเมื่อ ${formatDate(activeFile.createdAt)}`
-                    : `${files.length} รายการ · คลังไฟล์เอกสาร รูปภาพ และวิดีโอ (สตรีมมิ่งได้)`}
-                </p>
-              </div>
-              <div className="banner-actions">
-                {activeFile && (
-                  <>
-                    <button
-                      className="button button-quiet"
-                      type="button"
-                      onClick={() => setMediaLightboxFile(activeFile)}
-                    >
-                      👁️ ดูตัวอย่าง
-                    </button>
-                    <a className="button button-quiet" href={activeFile.downloadUrl} download={activeFile.displayName}>
-                      ⬇️ ดาวน์โหลด
-                    </a>
-                    <button
-                      className="button button-danger-quiet"
-                      type="button"
-                      onClick={() => void handleDeleteFile(activeFile)}
-                    >
-                      ลบ
-                    </button>
-                    <button
-                      className="button button-quiet"
-                      type="button"
-                      onClick={() => setActiveFile(null)}
-                    >
-                      ← ดูไฟล์ทั้งหมด
-                    </button>
-                  </>
-                )}
-                <label className="button button-primary" style={{ cursor: 'pointer', margin: 0 }}>
-                  <span>＋ อัปโหลดไฟล์</span>
-                  <input
-                    type="file"
-                    multiple
-                    style={{ display: 'none' }}
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files.length > 0) {
-                        for (const file of Array.from(e.target.files)) {
-                          void uploadFile(file);
-                        }
-                        e.target.value = '';
-                      }
-                    }}
-                  />
-                </label>
-              </div>
-            </div>
-            {notesError && <p className="form-error editor-error" role="alert">{notesError}</p>}
-            {notice && <p className="form-notice" role="status">{notice}</p>}
-            {activeFile ? (
-              <article className="favorite-preview">
-                <h2 className="file-title">{activeFile.displayName}</h2>
-                <dl className="file-facts">
-                  <div>
-                    <dt>ขนาด</dt>
-                    <dd>{formatBytes(activeFile.sizeBytes)}</dd>
-                  </div>
-                  <div>
-                    <dt>ชนิดไฟล์ที่ตรวจพบ</dt>
-                    <dd>{activeFile.mediaType}</dd>
-                  </div>
-                  <div>
-                    <dt>SHA-256</dt>
-                    <dd><code>{activeFile.sha256}</code></dd>
-                  </div>
-                </dl>
-                <div className="custom-category-select-wrap">
-                  <label className="custom-cat-label">
-                    <span>📁 หมวดหมู่ของฉัน:</span>
-                    <select
-                      value={fileCustomCatId || ''}
-                      onChange={async (e) => {
-                        const newCatId = e.target.value || null;
-                        setFileCustomCatId(newCatId);
-                        if (activeFile) {
-                          try {
-                            await setItemCustomCategory('file', activeFile.id, newCatId);
-                            pushToast('success', 'อัปเดตหมวดหมู่ของไฟล์แล้ว');
-                          } catch (err) {
-                            pushToast('error', errorMessage(err));
-                          }
-                        }
-                      }}
-                    >
-                      <option value="">-- ไม่ระบุหมวดหมู่ --</option>
-                      {customCategories.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.parentId ? '  ↳ ' : ''}{c.icon} {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-                <p className="file-note">
-                  ไฟล์ถูกเก็บในพื้นที่ส่วนตัวของคุณ ระบบตรวจชนิดไฟล์จากเนื้อหาและไม่แสดงไฟล์ที่อาจเป็นอันตรายแบบฝังในหน้าเว็บ
-                </p>
-              </article>
-            ) : null}
-
-            <div className="file-grid-section" style={{ marginTop: activeFile ? '28px' : '0' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: 650, margin: 0, color: 'var(--ink)' }}>
-                  ไฟล์ทั้งหมดในระบบ ({files.length})
-                </h3>
-                <label className="button button-primary" style={{ cursor: 'pointer', margin: 0 }}>
-                  <span>＋ อัปโหลดไฟล์</span>
-                  <input
-                    type="file"
-                    multiple
-                    style={{ display: 'none' }}
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files.length > 0) {
-                        for (const file of Array.from(e.target.files)) {
-                          void uploadFile(file);
-                        }
-                        e.target.value = '';
-                      }
-                    }}
-                  />
-                </label>
-              </div>
-              {files.length === 0 ? (
-                <div className="empty-state" style={{ padding: '60px 20px', background: 'var(--paper)', borderRadius: '16px', border: '1px dashed var(--line)', textAlign: 'center' }}>
-                  <span className="empty-icon" style={{ fontSize: '40px', display: 'block', marginBottom: '12px' }}>📁</span>
-                  <strong>ยังไม่มีไฟล์ในคลัง</strong>
-                  <span style={{ color: 'var(--muted)', display: 'block' }}>อัปโหลดรูปภาพ เอกสาร หรือวิดีโอเพื่อจัดเก็บ</span>
-                </div>
-              ) : (
-                <div className="file-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px' }}>
-                  {files.map((file) => (
-                    <article className={`dash-card file-card${activeFile?.id === file.id ? ' is-active' : ''}`} key={file.id} style={{ padding: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                      <div style={{ cursor: 'pointer' }} onClick={() => setActiveFile(file)}>
-                        <div style={{ height: '120px', background: 'var(--canvas)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginBottom: '12px' }}>
-                          {file.mediaType.startsWith('image/') ? (
-                            <img src={file.downloadUrl} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          ) : (
-                            <span style={{ fontSize: '36px' }}>{fileIcon(file.mediaType, file.displayName)}</span>
-                          )}
-                        </div>
-                        <strong style={{ fontSize: '14px', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: '4px' }}>
-                          {file.displayName}
-                        </strong>
-                        <span style={{ fontSize: '12px', color: 'var(--muted)' }}>
-                          {formatBytes(file.sizeBytes)} · {file.mediaType}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--line)' }}>
-                        <button
-                          className="button button-quiet"
-                          type="button"
-                          style={{ padding: '2px 8px', minHeight: '26px', fontSize: '11px' }}
-                          onClick={() => setMediaLightboxFile(file)}
-                        >
-                          👁️ ดูตัวอย่าง
-                        </button>
-                        <div style={{ display: 'flex', gap: '4px' }}>
-                          <a className="button button-quiet" style={{ padding: '2px 8px', minHeight: '26px', fontSize: '11px' }} href={file.downloadUrl} download={file.displayName}>
-                            ดาวน์โหลด
-                          </a>
-                          <button
-                            className="button button-danger-quiet"
-                            type="button"
-                            style={{ padding: '2px 8px', minHeight: '26px', fontSize: '11px' }}
-                            onClick={() => void handleDeleteFile(file)}
-                          >
-                            ลบ
-                          </button>
-                        </div>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
-        ) : viewMode === 'all' ? (
-          <section className="editor-panel" aria-label="ภาพรวมทั้งหมด">
-            <div className="empty-state trash-empty">
-              <span className="empty-icon" aria-hidden="true">▦</span>
-              <strong>เลือกรายการจากทั้งหมด</strong>
-              <span>โน้ต ลิงก์ และไฟล์จะเปิดในมุมมองของแต่ละประเภท</span>
-            </div>
-          </section>
+          <FilesView
+            files={files}
+            activeFile={activeFile}
+            setActiveFile={setActiveFile}
+            onSetMediaLightboxFile={setMediaLightboxFile}
+            onDeleteFile={handleDeleteFile}
+            notesError={notesError}
+            notice={notice}
+            onUploadFiles={handleUpload}
+            fileCustomCatId={fileCustomCatId}
+            onFileCustomCatChange={async (newCatId) => {
+              if (!activeFile) return;
+              try {
+                await setItemCustomCategory('file', activeFile.id, newCatId);
+                setFileCustomCatId(newCatId);
+                pushToast('success', 'อัปเดตหมวดหมู่ของไฟล์แล้ว');
+                setRefreshKey((k) => k + 1);
+              } catch (err) {
+                pushToast('error', errorMessage(err));
+              }
+            }}
+            customCategories={customCategories}
+            onUploadSuccess={(uploaded) => {
+              setFiles((prev) => [uploaded, ...prev]);
+              setNotice(`อัปโหลด "${uploaded.displayName}" สำเร็จ`);
+              pushToast('success', `อัปโหลด "${uploaded.displayName}" สำเร็จ`);
+              setRefreshKey((k) => k + 1);
+            }}
+          />
         ) : (
-          <section className="editor-panel trash-panel" aria-label="จัดการโน้ตในถังขยะ">
-            <div className="module-header-banner">
-              <div className="banner-icon">🗑️</div>
-              <div className="banner-info">
-                <span className="eyebrow">Trash &amp; Archive</span>
-                <h2 className="banner-title">ถังขยะ</h2>
-                <p className="banner-subtitle">
-                  {listTotal} รายการในถังขยะ · ระบบไม่ลบโน้ตอัตโนมัติ คุณสามารถกู้คืนหรือลบถาวรได้
-                </p>
-              </div>
-              {activeTrashNote && (
-                <div className="banner-actions">
-                  <button className="button button-primary" type="button" onClick={handleRestore} disabled={saveBusy}>
-                    {saveBusy ? 'กำลังดำเนินการ…' : 'กู้คืนโน้ต'}
-                  </button>
-                  <button
-                    className="button button-danger-quiet"
-                    type="button"
-                    onClick={() => setPermanentDeleteOpen(true)}
-                    disabled={saveBusy}
-                  >
-                    ลบถาวร
-                  </button>
-                  <button
-                    className="button button-quiet"
-                    type="button"
-                    onClick={() => setActiveTrashNote(null)}
-                  >
-                    ← ดูทั้งหมด
-                  </button>
-                </div>
-              )}
-            </div>
-            {notesError && <p className="form-error editor-error" role="alert">{notesError}</p>}
-            {notice && <p className="form-notice" role="status">{notice}</p>}
-            {activeTrashNote ? (
-              <article className="dash-card" style={{ padding: '24px' }}>
-                <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '8px' }}>{activeTrashNote.title}</h2>
-                <p style={{ color: 'var(--muted)', fontSize: '12px', marginBottom: '16px' }}>ย้ายเมื่อ {formatDate(activeTrashNote.updatedAt)}</p>
-                <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{activeTrashNote.content || 'ไม่มีเนื้อหา'}</div>
-              </article>
-            ) : (
-              filteredNotes.length === 0 ? (
-                <div className="empty-state trash-empty" style={{ padding: '60px 20px', background: 'var(--paper)', borderRadius: '16px', border: '1px dashed var(--line)', textAlign: 'center' }}>
-                  <span className="empty-icon" style={{ fontSize: '40px', display: 'block', marginBottom: '12px' }}>🗑️</span>
-                  <strong style={{ fontSize: '18px', display: 'block', marginBottom: '6px' }}>ถังขยะว่างเปล่า</strong>
-                  <span style={{ color: 'var(--muted)' }}>ไม่มีโน้ตที่ถูกลบอยู่ในถังขยะ</span>
-                </div>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px', marginTop: '16px' }}>
-                  {filteredNotes.map((note) => (
-                    <article
-                      key={note.id}
-                      className="dash-card trash-card"
-                      style={{ padding: '18px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}
-                    >
-                      <div>
-                        <strong style={{ fontSize: '15px', color: 'var(--ink)', display: 'block', marginBottom: '8px' }}>
-                          {note.title || 'ไม่มีหัวข้อ'}
-                        </strong>
-                        <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--muted)', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                          {note.content || 'ไม่มีเนื้อหา'}
-                        </p>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid var(--line)', fontSize: '12px' }}>
-                        <span style={{ color: 'var(--muted)' }}>{formatDate(note.updatedAt)}</span>
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          <button
-                            className="button button-quiet"
-                            type="button"
-                            style={{ padding: '3px 10px', minHeight: '26px' }}
-                            onClick={async () => {
-                              try {
-                                await restoreNote(note.id);
-                                pushToast('success', 'กู้คืนโน้ตเรียบร้อย');
-                                setRefreshKey((k) => k + 1);
-                              } catch (err) {
-                                pushToast('error', errorMessage(err));
-                              }
-                            }}
-                          >
-                            กู้คืน
-                          </button>
-                          <button
-                            className="button button-danger-quiet"
-                            type="button"
-                            style={{ padding: '3px 10px', minHeight: '26px' }}
-                            onClick={() => {
-                              setActiveTrashNote(note);
-                              setPermanentDeleteOpen(true);
-                            }}
-                          >
-                            ลบถาวร
-                          </button>
-                        </div>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              )
-            )}
-          </section>
+          <TrashView
+            viewMode={viewMode === 'all' ? 'all' : 'trash'}
+            listTotal={listTotal}
+            activeTrashNote={activeTrashNote}
+            setActiveTrashNote={setActiveTrashNote}
+            onRestore={handleRestore}
+            saveBusy={saveBusy}
+            onOpenPermanentDelete={(note) => {
+              if (note) setActiveTrashNote(note);
+              setPermanentDeleteOpen(true);
+            }}
+            notesError={notesError}
+            notice={notice}
+            filteredNotes={filteredNotes}
+            onRestoreNoteItem={async (note) => {
+              try {
+                await restoreNote(note.id);
+                pushToast('success', 'กู้คืนโน้ตเรียบร้อย');
+                setRefreshKey((k) => k + 1);
+              } catch (err) {
+                pushToast('error', errorMessage(err));
+              }
+            }}
+          />
         )}
+        </Suspense>
         </div>
       </div>
 
-      {themeOpen && (
-        <div className="dialog-backdrop" onClick={() => setThemeOpen(false)}>
-          <section
-            className="studio-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Theme and Color Studio"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="popover-head">
-              <h2>Theme & Color Studio</h2>
-              <button className="icon-button" type="button" aria-label="ปิด" onClick={() => setThemeOpen(false)}>×</button>
-            </div>
-            <div className="theme-grid">
-              {themes.map((item) => (
-                <button
-                  className={`theme-swatch${theme === item.name ? ' is-active' : ''}`}
-                  key={item.name}
-                  type="button"
-                  onClick={() => setTheme(item.name)}
-                >
-                  <span className="swatch-dot" style={{ background: item.color }} />
-                  {item.label}
-                </button>
-              ))}
-            </div>
-            <div className="mode-toggle">
-              <button
-                className={`button ${themeMode === 'light' ? 'button-primary' : 'button-quiet'}`}
-                type="button"
-                onClick={() => setThemeMode('light')}
-              >
-                Light
-              </button>
-              <button
-                className={`button ${themeMode === 'dark' ? 'button-primary' : 'button-quiet'}`}
-                type="button"
-                onClick={() => setThemeMode('dark')}
-              >
-                Dark
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
+      <Suspense fallback={null}>
+      {/* Theme Modal */}
+      <ThemeModal
+        isOpen={themeOpen}
+        onClose={() => setThemeOpen(false)}
+        theme={theme}
+        onSelectTheme={setTheme}
+        themeMode={themeMode}
+        onSelectThemeMode={setThemeMode}
+        themes={themes}
+      />
 
-      {profileOpen && (
-        <div className="dialog-backdrop" onClick={() => setProfileOpen(false)}>
-          <section
-            className="studio-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-label="โปรไฟล์ของฉัน"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="popover-head">
-              <h2>โปรไฟล์ของฉัน</h2>
-              <button className="icon-button" type="button" aria-label="ปิด" onClick={() => setProfileOpen(false)}>×</button>
-            </div>
-            <form className="profile-form" onSubmit={saveProfile}>
-              <label>
-                ชื่อที่แสดง
-                <input
-                  value={profile.name}
-                  onChange={(event) => setProfile({ ...profile, name: event.target.value })}
-                  placeholder={user?.username ?? ''}
-                  maxLength={80}
-                />
-              </label>
-              <label>
-                สเตตัสประจำวัน
-                <input
-                  value={profile.status}
-                  onChange={(event) => setProfile({ ...profile, status: event.target.value })}
-                  maxLength={120}
-                />
-              </label>
-              <div className="avatar-row">
-                <span className="avatar profile-avatar large">
-                  {profile.avatarFileId ? (
-                    <img src={`/api/files/${profile.avatarFileId}`} alt="" loading="lazy" decoding="async" />
-                  ) : (
-                    profile.avatarPreset || (profile.name || user?.username || 'P').slice(0, 1)
-                  )}
-                </span>
-                <select
-                  value={profile.avatarPreset}
-                  onChange={(event) => setProfile({ ...profile, avatarPreset: event.target.value })}
-                  aria-label="อวตารสำเร็จรูป"
-                >
-                  {['🌿', '🌙', '☀️', '🦊', '🐼', '🌸', '💙', '⭐'].map((preset) => (
-                    <option value={preset} key={preset}>{preset}</option>
-                  ))}
-                </select>
-                <button
-                  className="button button-quiet"
-                  type="button"
-                  onClick={() => profileAvatarInputRef.current?.click()}
-                >
-                  อัปโหลดรูป
-                </button>
-                <input
-                  ref={profileAvatarInputRef}
-                  className="visually-hidden"
-                  type="file"
-                  accept="image/*"
-                  onChange={(event) => void handleProfileAvatarUpload(event)}
-                />
-              </div>
-              <button className="button button-primary" type="submit">บันทึกโปรไฟล์</button>
-            </form>
-          </section>
-        </div>
-      )}
+      {/* Profile Modal */}
+      <ProfileModal
+        isOpen={profileOpen}
+        onClose={() => setProfileOpen(false)}
+        profile={profile}
+        setProfile={setProfile}
+        user={user}
+        onSaveProfile={saveProfile}
+        onUploadAvatar={handleProfileAvatarUpload}
+      />
 
-      {commandOpen && (
-        <div className="dialog-backdrop" onClick={() => setCommandOpen(false)}>
-          <section
-            className="command-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-label="ค้นหาด่วน"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="command-input-row">
-              <input
-                autoFocus
-                value={commandQuery}
-                onChange={(event) => {
-                  const next = event.target.value;
-                  setCommandQuery(next);
-                  setCommandError('');
-                  setCommandResults(null);
-                  setCommandBusy(Boolean(next.trim()) && !(commandFrom && commandTo && commandFrom > commandTo));
-                }}
-                placeholder="ค้นหาโน้ต งาน โปรเจกต์ เป้าหมาย บุคคล แจ้งเตือน บุ๊กมาร์ก ไฟล์ คลังสำคัญ ห้องสมุด…"
-                maxLength={120}
-              />
-              <button className="icon-button" type="button" aria-label="ปิด" onClick={() => setCommandOpen(false)}>×</button>
-            </div>
-            <div className="command-filters" aria-label="ตัวกรองการค้นหา">
-              <div className="command-filter-head">
-                <span className="sidebar-hint">ประเภทข้อมูล ({commandTypes.length}/{SEARCH_TYPE_LABELS.length})</span>
-                <button className="text-button" type="button" onClick={resetCommandFilters}>
-                  ล้างตัวกรอง
-                </button>
-              </div>
-              <div className="command-type-chips" role="group" aria-label="เลือกประเภทข้อมูลที่ต้องการค้นหา">
-                {SEARCH_TYPE_LABELS.map(({ type, label }) => {
-                  const selected = commandTypes.includes(type);
-                  return (
-                    <button
-                      key={type}
-                      className={`button ${selected ? 'button-primary' : 'button-quiet'} command-type-chip`}
-                      type="button"
-                      aria-pressed={selected}
-                      onClick={() => toggleCommandType(type)}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="command-date-row">
-                <label>
-                  ตั้งแต่วันที่
-                  <input
-                    type="date"
-                    aria-label="ตั้งแต่วันที่"
-                    value={commandFrom}
-                    onChange={(event) => {
-                      const nextFrom = event.target.value;
-                      setCommandFrom(nextFrom);
-                      setCommandError('');
-                      if (commandQuery.trim() && !(nextFrom && commandTo && nextFrom > commandTo)) {
-                        setCommandBusy(true);
-                      } else {
-                        setCommandBusy(false);
-                      }
-                    }}
-                  />
-                </label>
-                <label>
-                  ถึงวันที่
-                  <input
-                    type="date"
-                    aria-label="ถึงวันที่"
-                    value={commandTo}
-                    onChange={(event) => {
-                      const nextTo = event.target.value;
-                      setCommandTo(nextTo);
-                      setCommandError('');
-                      if (commandQuery.trim() && !(commandFrom && nextTo && commandFrom > nextTo)) {
-                        setCommandBusy(true);
-                      } else {
-                        setCommandBusy(false);
-                      }
-                    }}
-                  />
-                </label>
-              </div>
-            </div>
-            {(commandFrom && commandTo && commandFrom > commandTo
-              ? 'ช่วงวันที่ไม่ถูกต้อง: วันที่เริ่มต้องไม่หลังวันที่สิ้นสุด'
-              : commandError) && (
-              <p className="form-error" role="alert">
-                {commandFrom && commandTo && commandFrom > commandTo
-                  ? 'ช่วงวันที่ไม่ถูกต้อง: วันที่เริ่มต้องไม่หลังวันที่สิ้นสุด'
-                  : commandError}
-              </p>
-            )}
-            {commandBusy && <p className="sidebar-hint">กำลังค้นหา…</p>}
-            {commandResults && !(commandFrom && commandTo && commandFrom > commandTo) && (
-              <div className="command-results">
-                {commandResults.notes.length === 0
-                  && (commandResults.tasks?.length ?? 0) === 0
-                  && (commandResults.projects?.length ?? 0) === 0
-                  && (commandResults.goals?.length ?? 0) === 0
-                  && commandResults.people.length === 0
-                  && commandResults.reminders.length === 0
-                  && (commandResults.bookmarks?.length ?? 0) === 0
-                  && (commandResults.files?.length ?? 0) === 0
-                  && (commandResults.vault?.length ?? 0) === 0
-                  && (commandResults.library?.length ?? 0) === 0 && (
-                    <p className="sidebar-hint">ไม่พบผลลัพธ์ที่ตรงกับคำค้นหาและตัวกรอง</p>
-                  )}
-                {commandResults.notes.map((note) => (
-                  <button className="command-item" type="button" key={`note-${note.id}`} onClick={() => navigateCommand('note', note.id)}>
-                    <span className="entry-kind">โน้ต</span>
-                    <span>{note.title}</span>
-                  </button>
-                ))}
-                {(commandResults.tasks ?? []).map((task) => (
-                  <button className="command-item" type="button" key={`task-${task.id}`} onClick={() => navigateCommand('task', task.id)}>
-                    <span className="entry-kind">งาน</span>
-                    <span>{task.title}{task.dueDate ? ` · ${task.dueDate}` : ''}</span>
-                  </button>
-                ))}
-                {(commandResults.projects ?? []).map((project) => (
-                  <button className="command-item" type="button" key={`project-${project.id}`} onClick={() => navigateCommand('project', project.id)}>
-                    <span className="entry-kind">โปรเจกต์</span>
-                    <span>{project.name}{project.dueDate ? ` · ${project.dueDate}` : ''}</span>
-                  </button>
-                ))}
-                {(commandResults.goals ?? []).map((goal) => (
-                  <button className="command-item" type="button" key={`goal-${goal.id}`} onClick={() => navigateCommand('goal', goal.id)}>
-                    <span className="entry-kind">เป้าหมาย</span>
-                    <span>{goal.title}</span>
-                  </button>
-                ))}
-                {commandResults.people.map((person) => (
-                  <button className="command-item" type="button" key={`person-${person.id}`} onClick={() => navigateCommand('person', person.id)}>
-                    <span className="entry-kind bookmark">บุคคล</span>
-                    <span>{person.name}{person.roleLabel ? ` · ${person.roleLabel}` : ''}</span>
-                  </button>
-                ))}
-                {commandResults.reminders.map((reminder) => (
-                  <button className="command-item" type="button" key={`reminder-${reminder.id}`} onClick={() => navigateCommand('reminder', reminder.id)}>
-                    <span className="entry-kind file">แจ้งเตือน</span>
-                    <span>{reminder.title} · {reminder.targetDate}</span>
-                  </button>
-                ))}
-                {(commandResults.bookmarks ?? []).map((bookmark) => (
-                  <button className="command-item" type="button" key={`bookmark-${bookmark.id}`} onClick={() => navigateCommand('bookmark', bookmark.id)}>
-                    <span className="entry-kind bookmark">บุ๊กมาร์ก</span>
-                    <span>{bookmark.title}</span>
-                  </button>
-                ))}
-                {(commandResults.files ?? []).map((file) => (
-                  <button className="command-item" type="button" key={`file-${file.id}`} onClick={() => navigateCommand('file', file.id)}>
-                    <span className="entry-kind file">ไฟล์</span>
-                    <span>{file.displayName} · {formatBytes(file.sizeBytes)}</span>
-                  </button>
-                ))}
-                {(commandResults.vault ?? []).map((item) => (
-                  <button className="command-item" type="button" key={`vault-${item.id}`} onClick={() => navigateCommand('vault', item.id)}>
-                    <span className="entry-kind vault">คลังสำคัญ</span>
-                    <span>
-                      {item.title}
-                      {item.renewalOrExpiryDate ? ` · ${item.renewalOrExpiryDate}` : ''}
-                      {item.keyValue ? ` · ${item.keyValue}` : ''}
-                    </span>
-                  </button>
-                ))}
-                {(commandResults.library ?? []).map((item) => (
-                  <button className="command-item" type="button" key={`library-${item.id}`} onClick={() => navigateCommand('library', item.id)}>
-                    <span className="entry-kind library">ห้องสมุด</span>
-                    <span>{item.title} · {item.status}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            {!commandResults && !commandBusy && !commandError && (
-              <p className="sidebar-hint">พิมพ์คำค้นหาและเลือกตัวกรองด้านบน — กด Esc เพื่อปิด</p>
-            )}
-          </section>
-        </div>
-      )}
+      {/* Global Search Modal */}
+      <CommandSearchModal
+        isOpen={commandOpen}
+        onClose={() => setCommandOpen(false)}
+        query={commandQuery}
+        onQueryChange={(next) => {
+          setCommandQuery(next);
+          setCommandError('');
+          setCommandResults(null);
+          setCommandBusy(Boolean(next.trim()) && !(commandFrom && commandTo && commandFrom > commandTo));
+        }}
+        types={commandTypes}
+        onToggleType={toggleCommandType}
+        onResetFilters={resetCommandFilters}
+        from={commandFrom}
+        onFromChange={(nextFrom) => {
+          setCommandFrom(nextFrom);
+          setCommandError('');
+          if (commandQuery.trim() && !(nextFrom && commandTo && nextFrom > commandTo)) {
+            setCommandBusy(true);
+          } else {
+            setCommandBusy(false);
+          }
+        }}
+        to={commandTo}
+        onToChange={(nextTo) => {
+          setCommandTo(nextTo);
+          setCommandError('');
+          if (commandQuery.trim() && !(commandFrom && nextTo && commandFrom > nextTo)) {
+            setCommandBusy(true);
+          } else {
+            setCommandBusy(false);
+          }
+        }}
+        isBusy={commandBusy}
+        error={commandError}
+        results={commandResults}
+        onNavigate={navigateCommand}
+        customCategories={customCategories}
+      />
 
-      <div className="toast-stack" role="region" aria-label="การแจ้งเตือน">
-        {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            className={`toast toast-${toast.kind}`}
-            role={toast.kind === 'error' ? 'alert' : 'status'}
-          >
-            <span>{toast.message}</span>
-            <button
-              className="icon-button toast-close"
-              type="button"
-              aria-label="ปิดการแจ้งเตือน"
-              onClick={() => dismissToast(toast.id)}
-            >
-              ×
-            </button>
-          </div>
-        ))}
-      </div>
+      {/* Toast Notification Stack */}
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
 
-      {permanentDeleteOpen && activeTrashNote && (
-        <div className="dialog-backdrop">
-          <section
-            className="confirm-dialog"
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="permanent-delete-title"
-            aria-describedby="permanent-delete-description"
-          >
-            <span className="eyebrow">ยืนยันการลบ</span>
-            <h2 id="permanent-delete-title">ลบโน้ตนี้ถาวรหรือไม่?</h2>
-            <p id="permanent-delete-description">
-              “{activeTrashNote.title}” จะถูกลบและไม่สามารถกู้คืนได้ การดำเนินการนี้ไม่สามารถย้อนกลับได้
-            </p>
-            {notesError && <p className="form-error" role="alert">{notesError}</p>}
-            <div className="editor-actions">
-              <button
-                className="button button-quiet"
-                type="button"
-                onClick={() => setPermanentDeleteOpen(false)}
-                disabled={saveBusy}
-              >
-                ยกเลิก
-              </button>
-              <button
-                className="button button-danger"
-                type="button"
-                onClick={handlePermanentDelete}
-                disabled={saveBusy}
-              >
-                {saveBusy ? 'กำลังลบ…' : 'ยืนยันลบถาวร'}
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
-          {/* Modal: Customize Sidebar */}
-      {customizeNavOpen && (
-        <div className="dialog-backdrop">
-          <section
-            className="dialog"
-            style={{ maxWidth: '540px' }}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="customize-nav-title"
-          >
-            <div className="dialog-head">
-              <div>
-                <span className="eyebrow">ตั้งค่าส่วนตัว</span>
-                <h2 id="customize-nav-title">⚙️ ตั้งค่าแถบเมนู (Customize Sidebar)</h2>
-              </div>
-              <button
-                className="icon-button"
-                type="button"
-                aria-label="ปิด"
-                onClick={() => setCustomizeNavOpen(false)}
-              >
-                ×
-              </button>
-            </div>
-            <p className="sidebar-hint" style={{ margin: '4px 0 12px' }}>
-              เปลี่ยนชื่อเมนู เปิด/ปิด (ซ่อน) เมนูที่ไม่ได้ใช้งาน หรือจัดลำดับขึ้น-ลงตามความต้องการของคุณ
-            </p>
-            <div className="nav-edit-list">
-              {tempNavConfig.map((item, index) => (
-                <div key={item.id} className={`nav-edit-row${item.enabled ? '' : ' is-disabled'}`}>
-                  <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} title={item.enabled ? 'คลิกเพื่อซ่อนเมนู' : 'คลิกเพื่อแสดงเมนู'}>
-                    <input
-                      type="checkbox"
-                      checked={item.enabled}
-                      onChange={() => toggleNavItem(index)}
-                    />
-                  </label>
-                  <span className="nav-edit-icon" aria-hidden="true">{item.icon}</span>
-                  <input
-                    className="nav-edit-input"
-                    type="text"
-                    value={item.label}
-                    placeholder={item.defaultLabel}
-                    disabled={!item.enabled}
-                    onChange={(e) => updateNavItemLabel(index, e.target.value)}
-                  />
-                  <div className="nav-edit-actions">
-                    <button
-                      className="button button-quiet"
-                      style={{ padding: '2px 8px', fontSize: '13px' }}
-                      type="button"
-                      disabled={index === 0}
-                      onClick={() => moveNavItem(index, 'up')}
-                      title="เลื่อนขึ้น"
-                    >
-                      ▲
-                    </button>
-                    <button
-                      className="button button-quiet"
-                      style={{ padding: '2px 8px', fontSize: '13px' }}
-                      type="button"
-                      disabled={index === tempNavConfig.length - 1}
-                      onClick={() => moveNavItem(index, 'down')}
-                      title="เลื่อนลง"
-                    >
-                      ▼
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="editor-actions" style={{ justifyContent: 'space-between', borderTop: '1px solid var(--line)', paddingTop: '14px' }}>
-              <button
-                className="button button-quiet"
-                type="button"
-                onClick={handleResetNavConfig}
-              >
-                รีเซ็ตเป็นค่าเริ่มต้น
-              </button>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  className="button button-quiet"
-                  type="button"
-                  onClick={() => setCustomizeNavOpen(false)}
-                >
-                  ยกเลิก
-                </button>
-                <button
-                  className="button button-primary"
-                  type="button"
-                  onClick={handleSaveNavConfig}
-                >
-                  บันทึกการตั้งค่า
-                </button>
-              </div>
-            </div>
-          </section>
-        </div>
-      )}
+      {/* Permanent Delete Modal */}
+      <PermanentDeleteModal
+        isOpen={permanentDeleteOpen && Boolean(activeTrashNote)}
+        onClose={() => setPermanentDeleteOpen(false)}
+        note={activeTrashNote}
+        onConfirm={handlePermanentDelete}
+        isBusy={saveBusy}
+        error={notesError}
+      />
 
-      {/* Modal: Create / Edit Custom Category */}
-      {categoryModal && (
-        <div className="dialog-backdrop">
-          <section
-            className="dialog"
-            style={{ maxWidth: '460px' }}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="category-modal-title"
-          >
-            <div className="dialog-head">
-              <div>
-                <span className="eyebrow">หมวดหมู่และหัวข้อ</span>
-                <h2 id="category-modal-title">
-                  {categoryModal.mode === 'create'
-                    ? (categoryModal.parentId ? '➕ สร้างหมวดหมู่ย่อย' : '📁 สร้างหมวดหมู่ใหม่')
-                    : '✎ แก้ไขหมวดหมู่'}
-                </h2>
-              </div>
-              <button
-                className="icon-button"
-                type="button"
-                aria-label="ปิด"
-                disabled={categoryModalBusy}
-                onClick={() => setCategoryModal(null)}
-              >
-                ×
-              </button>
-            </div>
-            {categoryModalError && <p className="form-error" role="alert">{categoryModalError}</p>}
-            <form onSubmit={(e) => { e.preventDefault(); void handleSaveCategory(); }} style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '10px' }}>
-              <label>
-                ชื่อหมวดหมู่
-                <input
-                  required
-                  type="text"
-                  maxLength={120}
-                  value={categoryDraft.name}
-                  onChange={(e) => setCategoryDraft({ ...categoryDraft, name: e.target.value })}
-                  placeholder="เช่น การเงิน & การลงทุน, งานวิจัย, สูตรอาหาร..."
-                  autoFocus
-                />
-              </label>
+      {/* Customize Sidebar Modal */}
+      <SidebarNavModal
+        isOpen={customizeNavOpen}
+        onClose={() => setCustomizeNavOpen(false)}
+        tempNavConfig={tempNavConfig}
+        onToggleNavItem={toggleNavItem}
+        onUpdateNavItemLabel={updateNavItemLabel}
+        onMoveNavItem={moveNavItem}
+        onResetNavConfig={handleResetNavConfig}
+        onSaveNavConfig={handleSaveNavConfig}
+      />
 
-              <label>
-                ไอคอน / Emoji
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <input
-                    type="text"
-                    maxLength={8}
-                    style={{ width: '64px', textAlign: 'center', fontSize: '18px' }}
-                    value={categoryDraft.icon}
-                    onChange={(e) => setCategoryDraft({ ...categoryDraft, icon: e.target.value })}
-                  />
-                  <div className="emoji-preset-bar">
-                    {['📁', '💼', '💰', '🎯', '🚀', '💡', '📚', '🩺', '🏠', '🌿', '🎨', '⚙️', '⭐'].map((emoji) => (
-                      <button
-                        key={emoji}
-                        type="button"
-                        className="emoji-preset-btn"
-                        onClick={() => setCategoryDraft({ ...categoryDraft, icon: emoji })}
-                      >
-                        {emoji}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </label>
+      {/* Custom Category Create/Edit Modal */}
+      <CategoryModal
+        modalState={categoryModal}
+        onClose={() => setCategoryModal(null)}
+        draft={categoryDraft}
+        setDraft={setCategoryDraft}
+        customCategories={customCategories}
+        isBusy={categoryModalBusy}
+        error={categoryModalError}
+        onSave={handleSaveCategory}
+      />
 
-              <label>
-                สีประจำหมวดหมู่
-                <div className="color-preset-bar">
-                  <input
-                    type="color"
-                    value={categoryDraft.color}
-                    onChange={(e) => setCategoryDraft({ ...categoryDraft, color: e.target.value })}
-                    style={{ width: '32px', height: '32px', padding: 0, border: 'none', borderRadius: '50%', cursor: 'pointer' }}
-                  />
-                  {['#3f7658', '#4f5fa8', '#a85a72', '#a8742c', '#6b4f9e', '#0284c7', '#059669', '#dc2626'].map((col) => (
-                    <button
-                      key={col}
-                      type="button"
-                      className={`color-preset-btn${categoryDraft.color === col ? ' is-active' : ''}`}
-                      style={{ backgroundColor: col }}
-                      onClick={() => setCategoryDraft({ ...categoryDraft, color: col })}
-                      title={col}
-                    />
-                  ))}
-                </div>
-              </label>
-
-              {customCategories.length > 0 && categoryModal.mode === 'create' && (
-                <label>
-                  หมวดหมู่หลัก (ถ้าต้องการสร้างเป็นหมวดย่อย)
-                  <select
-                    value={categoryDraft.parentId ?? ''}
-                    onChange={(e) => setCategoryDraft({ ...categoryDraft, parentId: e.target.value || null })}
-                  >
-                    <option value="">ไม่มี (หมวดหมู่ระดับบนสุด)</option>
-                    {customCategories.filter((c) => !c.parentId).map((c) => (
-                      <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
-                    ))}
-                  </select>
-                </label>
-              )}
-
-              <div className="editor-actions" style={{ marginTop: '8px' }}>
-                <button
-                  className="button button-quiet"
-                  type="button"
-                  disabled={categoryModalBusy}
-                  onClick={() => setCategoryModal(null)}
-                >
-                  ยกเลิก
-                </button>
-                <button
-                  className="button button-primary"
-                  type="submit"
-                  disabled={categoryModalBusy}
-                >
-                  {categoryModalBusy ? 'กำลังบันทึก…' : 'บันทึกหมวดหมู่'}
-                </button>
-              </div>
-            </form>
-          </section>
-        </div>
-      )}
-
-      {/* Modal: Quick Add into Category */}
-      {quickAddCatOpen && selectedCustomCategoryId && (
-        <div className="dialog-backdrop">
-          <section
-            className="dialog"
-            style={{ maxWidth: '640px', width: '100%' }}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="quick-add-cat-title"
-          >
-            <div className="dialog-head">
-              <div>
-                <span className="eyebrow">{customCategoryData?.category.name}</span>
-                <h2 id="quick-add-cat-title">＋ เพิ่มข้อมูลในหมวดนี้</h2>
-              </div>
-              <button
-                className="icon-button"
-                type="button"
-                aria-label="ปิด"
-                disabled={quickAddBusy}
-                onClick={() => setQuickAddCatOpen(false)}
-              >
-                ×
-              </button>
-            </div>
-
-            {/* Type selector tabs */}
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', margin: '12px 0 16px' }}>
-              <button
-                className={`button ${quickAddType === 'note' ? 'button-primary' : 'button-quiet'}`}
-                type="button"
-                onClick={() => setQuickAddType('note')}
-              >
-                📝 โน้ต
-              </button>
-              <button
-                className={`button ${quickAddType === 'task' ? 'button-primary' : 'button-quiet'}`}
-                type="button"
-                onClick={() => setQuickAddType('task')}
-              >
-                ☑️ งาน
-              </button>
-              <button
-                className={`button ${quickAddType === 'bookmark' ? 'button-primary' : 'button-quiet'}`}
-                type="button"
-                onClick={() => setQuickAddType('bookmark')}
-              >
-                ↗️ ลิงก์
-              </button>
-              <button
-                className={`button ${quickAddType === 'file' ? 'button-primary' : 'button-quiet'}`}
-                type="button"
-                onClick={() => setQuickAddType('file')}
-              >
-                📁 อัปโหลดไฟล์
-              </button>
-              <button
-                className={`button ${quickAddType === 'vault' ? 'button-primary' : 'button-quiet'}`}
-                type="button"
-                onClick={() => setQuickAddType('vault')}
-              >
-                🔐 คลังสำคัญ
-              </button>
-              <button
-                className={`button ${quickAddType === 'library' ? 'button-primary' : 'button-quiet'}`}
-                type="button"
-                onClick={() => setQuickAddType('library')}
-              >
-                📚 คู่มือ
-              </button>
-              <button
-                className={`button ${quickAddType === 'attach' ? 'button-primary' : 'button-quiet'}`}
-                type="button"
-                onClick={() => setQuickAddType('attach')}
-              >
-                🔗 ข้อมูลเดิม
-              </button>
-            </div>
-
-            {/* Tab: Attach Existing Items */}
-            {quickAddType === 'attach' ? (
-              <div className="attach-existing-container">
-                <input
-                  type="search"
-                  placeholder="ค้นหาข้อมูลที่มีอยู่แล้ว..."
-                  value={attachSearchQuery}
-                  onChange={(e) => setAttachSearchQuery(e.target.value)}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--border)' }}
-                />
-                <div className="attach-existing-filters">
-                  {(['all', 'note', 'task', 'bookmark', 'file', 'vault', 'library'] as const).map((filter) => (
-                    <button
-                      key={filter}
-                      type="button"
-                      className={`button ${attachTypeFilter === filter ? 'button-primary' : 'button-quiet'}`}
-                      onClick={() => setAttachTypeFilter(filter)}
-                    >
-                      {filter === 'all' ? 'ทั้งหมด' : filter === 'note' ? '📝 โน้ต' : filter === 'task' ? '☑️ งาน' : filter === 'bookmark' ? '↗️ ลิงก์' : filter === 'file' ? '📁 ไฟล์' : filter === 'vault' ? '🔐 คลังสำคัญ' : '📚 คู่มือ'}
-                    </button>
-                  ))}
-                </div>
-                <div className="attach-existing-list">
-                  {(() => {
-                    const query = attachSearchQuery.trim().toLowerCase();
-                    const candidates: Array<{ itemType: 'note' | 'task' | 'bookmark' | 'file' | 'vault' | 'library'; id: string; title: string; subtitle: string }> = [];
-
-                    if (attachTypeFilter === 'all' || attachTypeFilter === 'note') {
-                      notes.forEach((n) => {
-                        if (!query || n.title.toLowerCase().includes(query) || n.content.toLowerCase().includes(query)) {
-                          candidates.push({ itemType: 'note', id: n.id, title: n.title, subtitle: 'โน้ต' });
-                        }
-                      });
-                    }
-                    if (attachTypeFilter === 'all' || attachTypeFilter === 'task') {
-                      tasks.forEach((t) => {
-                        if (!query || t.title.toLowerCase().includes(query) || (t.detail && t.detail.toLowerCase().includes(query))) {
-                          candidates.push({ itemType: 'task', id: t.id, title: t.title, subtitle: `งาน (${taskStatusLabel(t.status)})` });
-                        }
-                      });
-                    }
-                    if (attachTypeFilter === 'all' || attachTypeFilter === 'bookmark') {
-                      bookmarks.forEach((b) => {
-                        if (!query || b.title.toLowerCase().includes(query) || b.url.toLowerCase().includes(query)) {
-                          candidates.push({ itemType: 'bookmark', id: b.id, title: b.title, subtitle: b.url });
-                        }
-                      });
-                    }
-                    if (attachTypeFilter === 'all' || attachTypeFilter === 'file') {
-                      files.forEach((f) => {
-                        if (!query || f.displayName.toLowerCase().includes(query) || f.mediaType.toLowerCase().includes(query)) {
-                          candidates.push({ itemType: 'file', id: f.id, title: f.displayName, subtitle: `${formatBytes(f.sizeBytes)} · ${f.mediaType}` });
-                        }
-                      });
-                    }
-                    if (attachTypeFilter === 'all' || attachTypeFilter === 'vault') {
-                      vaultItems.forEach((v) => {
-                        if (!query || v.title.toLowerCase().includes(query) || v.keyValue.toLowerCase().includes(query)) {
-                          candidates.push({ itemType: 'vault', id: v.id, title: v.title, subtitle: `คลังสำคัญ: ${v.category}` });
-                        }
-                      });
-                    }
-                    if (attachTypeFilter === 'all' || attachTypeFilter === 'library') {
-                      libraryItems.forEach((l) => {
-                        if (!query || l.title.toLowerCase().includes(query) || (l.sourceUrlOrAuthor && l.sourceUrlOrAuthor.toLowerCase().includes(query))) {
-                          candidates.push({ itemType: 'library', id: l.id, title: l.title, subtitle: `ห้องสมุด: ${l.category}` });
-                        }
-                      });
-                    }
-
-                    if (candidates.length === 0) {
-                      return <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px 0' }}>ไม่พบข้อมูลที่ตรงกับคำค้นหา</p>;
-                    }
-
-                    const isLinked = (type: string, id: string) => {
-                      if (!customCategoryData) return false;
-                      if (type === 'note') return customCategoryData.notes.some((x) => x.id === id);
-                      if (type === 'task') return customCategoryData.tasks.some((x) => x.id === id);
-                      if (type === 'bookmark') return customCategoryData.bookmarks.some((x) => x.id === id);
-                      if (type === 'file') return customCategoryData.files.some((x) => x.id === id);
-                      if (type === 'vault') return customCategoryData.vault.some((x) => x.id === id);
-                      if (type === 'library') return customCategoryData.library.some((x) => x.id === id);
-                      return false;
-                    };
-
-                    return candidates.slice(0, 50).map((cand) => {
-                      const linked = isLinked(cand.itemType, cand.id);
-                      const key = `${cand.itemType}:${cand.id}`;
-                      const busy = attachBusyId === key;
-                      return (
-                        <div key={key} className="attach-item-row">
-                          <div className="attach-item-info">
-                            <strong>{cand.title}</strong>
-                            <span>{cand.subtitle}</span>
-                          </div>
-                          {linked ? (
-                            <span style={{ fontSize: '12px', color: 'var(--accent, #38a169)', fontWeight: 600 }}>ผูกอยู่แล้ว ✓</span>
-                          ) : (
-                            <button
-                              className="button button-quiet"
-                              type="button"
-                              disabled={busy}
-                              style={{ fontSize: '12px', padding: '4px 8px' }}
-                              onClick={() => void handleLinkExistingItem(cand.itemType, cand.id)}
-                            >
-                              {busy ? 'กำลังผูก…' : '＋ ผูกเข้าหมวดนี้'}
-                            </button>
-                          )}
-                        </div>
-                      );
-                    });
-                  })()}
-                </div>
-                <div className="editor-actions" style={{ marginTop: '12px' }}>
-                  <button className="button button-quiet" type="button" onClick={() => setQuickAddCatOpen(false)}>
-                    ปิดหน้าต่าง
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <form onSubmit={handleQuickAddIntoCategory} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {/* Form fields based on quickAddType */}
-                {quickAddType === 'file' ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    <label>
-                      เลือกไฟล์ (รูปภาพ, วิดีโอขนาดใหญ่ MP4/MOV/WebM, เสียง MP3/WAV, PDF, เอกสาร)
-                      <input
-                        required
-                        type="file"
-                        onChange={(e) => setCatUploadFile(e.target.files?.[0] || null)}
-                        style={{ marginTop: '6px' }}
-                      />
-                    </label>
-                    {catUploadFile && (
-                      <div style={{ padding: '8px 12px', background: 'var(--surface-hover)', borderRadius: '6px', fontSize: '13px' }}>
-                        <div><strong>ชื่อไฟล์:</strong> {catUploadFile.name}</div>
-                        <div><strong>ขนาด:</strong> {formatBytes(catUploadFile.size)}</div>
-                        <div><strong>ชนิดไฟล์:</strong> {catUploadFile.type || 'ไม่ระบุ'}</div>
-                      </div>
-                    )}
-                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
-                      ⚡ ไฟล์ขนาดใหญ่จะถูกบันทึกตรงลงดิสก์และสตรีมมิ่งผ่าน HTTP Range Requests รองรับการเปิดดูและกรอวิดีโอ (Seek) ได้ทันทีโดยไม่เปลืองหน่วยความจำ
-                    </p>
-                  </div>
-                ) : quickAddType === 'vault' ? (
-                  <>
-                    <label>
-                      ชื่อรายการทรัพย์สิน / เอกสารสำคัญ
-                      <input
-                        required
-                        type="text"
-                        value={quickAddTitle}
-                        onChange={(e) => setQuickAddTitle(e.target.value)}
-                        placeholder="เช่น กรมธรรม์ประกันสุขภาพ, โฉนดที่ดิน, สัญญาเช่า"
-                        autoFocus
-                      />
-                    </label>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                      <label>
-                        หมวดหมู่คลัง
-                        <select
-                          value={quickAddVaultCategory}
-                          onChange={(e) => setQuickAddVaultCategory(e.target.value as VaultCategory)}
-                        >
-                          {VAULT_CATEGORIES.map((cat) => (
-                            <option key={cat} value={cat}>{cat}</option>
-                          ))}
-                        </select>
-                      </label>
-                      <label>
-                        รหัส / เลขสำคัญ
-                        <input
-                          type="text"
-                          value={quickAddVaultKey}
-                          onChange={(e) => setQuickAddVaultKey(e.target.value)}
-                          placeholder="เลขกรมธรรม์, Serial..."
-                        />
-                      </label>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                      <label>
-                        สถานที่เก็บตัวจริง
-                        <input
-                          type="text"
-                          value={quickAddVaultLocation}
-                          onChange={(e) => setQuickAddVaultLocation(e.target.value)}
-                          placeholder="เช่น ตู้เซฟห้องนอน..."
-                        />
-                      </label>
-                      <label>
-                        วันหมดอายุ / ต่ออายุ
-                        <input
-                          type="date"
-                          value={quickAddVaultExpiry}
-                          onChange={(e) => setQuickAddVaultExpiry(e.target.value)}
-                        />
-                      </label>
-                    </div>
-                    <label>
-                      ยอดเงิน / ค่าใช้จ่าย (ถ้ามี)
-                      <input
-                        type="text"
-                        value={quickAddVaultAmount}
-                        onChange={(e) => setQuickAddVaultAmount(e.target.value)}
-                        placeholder="เช่น 15,000 บาท/ปี"
-                      />
-                    </label>
-                    <label>
-                      บันทึกเพิ่มเติม
-                      <textarea
-                        rows={2}
-                        value={quickAddContentOrUrl}
-                        onChange={(e) => setQuickAddContentOrUrl(e.target.value)}
-                        placeholder="เงื่อนไขหรือรายละเอียดเพิ่มเติม..."
-                      />
-                    </label>
-                  </>
-                ) : quickAddType === 'library' ? (
-                  <>
-                    <label>
-                      ชื่อเรื่อง / ชื่อคู่มือ
-                      <input
-                        required
-                        type="text"
-                        value={quickAddTitle}
-                        onChange={(e) => setQuickAddTitle(e.target.value)}
-                        placeholder="เช่น คู่มือการใช้งานระบบ, สรุปหนังสือ Deep Work"
-                        autoFocus
-                      />
-                    </label>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                      <label>
-                        หมวดหมู่ห้องสมุด
-                        <select
-                          value={quickAddLibraryCategory}
-                          onChange={(e) => setQuickAddLibraryCategory(e.target.value as LibraryCategory)}
-                        >
-                          {LIBRARY_CATEGORIES.map((cat) => (
-                            <option key={cat} value={cat}>{cat}</option>
-                          ))}
-                        </select>
-                      </label>
-                      <label>
-                        สถานะ
-                        <select
-                          value={quickAddLibraryStatus}
-                          onChange={(e) => setQuickAddLibraryStatus(e.target.value as LibraryStatus)}
-                        >
-                          {LIBRARY_STATUSES.map((st) => (
-                            <option key={st} value={st}>{st}</option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-                    <label>
-                      แหล่งที่มา / ผู้แต่ง
-                      <input
-                        type="text"
-                        value={quickAddLibrarySource}
-                        onChange={(e) => setQuickAddLibrarySource(e.target.value)}
-                        placeholder="ลิงก์ URL หรือชื่อผู้เขียน..."
-                      />
-                    </label>
-                    <label>
-                      แก่นสำคัญ / สาระที่ต้องจำ (Key Takeaways)
-                      <textarea
-                        rows={3}
-                        value={quickAddContentOrUrl}
-                        onChange={(e) => setQuickAddContentOrUrl(e.target.value)}
-                        placeholder="สิ่งที่ได้เรียนรู้หรือขั้นตอนสำคัญ..."
-                      />
-                    </label>
-                  </>
-                ) : (
-                  <>
-                    <label>
-                      {quickAddType === 'note' ? 'หัวข้อโน้ต' : quickAddType === 'task' ? 'ชื่องาน' : 'ชื่อลิงก์ / เว็บไซต์'}
-                      <input
-                        required
-                        type="text"
-                        value={quickAddTitle}
-                        onChange={(e) => setQuickAddTitle(e.target.value)}
-                        placeholder={quickAddType === 'note' ? 'หัวข้อโน้ต...' : quickAddType === 'task' ? 'สิ่งที่ต้องทำ...' : 'ชื่อเว็บไซต์...'}
-                        autoFocus
-                      />
-                    </label>
-
-                    {quickAddType === 'note' && (
-                      <label>
-                        เนื้อหาโน้ต
-                        <textarea
-                          rows={4}
-                          value={quickAddContentOrUrl}
-                          onChange={(e) => setQuickAddContentOrUrl(e.target.value)}
-                          placeholder="เขียนเนื้อหาหรือรายละเอียด..."
-                        />
-                      </label>
-                    )}
-
-                    {quickAddType === 'task' && (
-                      <label>
-                        รายละเอียดงาน (เพิ่มเติม)
-                        <textarea
-                          rows={3}
-                          value={quickAddContentOrUrl}
-                          onChange={(e) => setQuickAddContentOrUrl(e.target.value)}
-                          placeholder="รายละเอียดเพิ่มเติมของงานนี้..."
-                        />
-                      </label>
-                    )}
-
-                    {quickAddType === 'bookmark' && (
-                      <label>
-                        URL ลิงก์
-                        <input
-                          required
-                          type="url"
-                          value={quickAddContentOrUrl}
-                          onChange={(e) => setQuickAddContentOrUrl(e.target.value)}
-                          placeholder="https://example.com"
-                        />
-                      </label>
-                    )}
-                  </>
-                )}
-
-                <div className="editor-actions" style={{ marginTop: '8px' }}>
-                  <button
-                    className="button button-quiet"
-                    type="button"
-                    disabled={quickAddBusy}
-                    onClick={() => setQuickAddCatOpen(false)}
-                  >
-                    ยกเลิก
-                  </button>
-                  <button
-                    className="button button-primary"
-                    type="submit"
-                    disabled={quickAddBusy}
-                  >
-                    {quickAddBusy ? 'กำลังบันทึก…' : 'เพิ่มลงในหมวดหมู่'}
-                  </button>
-                </div>
-              </form>
-            )}
-          </section>
-        </div>
-      )}
+      {/* Quick Add into Category Modal */}
+      <QuickAddCategoryModal
+        isOpen={quickAddCatOpen && Boolean(selectedCustomCategoryId)}
+        onClose={() => setQuickAddCatOpen(false)}
+        selectedCustomCategoryId={selectedCustomCategoryId}
+        customCategoryData={customCategoryData}
+        quickAddType={quickAddType}
+        setQuickAddType={setQuickAddType}
+        attachSearchQuery={attachSearchQuery}
+        setAttachSearchQuery={setAttachSearchQuery}
+        attachTypeFilter={attachTypeFilter}
+        setAttachTypeFilter={setAttachTypeFilter}
+        notes={notes}
+        tasks={tasks}
+        bookmarks={bookmarks}
+        files={files}
+        vaultItems={vaultItems}
+        libraryItems={libraryItems}
+        attachBusyId={attachBusyId}
+        onLinkExistingItem={handleLinkExistingItem}
+        quickAddBusy={quickAddBusy}
+        onQuickAddSubmit={handleQuickAddIntoCategory}
+        catUploadFile={catUploadFile}
+        setCatUploadFile={setCatUploadFile}
+        quickAddTitle={quickAddTitle}
+        setQuickAddTitle={setQuickAddTitle}
+        quickAddContentOrUrl={quickAddContentOrUrl}
+        setQuickAddContentOrUrl={setQuickAddContentOrUrl}
+        quickAddVaultCategory={quickAddVaultCategory}
+        setQuickAddVaultCategory={setQuickAddVaultCategory}
+        quickAddVaultKey={quickAddVaultKey}
+        setQuickAddVaultKey={setQuickAddVaultKey}
+        quickAddVaultLocation={quickAddVaultLocation}
+        setQuickAddVaultLocation={setQuickAddVaultLocation}
+        quickAddVaultExpiry={quickAddVaultExpiry}
+        setQuickAddVaultExpiry={setQuickAddVaultExpiry}
+        quickAddVaultAmount={quickAddVaultAmount}
+        setQuickAddVaultAmount={setQuickAddVaultAmount}
+        quickAddLibraryCategory={quickAddLibraryCategory}
+        setQuickAddLibraryCategory={setQuickAddLibraryCategory}
+        quickAddLibraryStatus={quickAddLibraryStatus}
+        setQuickAddLibraryStatus={setQuickAddLibraryStatus}
+        quickAddLibrarySource={quickAddLibrarySource}
+        setQuickAddLibrarySource={setQuickAddLibrarySource}
+      />
 
       {/* Media Lightbox Player Modal */}
       {mediaLightboxFile && (
-        <div className="media-lightbox-backdrop" onClick={() => setMediaLightboxFile(null)}>
-          <div className="media-lightbox-content" onClick={(e) => e.stopPropagation()}>
-            <div className="media-lightbox-header">
-              <div className="media-lightbox-title">
-                <span style={{ fontSize: '20px' }}>{fileIcon(mediaLightboxFile.mediaType, mediaLightboxFile.displayName)}</span>
-                <strong>{mediaLightboxFile.displayName}</strong>
-                <span className="media-lightbox-meta">({formatBytes(mediaLightboxFile.sizeBytes)})</span>
-              </div>
-              <div className="media-lightbox-actions">
-                <a
-                  className="button button-quiet"
-                  href={mediaLightboxFile.downloadUrl}
-                  download={mediaLightboxFile.displayName}
-                >
-                  ⬇️ ดาวน์โหลด
-                </a>
-                <button
-                  className="media-lightbox-close"
-                  type="button"
-                  aria-label="ปิด (Escape)"
-                  onClick={() => setMediaLightboxFile(null)}
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-            <div className="media-lightbox-body">
-              {mediaLightboxFile.mediaType.startsWith('image/') ? (
-                <img
-                  src={mediaLightboxFile.downloadUrl}
-                  alt={mediaLightboxFile.displayName}
-                  className="lightbox-img"
-                  loading="lazy"
-                  decoding="async"
-                />
-              ) : mediaLightboxFile.mediaType.startsWith('video/') ||
-                mediaLightboxFile.displayName.endsWith('.mp4') ||
-                mediaLightboxFile.displayName.endsWith('.webm') ||
-                mediaLightboxFile.displayName.endsWith('.mov') ? (
-                <video
-                  src={mediaLightboxFile.downloadUrl}
-                  controls
-                  autoPlay
-                  playsInline
-                  className="lightbox-video"
-                >
-                  เบราว์เซอร์ไม่รองรับการเล่นวิดีโอ
-                </video>
-              ) : mediaLightboxFile.mediaType.startsWith('audio/') ||
-                mediaLightboxFile.displayName.endsWith('.mp3') ||
-                mediaLightboxFile.displayName.endsWith('.wav') ||
-                mediaLightboxFile.displayName.endsWith('.m4a') ? (
-                <div className="lightbox-audio-wrapper">
-                  <span style={{ fontSize: '48px' }}>🎵</span>
-                  <strong style={{ fontSize: '16px' }}>{mediaLightboxFile.displayName}</strong>
-                  <audio src={mediaLightboxFile.downloadUrl} controls autoPlay className="lightbox-audio" />
-                </div>
-              ) : mediaLightboxFile.mediaType === 'application/pdf' || mediaLightboxFile.displayName.endsWith('.pdf') ? (
-                <iframe
-                  src={mediaLightboxFile.downloadUrl}
-                  title={mediaLightboxFile.displayName}
-                  className="lightbox-pdf"
-                />
-              ) : (
-                <div className="lightbox-fallback">
-                  <span style={{ fontSize: '48px' }}>📄</span>
-                  <p>ไฟล์นี้ไม่รองรับการเล่นสดบนเว็บ ({mediaLightboxFile.mediaType})</p>
-                  <a className="button button-primary" href={mediaLightboxFile.downloadUrl} download={mediaLightboxFile.displayName}>
-                    ดาวน์โหลดไฟล์ลงเครื่อง
-                  </a>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <MediaLightbox
+          file={mediaLightboxFile}
+          onClose={() => setMediaLightboxFile(null)}
+        />
       )}
+      </Suspense>
+
+      {/* Mobile Bottom Navigation & Quick Capture FAB (<= 768px) */}
+      <MobileBottomNav
+        viewMode={viewMode}
+        onSwitchView={switchView}
+        onOpenMobileMenu={() => setMobileMenuOpen(true)}
+        onQuickNewNote={() => {
+          startNewNote();
+          setViewMode('notes');
+        }}
+        inboxCount={inboxNewCount}
+        tasksCount={tasks.length}
+      />
     </main>
   );
 }

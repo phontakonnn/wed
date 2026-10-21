@@ -1,0 +1,40 @@
+.pkh-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--pkh-bg-subtle) 0%,
+    var(--pkh-border-default) 50%,
+    var(--pkh-bg-subtle) 100%
+  );
+  background-size: 200% 100%;
+  animation: pkh-shimmer 1.8s ease-in-out infinite;
+  display: block;
+}
+
+.pkh-skeleton--text {
+  height: 16px;
+  border-radius: var(--pkh-radius-xs);
+  margin-bottom: var(--pkh-space-2);
+}
+
+.pkh-skeleton--circular {
+  border-radius: 50%;
+}
+
+.pkh-skeleton--rectangular {
+  border-radius: var(--pkh-radius-md);
+}
+
+.pkh-skeleton--card {
+  border-radius: var(--pkh-radius-xl);
+  height: 160px;
+  width: 100%;
+}
+
+@keyframes pkh-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}

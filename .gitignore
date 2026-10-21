@@ -55,6 +55,10 @@ node_modules/
 # ---------------------------------------------------------------------------
 .tmp-acceptance*/
 tmp-acceptance*/
+test-results/
+**/test-results/
+playwright-report/
+**/playwright-report/
 
 # ---------------------------------------------------------------------------
 # Secrets and local configuration

@@ -60,6 +60,15 @@ type Note = {
   createdAt: number;
   updatedAt: number;
 };
+type NoteVersion = {
+  id: string;
+  noteId: string;
+  versionNumber: number;
+  title: string;
+  content: string;
+  createdAt: number;
+};
+
 type Bookmark = {
   id: string;
   title: string;
@@ -331,7 +340,7 @@ export function createApp(
     const isHealth = request.method === 'GET' && path === '/api/health';
     const isLogin = request.method === 'POST' && path === '/api/auth/login';
     const isWebAsset = request.method === 'GET' &&
-      (path === '/' || path === '/favicon.svg' || path === '/icons.svg' || path.startsWith('/assets/'));
+      (options.webRoot ? !path.startsWith('/api/') : (path === '/' || path === '/favicon.svg' || path === '/icons.svg' || path === '/sw.js' || path === '/manifest.json' || path.startsWith('/assets/')));
     const isPublic = isHealth || isLogin || isWebAsset;
 
     if (request.method !== 'GET' && request.method !== 'HEAD' && !csrfIsValid(
@@ -1437,6 +1446,33 @@ export function createApp(
       return reply.code(400).send({ error: 'หัวข้อโน้ตต้องไม่ว่าง' });
     }
 
+    const current = database.prepare(
+      'SELECT id, title, content, updated_at FROM notes WHERE id = ? AND owner_id = ? AND deleted_at IS NULL'
+    ).get(request.params.noteId, ownerId) as { id: string; title: string; content: string; updated_at: number } | undefined;
+    if (!current) return reply.code(404).send({ error: 'ไม่พบโน้ต' });
+
+    const willChangeTitle = normalizedTitle !== undefined && normalizedTitle !== current.title;
+    const willChangeContent = content !== undefined && content !== current.content;
+
+    if (willChangeTitle || willChangeContent) {
+      const maxVer = database.prepare(
+        'SELECT COALESCE(MAX(version_number), 0) AS maxVersion FROM note_versions WHERE note_id = ?'
+      ).get(current.id) as { maxVersion: number };
+
+      database.prepare(`
+        INSERT INTO note_versions (id, note_id, owner_id, version_number, title, content, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        randomUUID(),
+        current.id,
+        ownerId,
+        maxVer.maxVersion + 1,
+        current.title,
+        current.content,
+        current.updated_at || Date.now()
+      );
+    }
+
     const result = database.prepare(`
       UPDATE notes
       SET title = COALESCE(?, title),
@@ -1448,6 +1484,91 @@ export function createApp(
 
     const note = database.prepare(`${noteSelect} WHERE id = ? AND owner_id = ?`)
       .get(request.params.noteId, ownerId) as Note;
+    return { note };
+  });
+
+  app.get<{ Params: { noteId: string } }>('/api/notes/:noteId/versions', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['noteId'],
+        properties: {
+          noteId: { type: 'string', pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const ownerId = request.sessionUserId;
+    if (!ownerId) return reply.code(401).send({ error: 'กรุณาเข้าสู่ระบบ' });
+    const note = database.prepare('SELECT id FROM notes WHERE id = ? AND owner_id = ? AND deleted_at IS NULL')
+      .get(request.params.noteId, ownerId);
+    if (!note) return reply.code(404).send({ error: 'ไม่พบโน้ต' });
+
+    const versions = database.prepare(`
+      SELECT id, note_id AS noteId, version_number AS versionNumber, title, content, created_at AS createdAt
+      FROM note_versions
+      WHERE note_id = ? AND owner_id = ?
+      ORDER BY version_number DESC
+    `).all(request.params.noteId, ownerId) as NoteVersion[];
+    return { versions };
+  });
+
+  app.post<{ Params: { noteId: string; versionId: string } }>('/api/notes/:noteId/versions/:versionId/restore', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['noteId', 'versionId'],
+        properties: {
+          noteId: { type: 'string', pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' },
+          versionId: { type: 'string', pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const ownerId = request.sessionUserId;
+    if (!ownerId) return reply.code(401).send({ error: 'กรุณาเข้าสู่ระบบ' });
+
+    const targetVersion = database.prepare(
+      'SELECT id, note_id, version_number, title, content FROM note_versions WHERE id = ? AND note_id = ? AND owner_id = ?'
+    ).get(request.params.versionId, request.params.noteId, ownerId) as {
+      id: string;
+      note_id: string;
+      version_number: number;
+      title: string;
+      content: string;
+    } | undefined;
+    if (!targetVersion) return reply.code(404).send({ error: 'ไม่พบประวัติเวอร์ชันที่ต้องการกู้คืน' });
+
+    const current = database.prepare(
+      'SELECT id, title, content, updated_at FROM notes WHERE id = ? AND owner_id = ? AND deleted_at IS NULL'
+    ).get(request.params.noteId, ownerId) as { id: string; title: string; content: string; updated_at: number } | undefined;
+    if (!current) return reply.code(404).send({ error: 'ไม่พบโน้ต' });
+
+    const maxVer = database.prepare(
+      'SELECT COALESCE(MAX(version_number), 0) AS maxVersion FROM note_versions WHERE note_id = ?'
+    ).get(current.id) as { maxVersion: number };
+
+    database.prepare(`
+      INSERT INTO note_versions (id, note_id, owner_id, version_number, title, content, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      randomUUID(),
+      current.id,
+      ownerId,
+      maxVer.maxVersion + 1,
+      current.title,
+      current.content,
+      current.updated_at || Date.now()
+    );
+
+    database.prepare(`
+      UPDATE notes
+      SET title = ?, content = ?, updated_at = ?
+      WHERE id = ? AND owner_id = ? AND deleted_at IS NULL
+    `).run(targetVersion.title, targetVersion.content, Date.now(), current.id, ownerId);
+
+    const note = database.prepare(`${noteSelect} WHERE id = ? AND owner_id = ?`)
+      .get(current.id, ownerId) as Note;
     return { note };
   });
 

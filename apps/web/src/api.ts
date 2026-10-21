@@ -11,6 +11,15 @@ export interface Note {
   updatedAt: number;
 }
 
+export interface NoteVersion {
+  id: string;
+  noteId: string;
+  versionNumber: number;
+  title: string;
+  content: string;
+  createdAt: number;
+}
+
 export interface Bookmark {
   id: string;
   title: string;
@@ -693,6 +702,22 @@ export async function permanentlyDeleteNote(noteId: string): Promise<void> {
   });
 }
 
+
+export async function listNoteVersions(noteId: string): Promise<NoteVersion[]> {
+  const result = await request<{ versions: NoteVersion[] }>(`/api/notes/${encodeURIComponent(noteId)}/versions`);
+  if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
+  return result.versions;
+}
+
+export async function restoreNoteVersion(noteId: string, versionId: string): Promise<Note> {
+  const result = await request<{ note: Note }>(
+    `/api/notes/${encodeURIComponent(noteId)}/versions/${encodeURIComponent(versionId)}/restore`,
+    { method: 'POST' },
+  );
+  if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
+  return result.note;
+}
+
 export async function getNote(noteId: string): Promise<Note> {
   const result = await request<{ note: Note }>(`/api/notes/${encodeURIComponent(noteId)}`);
   if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
@@ -731,28 +756,69 @@ export async function listFiles(page = 1, pageSize = 50): Promise<FilePage> {
   return result;
 }
 
-export async function uploadFile(file: File): Promise<StoredFile> {
-  const headers = new Headers();
-  headers.set('x-pkh-request', '1');
-  headers.set('x-file-name', encodeURIComponent(file.name));
-  headers.set('content-type', 'application/octet-stream');
+export interface UploadProgressOptions {
+  onProgress?: (percent: number, loaded: number, total: number) => void;
+  signal?: AbortSignal;
+}
 
-  const response = await fetch('/api/files', {
-    method: 'POST',
-    headers,
-    body: file,
-    credentials: 'same-origin',
+export function uploadFileWithProgress(
+  file: File,
+  options?: UploadProgressOptions
+): Promise<StoredFile> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+
+    if (options?.signal) {
+      if (options.signal.aborted) {
+        reject(new ApiError('การอัปโหลดถูกยกเลิก', 0));
+        return;
+      }
+      options.signal.addEventListener('abort', () => {
+        xhr.abort();
+        reject(new ApiError('การอัปโหลดถูกยกเลิก', 0));
+      });
+    }
+
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable && options?.onProgress) {
+        const percent = Math.round((e.loaded / e.total) * 100);
+        options.onProgress(percent, e.loaded, e.total);
+      }
+    });
+
+    xhr.addEventListener('load', () => {
+      let payload: { error?: string; file?: StoredFile };
+      try {
+        payload = JSON.parse(xhr.responseText) as { error?: string; file?: StoredFile };
+      } catch {
+        return reject(new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่อ่านไม่ได้', xhr.status));
+      }
+      if (xhr.status >= 200 && xhr.status < 300 && payload.file) {
+        resolve(payload.file);
+      } else {
+        reject(new ApiError(payload.error ?? 'อัปโหลดไฟล์ไม่สำเร็จ', xhr.status));
+      }
+    });
+
+    xhr.addEventListener('error', () => {
+      reject(new ApiError('เครือข่ายขัดข้องระหว่างอัปโหลดไฟล์', 0));
+    });
+
+    xhr.addEventListener('abort', () => {
+      reject(new ApiError('การอัปโหลดถูกยกเลิก', 0));
+    });
+
+    xhr.open('POST', '/api/files');
+    xhr.setRequestHeader('x-pkh-request', '1');
+    xhr.setRequestHeader('x-file-name', encodeURIComponent(file.name));
+    xhr.setRequestHeader('content-type', 'application/octet-stream');
+    xhr.withCredentials = true;
+    xhr.send(file);
   });
-  let payload: { error?: string; file?: StoredFile };
-  try {
-    payload = await response.json() as { error?: string; file?: StoredFile };
-  } catch {
-    throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่อ่านไม่ได้', response.status);
-  }
-  if (!response.ok || !payload.file) {
-    throw new ApiError(payload.error ?? 'อัปโหลดไฟล์ไม่สำเร็จ', response.status);
-  }
-  return payload.file;
+}
+
+export async function uploadFile(file: File): Promise<StoredFile> {
+  return uploadFileWithProgress(file);
 }
 
 export async function deleteFile(fileId: string): Promise<void> {

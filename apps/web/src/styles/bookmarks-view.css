@@ -1,0 +1,195 @@
+/* Bookmarks & Favorites View Styling */
+
+.bookmarks-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: 8px;
+}
+
+/* Quick Save Bar / Form Card */
+.bookmark-quick-bar {
+  background: var(--pkh-bg-surface);
+  border: 1px solid var(--pkh-border-subtle);
+  border-radius: var(--pkh-radius-lg);
+  padding: 20px;
+  box-shadow: var(--pkh-shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.bookmark-form-grid {
+  display: grid;
+  grid-template-columns: 2fr 1.5fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 768px) {
+  .bookmark-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.bookmark-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bookmark-field-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pkh-text-secondary);
+}
+
+.bookmark-field-group input,
+.bookmark-field-group select,
+.bookmark-field-group textarea {
+  padding: 8px 12px;
+  border-radius: var(--pkh-radius-md);
+  border: 1px solid var(--pkh-border-default);
+  background: var(--pkh-bg-surface);
+  color: var(--pkh-text-primary);
+  font-size: 13px;
+  outline: none;
+  font-family: inherit;
+  transition: border-color var(--pkh-motion-fast);
+}
+
+.bookmark-field-group input:focus,
+.bookmark-field-group select:focus,
+.bookmark-field-group textarea:focus {
+  border-color: var(--pkh-brand-primary);
+  box-shadow: 0 0 0 2px var(--pkh-brand-subtle);
+}
+
+/* Duplicate URL Warning Pill */
+.bookmark-duplicate-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--pkh-radius-md);
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+  font-size: 12px;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+.bookmark-duplicate-alert strong {
+  font-weight: 650;
+}
+
+/* Bookmark Cards Grid */
+.bookmarks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.bookmark-card-modern {
+  background: var(--pkh-bg-surface);
+  border: 1px solid var(--pkh-border-subtle);
+  border-radius: var(--pkh-radius-lg);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  transition: all var(--pkh-motion-fast);
+  cursor: pointer;
+  box-shadow: var(--pkh-shadow-xs);
+  position: relative;
+}
+
+.bookmark-card-modern:hover {
+  transform: translateY(-2px);
+  border-color: var(--pkh-border-default);
+  box-shadow: var(--pkh-shadow-md);
+}
+
+.bookmark-card-modern.is-active {
+  border-color: var(--pkh-brand-primary);
+  box-shadow: 0 0 0 2px var(--pkh-brand-subtle);
+}
+
+.bookmark-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.bookmark-domain-pill {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--pkh-radius-full);
+  background: var(--pkh-bg-subtle);
+  border: 1px solid var(--pkh-border-subtle);
+  color: var(--pkh-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.bookmark-card-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--pkh-text-primary);
+  line-height: 1.35;
+  margin: 6px 0 2px;
+}
+
+.bookmark-card-url {
+  font-size: 12px;
+  color: var(--pkh-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-decoration: none;
+  display: block;
+}
+
+.bookmark-card-desc {
+  font-size: 12px;
+  color: var(--pkh-text-secondary);
+  line-height: 1.45;
+  margin: 6px 0 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.bookmark-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 10px;
+  border-top: 1px solid var(--pkh-border-subtle);
+  font-size: 11px;
+  color: var(--pkh-text-muted);
+}
+
+.bookmark-external-link {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--pkh-brand-primary);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border-radius: var(--pkh-radius-sm);
+  background: var(--pkh-brand-subtle);
+  transition: all var(--pkh-motion-fast);
+}
+
+.bookmark-external-link:hover {
+  background: var(--pkh-brand-primary);
+  color: #ffffff;
+}

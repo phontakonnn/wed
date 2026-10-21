@@ -23,7 +23,8 @@
     "storage:check": "npm --prefix apps/server run storage:check --",
     "storage:quarantine": "npm --prefix apps/server run storage:quarantine --",
     "backup:preflight": "npm --prefix apps/server run backup:preflight --",
-    "backup:staging": "npm --prefix apps/server run backup:staging --"
+    "backup:staging": "npm --prefix apps/server run backup:staging --",
+    "test:e2e": "npm --prefix apps/web run test:e2e"
   },
   "license": "MIT",
   "type": "module"
