@@ -1223,8 +1223,53 @@ export interface DashboardData {
 
 export async function getDashboard(): Promise<DashboardData> {
   const result = await request<DashboardData>('/api/dashboard');
-  if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
-  return result;
+  const todayStr = new Date().toISOString().slice(0, 10);
+  return {
+    today: result?.today || todayStr,
+    counts: {
+      dueToday: result?.counts?.dueToday ?? (result?.tasks?.dueToday?.length ?? 0),
+      overdue: result?.counts?.overdue ?? (result?.tasks?.overdue?.length ?? 0),
+      openTasks: result?.counts?.openTasks ?? 0,
+      reminders: result?.counts?.reminders ?? (result?.reminders?.length ?? 0),
+      inbox: result?.counts?.inbox ?? 0,
+      projects: result?.counts?.projects ?? (result?.projects?.length ?? 0),
+      goals: result?.counts?.goals ?? (result?.goals?.length ?? 0),
+      habitsOutstanding: result?.counts?.habitsOutstanding ?? 0,
+      notes: result?.counts?.notes ?? (result?.notes?.length ?? 0),
+      vaultExpiring: result?.counts?.vaultExpiring ?? (result?.vault?.expiring?.length ?? 0),
+      upcomingWindowEnd: result?.counts?.upcomingWindowEnd || '',
+    },
+    totals: {
+      notes: result?.totals?.notes ?? 0,
+      tasks: result?.totals?.tasks ?? 0,
+      vault: result?.totals?.vault ?? 0,
+      library: result?.totals?.library ?? 0,
+    },
+    tasks: {
+      dueToday: result?.tasks?.dueToday ?? [],
+      overdue: result?.tasks?.overdue ?? [],
+    },
+    reminders: result?.reminders ?? [],
+    timeblocks: {
+      blocks: result?.timeblocks?.blocks ?? [],
+      done: result?.timeblocks?.done ?? 0,
+      total: result?.timeblocks?.total ?? 0,
+    },
+    projects: result?.projects ?? [],
+    goals: result?.goals ?? [],
+    habits: result?.habits ?? [],
+    inbox: {
+      newCount: result?.inbox?.newCount ?? 0,
+      items: result?.inbox?.items ?? [],
+    },
+    notes: result?.notes ?? [],
+    vault: {
+      expiring: result?.vault?.expiring ?? [],
+    },
+    library: {
+      active: result?.library?.active ?? [],
+    },
+  };
 }
 
 // ---------------------------------------------------------------- habit logs

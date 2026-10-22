@@ -106,9 +106,6 @@ import {
   createCustomCategory,
   updateCustomCategory,
   deleteCustomCategory,
-  verify2FALogin,
-  requestForgotOtp,
-  resetPasswordWithOtp,
   getCustomCategoryItems,
   linkItemToCustomCategory,
   unlinkItemFromCustomCategory,
@@ -126,7 +123,6 @@ import {
   getNotificationPreferences,
   updateNotificationPreferences,
   type NotificationPreferences,
-  registerAccount,
   fetchCustomTypes,
   type CustomDataType,
 } from './api';
@@ -172,17 +168,10 @@ import { Skeleton } from './components/ui/Skeleton';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import {
   firebaseAuth,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  sendPasswordResetEmail,
-  sendSignInLinkToEmail,
   isSignInWithEmailLink,
   signInWithEmailLink,
-  signInWithPhoneNumber,
-  RecaptchaVerifier,
   onAuthStateChanged,
   type FirebaseUser,
-  type ConfirmationResult,
 } from './lib/firebase';
 import {
   subscribeUserLinks,
@@ -258,16 +247,6 @@ function App() {
   // Firebase Authentication & Serverless States
   const [firebaseSetupOpen, setFirebaseSetupOpen] = useState(false);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
-  const [authMethod, setAuthMethod] = useState<'firebase' | 'local'>('firebase');
-  const [fbAuthTab, setFbAuthTab] = useState<'password' | 'email-link' | 'phone'>('password');
-  const [fbEmail, setFbEmail] = useState('');
-  const [fbPassword, setFbPassword] = useState('');
-  const [fbPhone, setFbPhone] = useState('');
-  const [fbPhoneCode, setFbPhoneCode] = useState('');
-  const [fbConfirmationResult, setFbConfirmationResult] = useState<ConfirmationResult | null>(null);
-  const [fbStatusMessage, setFbStatusMessage] = useState('');
-  const [fbErrorMessage, setFbErrorMessage] = useState('');
-  const [fbBusy, setFbBusy] = useState(false);
   const [noteFavoriteState, setNoteFavoriteState] = useState<{ id: string; favorited: boolean } | null>(null);
   const [bookmarkFavoriteState, setBookmarkFavoriteState] = useState<{ id: string; favorited: boolean } | null>(null);
   const [favoriteBusy, setFavoriteBusy] = useState(false);
@@ -519,30 +498,6 @@ function App() {
   const [content, setContent] = useState('');
   const [bookmarkTitle, setBookmarkTitle] = useState('');
   const [bookmarkCategory, setBookmarkCategory] = useState<string>('📦 อื่นๆ');
-  const [twoFactorTempToken, setTwoFactorTempToken] = useState<string>('');
-  const [twoFactorCode, setTwoFactorCode] = useState<string>('');
-  const [isForgotOpen, setIsForgotOpen] = useState<boolean>(false);
-  const [forgotRecoveryType, setForgotRecoveryType] = useState<'email' | 'phone'>('email');
-  const [forgotUsername, setForgotUsername] = useState<string>('');
-  const [forgotEmail, setForgotEmail] = useState<string>('');
-  const [forgotPhone, setForgotPhone] = useState<string>('');
-  const [forgotOtp, setForgotOtp] = useState<string>('');
-  const [forgotNewPassword, setForgotNewPassword] = useState<string>('');
-  const [forgotStep, setForgotStep] = useState<'request' | 'reset'>('request');
-  const [forgotMessage, setForgotMessage] = useState<string>('');
-  const [forgotError, setForgotError] = useState<string>('');
-  const [forgotBusy, setForgotBusy] = useState<boolean>(false);
-  const [otpCountdown, setOtpCountdown] = useState<number>(0);
-  const [showAdminHelp, setShowAdminHelp] = useState<boolean>(false);
-  // Registration State
-  const [isInviteRegisterOpen, setIsInviteRegisterOpen] = useState(false);
-  const [inviteCode, setInviteCode] = useState('');
-  const [inviteUsername, setInviteUsername] = useState('');
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [invitePassword, setInvitePassword] = useState('');
-  const [inviteDisplayName, setInviteDisplayName] = useState('');
-  const [inviteError, setInviteError] = useState('');
-  const [inviteBusy, setInviteBusy] = useState(false);
 
   // Notification Center State
   const [notificationsList, setNotificationsList] = useState<NotificationItem[]>([]);
@@ -1459,11 +1414,6 @@ function App() {
     setAuthError('');
     try {
       const res = await login(username.trim(), password);
-      if (res.twoFactorRequired && res.tempToken) {
-        setTwoFactorTempToken(res.tempToken);
-        setTwoFactorCode('');
-        return;
-      }
       if (res.user) {
         setUser(res.user);
         setPassword('');
@@ -1476,98 +1426,6 @@ function App() {
       setAuthError(errorMessage(error));
     } finally {
       setAuthBusy(false);
-    }
-  }
-
-  async function handle2FAVerify(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!twoFactorTempToken || !twoFactorCode.trim()) return;
-    setAuthBusy(true);
-    setAuthError('');
-    try {
-      const res = await verify2FALogin(twoFactorTempToken, twoFactorCode.trim());
-      setUser(res.user);
-      setPassword('');
-      setTwoFactorTempToken('');
-      setTwoFactorCode('');
-      setNotesBusy(true);
-      setTaxonomyBusy(true);
-      setNotesError('');
-      setAuthState('signed-in');
-    } catch (error) {
-      setAuthError(errorMessage(error));
-    } finally {
-      setAuthBusy(false);
-    }
-  }
-
-  useEffect(() => {
-    if (otpCountdown <= 0) return;
-    const timer = setInterval(() => {
-      setOtpCountdown((c) => Math.max(0, c - 1));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [otpCountdown]);
-
-  async function handleRequestForgotOtp(event?: FormEvent<HTMLFormElement>) {
-    if (event) event.preventDefault();
-    if (forgotRecoveryType === 'email' && !forgotEmail.trim()) return;
-    if (forgotRecoveryType === 'phone' && !forgotPhone.trim()) return;
-
-    setForgotBusy(true);
-    setForgotError('');
-    try {
-      const res = await requestForgotOtp(forgotUsername.trim() || undefined, {
-        email: forgotEmail.trim() || undefined,
-        phone: forgotPhone.trim() || undefined,
-        recoveryType: forgotRecoveryType,
-      });
-      setForgotStep('reset');
-      setOtpCountdown(300);
-      const simulated = res.simulatedOtp || res.debugOtp;
-      if (simulated) {
-        setForgotMessage(res.message + ` (รหัส OTP จำลองสำหรับทดสอบ: ${simulated})`);
-        setForgotOtp(simulated);
-      } else {
-        setForgotMessage(res.message);
-      }
-      if (res.username && !forgotUsername.trim()) {
-        setForgotUsername(res.username);
-      }
-    } catch (error) {
-      setForgotError(errorMessage(error));
-    } finally {
-      setForgotBusy(false);
-    }
-  }
-
-  async function handleResetPasswordWithOtp(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!forgotOtp.trim() || !forgotNewPassword) return;
-    setForgotBusy(true);
-    setForgotError('');
-    try {
-      const res = await resetPasswordWithOtp(forgotUsername.trim() || undefined, forgotOtp.trim(), forgotNewPassword, {
-        email: forgotEmail.trim() || undefined,
-        phone: forgotPhone.trim() || undefined,
-      });
-      setForgotMessage(res.message || 'ตั้งรหัสผ่านใหม่สำเร็จแล้ว เข้าสู่ระบบได้ทันที');
-      setTimeout(() => {
-        setIsForgotOpen(false);
-        setForgotStep('request');
-        setForgotUsername('');
-        setForgotEmail('');
-        setForgotPhone('');
-        setForgotOtp('');
-        setForgotNewPassword('');
-        setForgotMessage('');
-        setOtpCountdown(0);
-        setShowAdminHelp(false);
-      }, 2500);
-    } catch (error) {
-      setForgotError(errorMessage(error));
-    } finally {
-      setForgotBusy(false);
     }
   }
 
@@ -1651,127 +1509,6 @@ function App() {
     };
   }, [firebaseUser?.uid]);
 
-  // Firebase Auth Action Handlers
-  async function handleFirebaseEmailPassword(isRegister: boolean) {
-    if (!firebaseAuth) {
-      setFbErrorMessage('ยังไม่ได้ตั้งค่า Firebase API Key กรุณากดปุ่ม "⚙️ ตั้งค่า Firebase" ด้านล่าง');
-      return;
-    }
-    if (!fbEmail.trim() || !fbPassword.trim()) {
-      setFbErrorMessage('กรุณากรอกอีเมลและรหัสผ่านให้ครบถ้วน');
-      return;
-    }
-    setFbBusy(true);
-    setFbErrorMessage('');
-    setFbStatusMessage('');
-    try {
-      if (isRegister) {
-        await createUserWithEmailAndPassword(firebaseAuth, fbEmail.trim(), fbPassword);
-        setFbStatusMessage('สมัครสมาชิกและเข้าสู่ระบบสำเร็จ');
-      } else {
-        await signInWithEmailAndPassword(firebaseAuth, fbEmail.trim(), fbPassword);
-        setFbStatusMessage('เข้าสู่ระบบสำเร็จ');
-      }
-    } catch (err: unknown) {
-      setFbErrorMessage(errorMessage(err));
-    } finally {
-      setFbBusy(false);
-    }
-  }
-
-  async function handleFirebasePasswordReset() {
-    if (!firebaseAuth) {
-      setFbErrorMessage('ยังไม่ได้ตั้งค่า Firebase API Key กรุณากดปุ่ม "⚙️ ตั้งค่า Firebase" ด้านล่าง');
-      return;
-    }
-    if (!fbEmail.trim()) {
-      setFbErrorMessage('กรุณากรอกอีเมลในช่องด้านบน เพื่อรับลิงก์รีเซ็ตรหัสผ่าน');
-      return;
-    }
-    setFbBusy(true);
-    setFbErrorMessage('');
-    setFbStatusMessage('');
-    try {
-      await sendPasswordResetEmail(firebaseAuth, fbEmail.trim());
-      setFbStatusMessage(`ส่งลิงก์สำหรับตั้งรหัสผ่านใหม่ไปยัง ${fbEmail.trim()} แล้ว กรุณาตรวจสอบกล่องจดหมายของคุณ`);
-    } catch (err: unknown) {
-      setFbErrorMessage(errorMessage(err));
-    } finally {
-      setFbBusy(false);
-    }
-  }
-
-  async function handleFirebaseEmailLinkSignIn() {
-    if (!firebaseAuth) {
-      setFbErrorMessage('ยังไม่ได้ตั้งค่า Firebase API Key กรุณากดปุ่ม "⚙️ ตั้งค่า Firebase" ด้านล่าง');
-      return;
-    }
-    if (!fbEmail.trim()) {
-      setFbErrorMessage('กรุณากรอกอีเมลที่ต้องการรับลิงก์');
-      return;
-    }
-    setFbBusy(true);
-    setFbErrorMessage('');
-    setFbStatusMessage('');
-    try {
-      const actionCodeSettings = {
-        url: window.location.href,
-        handleCodeInApp: true,
-      };
-      await sendSignInLinkToEmail(firebaseAuth, fbEmail.trim(), actionCodeSettings);
-      window.localStorage.setItem('pkh.emailForSignIn', fbEmail.trim());
-      setFbStatusMessage(`ส่งลิงก์เข้าสู่ระบบไปยัง ${fbEmail.trim()} เรียบร้อยแล้ว กรุณาเปิดอีเมลและคลิกลิงก์เพื่อเข้าใช้งานทันที`);
-    } catch (err: unknown) {
-      setFbErrorMessage(errorMessage(err));
-    } finally {
-      setFbBusy(false);
-    }
-  }
-
-  async function handleSendPhoneOtp() {
-    if (!firebaseAuth) {
-      setFbErrorMessage('ยังไม่ได้ตั้งค่า Firebase API Key กรุณากดปุ่ม "⚙️ ตั้งค่า Firebase" ด้านล่าง');
-      return;
-    }
-    if (!fbPhone.trim()) {
-      setFbErrorMessage('กรุณาระบุเบอร์โทรศัพท์ (เช่น +66812345678)');
-      return;
-    }
-    setFbBusy(true);
-    setFbErrorMessage('');
-    setFbStatusMessage('');
-    try {
-      const verifier = (window as unknown as { recaptchaVerifier?: RecaptchaVerifier }).recaptchaVerifier
-        || new RecaptchaVerifier(firebaseAuth, 'recaptcha-container', { size: 'invisible' });
-      (window as unknown as { recaptchaVerifier: RecaptchaVerifier }).recaptchaVerifier = verifier;
-
-      const confirmation = await signInWithPhoneNumber(firebaseAuth, fbPhone.trim(), verifier);
-      setFbConfirmationResult(confirmation);
-      setFbStatusMessage('ส่งรหัส OTP ไปยังโทรศัพท์ของคุณแล้ว');
-    } catch (err: unknown) {
-      setFbErrorMessage(errorMessage(err));
-    } finally {
-      setFbBusy(false);
-    }
-  }
-
-  async function handleVerifyPhoneOtp() {
-    if (!fbConfirmationResult || !fbPhoneCode.trim()) {
-      setFbErrorMessage('กรุณากรอกรหัส OTP 6 หลัก');
-      return;
-    }
-    setFbBusy(true);
-    setFbErrorMessage('');
-    try {
-      await fbConfirmationResult.confirm(fbPhoneCode.trim());
-      setFbStatusMessage('ยืนยัน OTP และเข้าสู่ระบบสำเร็จ');
-    } catch (err: unknown) {
-      setFbErrorMessage(errorMessage(err));
-    } finally {
-      setFbBusy(false);
-    }
-  }
-
   const loadNotificationsData = useCallback(async () => {
     try {
       const res = await getNotifications();
@@ -1852,32 +1589,6 @@ function App() {
     }
     setMobileDetailOpen(true);
   }, []);
-
-  const handleRegisterWithInvite = async (e: FormEvent) => {
-    e.preventDefault();
-    setInviteError('');
-    setInviteBusy(true);
-    try {
-      const res = await registerAccount({
-        inviteCode: inviteCode.trim() || undefined,
-        username: inviteUsername.trim(),
-        email: inviteEmail.trim() || undefined,
-        password: invitePassword,
-        displayName: inviteDisplayName.trim() || undefined,
-      });
-      setUser(res.user);
-      setIsInviteRegisterOpen(false);
-      setInviteCode('');
-      setInviteUsername('');
-      setInviteEmail('');
-      setInvitePassword('');
-      setInviteDisplayName('');
-    } catch (err) {
-      setInviteError(errorMessage(err) || 'ไม่สามารถลงทะเบียนได้');
-    } finally {
-      setInviteBusy(false);
-    }
-  };
 
   function startNewNote() {
     setNoteViewMode('editor');
@@ -3984,663 +3695,53 @@ function App() {
     return (
       <main className="center-state login-background">
         <section className="login-card">
-          <div className="brand-mark" aria-hidden="true">P</div>
-          <span className="eyebrow">PERSONAL KNOWLEDGE HUB</span>
-          <h1>ยินดีต้อนรับกลับ</h1>
-          <p className="muted">เข้าสู่ระบบเพื่อเปิดพื้นที่จัดเก็บความรู้ส่วนตัว</p>
+          <div className="brand-mark" aria-hidden="true">🧠</div>
+          <span className="eyebrow">PERSONAL LIFE OS</span>
+          <h1>เข้าสู่ระบบ</h1>
+          <p className="muted">เข้าสู่ระบบเพื่อเปิดพื้นที่จัดเก็บความรู้ส่วนตัวของคุณ</p>
 
-          {/* Auth Method Switcher: Firebase Cloud vs Local Server */}
-          <div style={{ display: 'flex', gap: '8px', background: 'rgba(0,0,0,0.04)', padding: '4px', borderRadius: '10px', marginBottom: '16px' }}>
-            <button
-              type="button"
-              className={`button ${authMethod === 'firebase' ? 'button-primary' : 'button-quiet'}`}
-              style={{ flex: 1, fontSize: '13px', padding: '6px 10px', borderRadius: '8px' }}
-              onClick={() => setAuthMethod('firebase')}
-            >
-              🔥 Firebase Cloud
-            </button>
-            <button
-              type="button"
-              className={`button ${authMethod === 'local' ? 'button-primary' : 'button-quiet'}`}
-              style={{ flex: 1, fontSize: '13px', padding: '6px 10px', borderRadius: '8px' }}
-              onClick={() => setAuthMethod('local')}
-            >
-              🖥️ Local / Server
-            </button>
-          </div>
-
-          {authMethod === 'firebase' ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {/* Firebase Sub-tabs */}
-              <div style={{ display: 'flex', gap: '6px', borderBottom: '1px solid var(--pkh-border-subtle)', paddingBottom: '8px' }}>
-                <button
-                  type="button"
-                  className={`button ${fbAuthTab === 'password' ? 'button-primary' : 'button-quiet'}`}
-                  style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '6px' }}
-                  onClick={() => { setFbAuthTab('password'); setFbErrorMessage(''); setFbStatusMessage(''); }}
-                >
-                  🔑 อีเมล & รหัสผ่าน
-                </button>
-                <button
-                  type="button"
-                  className={`button ${fbAuthTab === 'email-link' ? 'button-primary' : 'button-quiet'}`}
-                  style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '6px' }}
-                  onClick={() => { setFbAuthTab('email-link'); setFbErrorMessage(''); setFbStatusMessage(''); }}
-                >
-                  ✉️ ลิงก์อีเมล
-                </button>
-                <button
-                  type="button"
-                  className={`button ${fbAuthTab === 'phone' ? 'button-primary' : 'button-quiet'}`}
-                  style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '6px' }}
-                  onClick={() => { setFbAuthTab('phone'); setFbErrorMessage(''); setFbStatusMessage(''); }}
-                >
-                  📱 เบอร์โทร SMS
-                </button>
-              </div>
-
-              {fbStatusMessage && (
-                <div style={{ background: '#dcfce7', color: '#166534', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', lineHeight: 1.4 }}>
-                  ✓ {fbStatusMessage}
-                </div>
-              )}
-              {fbErrorMessage && (
-                <div style={{ background: '#fee2e2', color: '#991b1b', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', lineHeight: 1.4 }}>
-                  ⚠️ {fbErrorMessage}
-                </div>
-              )}
-
-              {fbAuthTab === 'password' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <label htmlFor="fb-email" style={{ fontSize: '13px' }}>อีเมล (Email)</label>
-                  <input
-                    id="fb-email"
-                    type="email"
-                    autoComplete="email"
-                    value={fbEmail}
-                    onChange={(e) => setFbEmail(e.target.value)}
-                    placeholder="user@example.com"
-                  />
-                  <label htmlFor="fb-pass" style={{ fontSize: '13px' }}>รหัสผ่าน (Password)</label>
-                  <input
-                    id="fb-pass"
-                    type="password"
-                    autoComplete="current-password"
-                    value={fbPassword}
-                    onChange={(e) => setFbPassword(e.target.value)}
-                    placeholder="รหัสผ่านอย่างน้อย 6 ตัวอักษร"
-                  />
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
-                    <button
-                      type="button"
-                      className="button button-primary"
-                      style={{ flex: 1 }}
-                      disabled={fbBusy}
-                      onClick={() => handleFirebaseEmailPassword(false)}
-                    >
-                      {fbBusy ? 'กำลังเข้าสู่ระบบ…' : 'เข้าสู่ระบบ'}
-                    </button>
-                    <button
-                      type="button"
-                      className="button button-quiet"
-                      style={{ flex: 1 }}
-                      disabled={fbBusy}
-                      onClick={() => handleFirebaseEmailPassword(true)}
-                    >
-                      {fbBusy ? 'กำลังสร้าง…' : '✨ สมัครใหม่'}
-                    </button>
-                  </div>
-                  <button
-                    type="button"
-                    className="text-button"
-                    style={{ fontSize: '12px', color: 'var(--pkh-text-secondary)', textDecoration: 'underline', marginTop: '4px', textAlign: 'center' }}
-                    onClick={handleFirebasePasswordReset}
-                    disabled={fbBusy}
-                  >
-                    ลืมรหัสผ่าน? ส่งลิงก์รีเซ็ตไปที่อีเมลจริง
-                  </button>
-                </div>
-              )}
-
-              {fbAuthTab === 'email-link' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <p style={{ fontSize: '12px', color: 'var(--pkh-text-secondary)', margin: 0 }}>
-                    ไม่ต้องจำรหัสผ่าน! ระบบจะส่งลิงก์เข้าสู่ระบบตรงไปยังกล่องจดหมายของคุณ เพียงคลิกลิงก์ก็เข้าสู่ระบบได้ทันที
-                  </p>
-                  <label htmlFor="fb-link-email" style={{ fontSize: '13px' }}>อีเมลของคุณ</label>
-                  <input
-                    id="fb-link-email"
-                    type="email"
-                    value={fbEmail}
-                    onChange={(e) => setFbEmail(e.target.value)}
-                    placeholder="user@example.com"
-                  />
-                  <button
-                    type="button"
-                    className="button button-primary button-wide"
-                    disabled={fbBusy || !fbEmail.trim()}
-                    onClick={handleFirebaseEmailLinkSignIn}
-                  >
-                    {fbBusy ? 'กำลังส่ง…' : '📩 ส่งลิงก์เข้าสู่ระบบทางอีเมล'}
-                  </button>
-                </div>
-              )}
-
-              {fbAuthTab === 'phone' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <div id="recaptcha-container"></div>
-                  {!fbConfirmationResult ? (
-                    <>
-                      <label htmlFor="fb-phone" style={{ fontSize: '13px' }}>หมายเลขโทรศัพท์ (พร้อมรหัสประเทศ)</label>
-                      <input
-                        id="fb-phone"
-                        type="tel"
-                        value={fbPhone}
-                        onChange={(e) => setFbPhone(e.target.value)}
-                        placeholder="เช่น +66812345678"
-                      />
-                      <button
-                        type="button"
-                        className="button button-primary button-wide"
-                        disabled={fbBusy || !fbPhone.trim()}
-                        onClick={handleSendPhoneOtp}
-                      >
-                        {fbBusy ? 'กำลังส่ง OTP…' : '📲 ส่งรหัสยืนยัน SMS OTP'}
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <label htmlFor="fb-otp" style={{ fontSize: '13px' }}>กรอกรหัส OTP 6 หลักที่ได้รับทาง SMS</label>
-                      <input
-                        id="fb-otp"
-                        type="text"
-                        value={fbPhoneCode}
-                        onChange={(e) => setFbPhoneCode(e.target.value)}
-                        placeholder="123456"
-                        maxLength={6}
-                        style={{ textAlign: 'center', fontSize: '18px', letterSpacing: '4px' }}
-                      />
-                      <button
-                        type="button"
-                        className="button button-primary button-wide"
-                        disabled={fbBusy || !fbPhoneCode.trim()}
-                        onClick={handleVerifyPhoneOtp}
-                      >
-                        {fbBusy ? 'กำลังตรวจสอบ…' : '✓ ยืนยันรหัสเข้าสู่ระบบ'}
-                      </button>
-                      <button
-                        type="button"
-                        className="text-button"
-                        style={{ fontSize: '12px', color: 'var(--pkh-text-secondary)', textAlign: 'center' }}
-                        onClick={() => setFbConfirmationResult(null)}
-                      >
-                        ← เปลี่ยนเบอร์โทรศัพท์
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-
-              {/* Firebase Setup Link */}
-              <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--pkh-border-subtle)', textAlign: 'center' }}>
-                <button
-                  type="button"
-                  className="text-button"
-                  style={{ fontSize: '12px', color: '#f59e0b', fontWeight: 600, cursor: 'pointer', background: 'none', border: 'none' }}
-                  onClick={() => setFirebaseSetupOpen(true)}
-                >
-                  ⚙️ ตั้งค่าการเชื่อมต่อ Firebase (Config)
-                </button>
-              </div>
-            </div>
-          ) : twoFactorTempToken ? (
-            <form className="login-form" onSubmit={handle2FAVerify}>
-              <div style={{ background: '#eff6ff', padding: '10px 12px', borderRadius: '8px', border: '1px solid #bfdbfe', fontSize: '12px', color: '#1e40af', marginBottom: '8px', lineHeight: 1.4 }}>
-                🔐 บัญชีนี้เปิดใช้งาน 2FA กรุณากรอกรหัส 6 หลักจากแอป Authenticator หรือรหัส Recovery Code 8 หลัก
-              </div>
-              <label htmlFor="2fa-code">รหัสยืนยัน 2FA หรือ Recovery Code</label>
-              <input
-                id="2fa-code"
-                autoComplete="one-time-code"
-                value={twoFactorCode}
-                onChange={(e) => setTwoFactorCode(e.target.value)}
-                placeholder="เช่น 123456 หรือ 1234-5678"
-                autoFocus
-                required
-                maxLength={20}
-                style={{ fontSize: '16px', letterSpacing: '1px', textAlign: 'center' }}
-              />
-              {authError && <p className="form-error" role="alert">{authError}</p>}
-              <button className="button button-primary button-wide" type="submit" disabled={authBusy}>
-                {authBusy ? 'กำลังตรวจสอบ…' : '✓ ยืนยันรหัสเข้าสู่ระบบ'}
-              </button>
-              <button
-                type="button"
-                className="button button-quiet button-wide"
-                style={{ marginTop: '8px' }}
-                onClick={() => {
-                  setTwoFactorTempToken('');
-                  setTwoFactorCode('');
-                  setAuthError('');
-                }}
-              >
-                ← กลับสู่หน้าเข้าสู่ระบบปกติ
-              </button>
-            </form>
-          ) : (
-            <form className="login-form" onSubmit={handleLogin}>
-              <label htmlFor="username">ชื่อผู้ใช้</label>
+          <form className="login-form" onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '16px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label htmlFor="username" style={{ fontSize: '13px', fontWeight: 600 }}>ชื่อผู้ใช้งาน (Username)</label>
               <input
                 id="username"
                 autoComplete="username"
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
+                placeholder="เช่น phontakon"
                 required
                 maxLength={80}
+                autoFocus
+                style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--pkh-border-subtle)' }}
               />
-              <label htmlFor="password">รหัสผ่าน</label>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label htmlFor="password" style={{ fontSize: '13px', fontWeight: 600 }}>รหัสผ่าน (Password)</label>
               <input
                 id="password"
                 type="password"
                 autoComplete="current-password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
+                placeholder="กรอกรหัสผ่าน"
                 required
                 maxLength={1024}
+                style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--pkh-border-subtle)' }}
               />
-              {authError && <p className="form-error" role="alert">{authError}</p>}
-              <button className="button button-primary button-wide" type="submit" disabled={authBusy}>
-                {authBusy ? 'กำลังเข้าสู่ระบบ…' : 'เข้าสู่ระบบ'}
-              </button>
-
-              <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginTop: '14px', flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  className="text-button"
-                  style={{ fontSize: '13px', color: 'var(--pkh-primary, #2563eb)', textDecoration: 'underline', cursor: 'pointer', background: 'none', border: 'none' }}
-                  onClick={() => {
-                    setIsInviteRegisterOpen(true);
-                    setInviteError('');
-                  }}
-                >
-                  {publicSettings.registration_mode === 'open' ? '✨ สมัครสมาชิกใหม่' : '🎟️ สมัครด้วยรหัสคำเชิญ'}
-                </button>
-                <button
-                  type="button"
-                  className="text-button"
-                  style={{ fontSize: '13px', color: 'var(--pkh-text-secondary, #64748b)', textDecoration: 'underline', cursor: 'pointer', background: 'none', border: 'none' }}
-                  onClick={() => {
-                    setIsForgotOpen(true);
-                    setForgotStep('request');
-                    setForgotError('');
-                    setForgotMessage('');
-                  }}
-                >
-                  ลืมรหัสผ่าน? (กู้คืนด้วย OTP)
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* Registration Modal */}
-          {isInviteRegisterOpen && (
-            <div className="dialog-backdrop" onClick={() => setIsInviteRegisterOpen(false)}>
-              <section
-                className="studio-dialog"
-                role="dialog"
-                aria-modal="true"
-                aria-label="สมัครสมาชิก"
-                onClick={(e) => e.stopPropagation()}
-                style={{ maxWidth: '420px', width: '90%' }}
-              >
-                <div className="popover-head">
-                  <h3 style={{ margin: 0, fontSize: '16px' }}>
-                    {publicSettings.registration_mode === 'open' ? '✨ สมัครสมาชิกใหม่ (Registration)' : '🎟️ สมัครสมาชิกด้วยรหัสคำเชิญ (Invite Code)'}
-                  </h3>
-                  <button className="icon-button" type="button" onClick={() => setIsInviteRegisterOpen(false)}>×</button>
-                </div>
-
-                {inviteError && (
-                  <div style={{ background: '#fee2e2', color: '#991b1b', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', margin: '8px 0' }}>
-                    ⚠️ {inviteError}
-                  </div>
-                )}
-
-                <form onSubmit={handleRegisterWithInvite} style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' }}>
-                  {publicSettings.registration_mode !== 'open' ? (
-                    <label style={{ fontSize: '13px' }}>
-                      รหัสคำเชิญ (Invite Code) *
-                      <input
-                        type="text"
-                        required
-                        placeholder="เช่น PKH-INV-ABC123"
-                        value={inviteCode}
-                        onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-                        style={{ letterSpacing: '1px', fontWeight: 600 }}
-                        autoFocus
-                      />
-                    </label>
-                  ) : (
-                    <label style={{ fontSize: '13px' }}>
-                      รหัสคำเชิญ (ถ้ามี)
-                      <input
-                        type="text"
-                        placeholder="เช่น PKH-INV-ABC123 (ไม่บังคับ)"
-                        value={inviteCode}
-                        onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-                        style={{ letterSpacing: '1px' }}
-                      />
-                    </label>
-                  )}
-
-                  <label style={{ fontSize: '13px' }}>
-                    ชื่อผู้ใช้ (Username) *
-                    <input
-                      type="text"
-                      required
-                      minLength={3}
-                      maxLength={80}
-                      placeholder="ความยาว 3-80 ตัวอักษร"
-                      value={inviteUsername}
-                      onChange={(e) => setInviteUsername(e.target.value)}
-                      autoFocus={publicSettings.registration_mode === 'open'}
-                    />
-                  </label>
-
-                  <label style={{ fontSize: '13px' }}>
-                    อีเมล (Email) (สำหรับกู้คืนรหัสผ่าน)
-                    <input
-                      type="email"
-                      placeholder="email@example.com"
-                      value={inviteEmail}
-                      onChange={(e) => setInviteEmail(e.target.value)}
-                    />
-                  </label>
-
-                  <label style={{ fontSize: '13px' }}>
-                    ชื่อที่แสดง (Display Name) (ไม่บังคับ)
-                    <input
-                      type="text"
-                      maxLength={80}
-                      placeholder="เช่น พี่ต้นกล้า, แอดมินมาร์ค"
-                      value={inviteDisplayName}
-                      onChange={(e) => setInviteDisplayName(e.target.value)}
-                    />
-                  </label>
-
-                  <label style={{ fontSize: '13px' }}>
-                    รหัสผ่าน (ขั้นต่ำ 12 ตัวอักษรตามมาตรฐาน OWASP) *
-                    <input
-                      type="password"
-                      required
-                      minLength={12}
-                      placeholder="อย่างน้อย 12 ตัวอักษร"
-                      value={invitePassword}
-                      onChange={(e) => setInvitePassword(e.target.value)}
-                    />
-                  </label>
-
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '6px' }}>
-                    <button type="button" className="button button-quiet" onClick={() => setIsInviteRegisterOpen(false)}>
-                      ยกเลิก
-                    </button>
-                    <button
-                      type="submit"
-                      className="button button-primary"
-                      disabled={inviteBusy || (publicSettings.registration_mode !== 'open' && !inviteCode.trim()) || !inviteUsername.trim() || invitePassword.length < 12}
-                    >
-                      {inviteBusy ? 'กำลังสร้างบัญชี…' : '✓ สร้างบัญชีและเข้าสู่ระบบ'}
-                    </button>
-                  </div>
-                </form>
-              </section>
             </div>
-          )}
 
-          {/* Forgot Password Modal */}
-          {isForgotOpen && (
-            <div className="dialog-backdrop" onClick={() => setIsForgotOpen(false)}>
-              <section
-                className="studio-dialog"
-                role="dialog"
-                aria-modal="true"
-                aria-label="กู้คืนรหัสผ่านด้วย OTP"
-                onClick={(e) => e.stopPropagation()}
-                style={{ maxWidth: '460px', width: '92%', borderRadius: '16px', padding: '22px' }}
-              >
-                <div className="popover-head" style={{ marginBottom: '14px', borderBottom: '1px solid var(--pkh-border-subtle)', paddingBottom: '10px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '20px' }}>🔑</span>
-                    <h3 style={{ margin: 0, fontSize: '17px' }}>กู้คืนรหัสผ่านด้วย OTP</h3>
-                  </div>
-                  <button className="icon-button" type="button" aria-label="ปิด" onClick={() => setIsForgotOpen(false)}>×</button>
-                </div>
+            {authError && <p className="form-error" role="alert" style={{ margin: '4px 0', color: '#dc2626', fontSize: '13px' }}>{authError}</p>}
 
-                {forgotMessage && (
-                  <div style={{ background: '#dcfce7', color: '#166534', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', margin: '8px 0', lineHeight: 1.5 }}>
-                    ✓ {forgotMessage}
-                  </div>
-                )}
-                {forgotError && (
-                  <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', margin: '8px 0', lineHeight: 1.5 }}>
-                    ⚠️ {forgotError}
-                  </div>
-                )}
-
-                {forgotStep === 'request' ? (
-                  <form onSubmit={handleRequestForgotOtp} style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '6px' }}>
-                    <p style={{ fontSize: '13px', color: 'var(--pkh-text-secondary)', margin: 0, lineHeight: 1.5 }}>
-                      เพื่อความปลอดภัยตามมาตรฐาน OWASP ASVS กรุณาระบุ <strong>ชื่อผู้ใช้</strong> และ <strong>ช่องทางที่ผูกไว้</strong> กับบัญชี
-                    </p>
-
-                    {/* Channel Selector */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--pkh-text-secondary)' }}>
-                        เลือกช่องทางรับรหัส OTP:
-                      </span>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                        <button
-                          type="button"
-                          className={`button ${forgotRecoveryType === 'email' ? 'button-primary' : 'button-quiet'}`}
-                          style={{ fontSize: '12px', padding: '8px 10px', borderRadius: '8px' }}
-                          onClick={() => setForgotRecoveryType('email')}
-                        >
-                          ✉️ ทางอีเมล (Email)
-                        </button>
-                        <button
-                          type="button"
-                          className={`button ${forgotRecoveryType === 'phone' ? 'button-primary' : 'button-quiet'}`}
-                          style={{ fontSize: '12px', padding: '8px 10px', borderRadius: '8px' }}
-                          onClick={() => setForgotRecoveryType('phone')}
-                        >
-                          📱 ทางเบอร์โทร (SMS)
-                        </button>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--pkh-text-main)' }}>
-                        ชื่อผู้ใช้ (Username) <span style={{ fontWeight: 400, color: 'var(--pkh-text-muted)' }}>(ระบุหรือไม่ก็ได้)</span>
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="หากจำได้ระบุชื่อผู้ใช้ (ไม่จำเป็น)"
-                        value={forgotUsername}
-                        onChange={(e) => setForgotUsername(e.target.value)}
-                        style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--pkh-border-default)' }}
-                      />
-                    </div>
-
-                    {forgotRecoveryType === 'email' ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--pkh-text-main)' }}>
-                          อีเมลที่ผูกไว้กับบัญชี (Email) *
-                        </label>
-                        <input
-                          type="email"
-                          required
-                          placeholder="เช่น user@example.com"
-                          value={forgotEmail}
-                          onChange={(e) => setForgotEmail(e.target.value)}
-                          style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--pkh-border-default)' }}
-                        />
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--pkh-text-main)' }}>
-                          เบอร์โทรศัพท์ที่ผูกไว้กับบัญชี (Phone) *
-                        </label>
-                        <input
-                          type="tel"
-                          required
-                          placeholder="เช่น 081-234-5678"
-                          value={forgotPhone}
-                          onChange={(e) => setForgotPhone(e.target.value)}
-                          style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--pkh-border-default)' }}
-                        />
-                      </div>
-                    )}
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
-                      <button
-                        type="button"
-                        className="text-button"
-                        style={{ fontSize: '12px' }}
-                        onClick={() => setShowAdminHelp(!showAdminHelp)}
-                      >
-                        🆘 เข้าถึงไม่ได้ทั้ง 2 ทาง?
-                      </button>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button type="button" className="button button-quiet" onClick={() => setIsForgotOpen(false)}>
-                          ยกเลิก
-                        </button>
-                        <button
-                          type="submit"
-                          className="button button-primary"
-                          disabled={forgotBusy || (forgotRecoveryType === 'email' ? !forgotEmail.trim() : !forgotPhone.trim())}
-                        >
-                          {forgotBusy ? 'กำลังส่ง OTP…' : 'ขอรับรหัส OTP →'}
-                        </button>
-                      </div>
-                    </div>
-
-                    {showAdminHelp && (
-                      <div style={{ background: 'var(--pkh-bg-subtle, #f8fafc)', border: '1px solid var(--pkh-border-subtle, #e2e8f0)', borderRadius: '10px', padding: '12px', fontSize: '12px', color: 'var(--pkh-text-secondary)', lineHeight: 1.6 }}>
-                        <strong>🛡️ ช่องทางช่วยเหลือจากผู้ดูแลระบบ (Admin Assistance):</strong><br />
-                        หากคุณไม่สามารถเข้าถึงอีเมลหรือเบอร์โทรศัพท์ที่เคยผูกไว้ได้ โปรดติดต่อผู้ดูแลระบบของ Workspace นี้เพื่อขอทำการตั้งรหัสผ่านชั่วคราวให้ใหม่ผ่านแท็บผู้ใช้งานในหน้าหลังบ้าน โดยผู้ดูแลระบบจะไม่สามารถมองเห็นรหัสผ่านเดิมของคุณได้
-                      </div>
-                    )}
-                  </form>
-                ) : (
-                  <form onSubmit={handleResetPasswordWithOtp} style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '6px' }}>
-                    <p style={{ fontSize: '13px', color: 'var(--pkh-text-secondary)', margin: 0, lineHeight: 1.5 }}>
-                      ระบบส่งรหัส OTP 6 หลักไปยัง {forgotRecoveryType === 'email' ? `อีเมล ${forgotEmail}` : `เบอร์ ${forgotPhone}`} เรียบร้อยแล้ว (รหัสมีอายุ 5 นาที)
-                    </p>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--pkh-text-main)' }}>
-                          รหัส OTP (6 หลัก) *
-                        </label>
-                        <button
-                          type="button"
-                          className="text-button"
-                          style={{ fontSize: '12px', color: otpCountdown > 0 ? 'var(--pkh-text-muted)' : 'var(--pkh-primary)' }}
-                          disabled={otpCountdown > 0 || forgotBusy}
-                          onClick={() => void handleRequestForgotOtp()}
-                        >
-                          {otpCountdown > 0 ? `ขอรหัสใหม่ได้ใน ${otpCountdown} วิ` : '🔄 ส่งรหัสอีกครั้ง'}
-                        </button>
-                      </div>
-                      <input
-                        type="text"
-                        required
-                        maxLength={6}
-                        placeholder="123456"
-                        value={forgotOtp}
-                        onChange={(e) => setForgotOtp(e.target.value.replace(/\D/g, ''))}
-                        style={{
-                          letterSpacing: '6px',
-                          textAlign: 'center',
-                          fontWeight: 700,
-                          fontSize: '20px',
-                          padding: '10px',
-                          borderRadius: '8px',
-                          border: '2px solid var(--pkh-border-default)',
-                          background: 'var(--pkh-bg-surface)',
-                          width: '100%',
-                          boxSizing: 'border-box',
-                        }}
-                        autoFocus
-                      />
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--pkh-text-main)' }}>
-                        รหัสผ่านใหม่ (อย่างน้อย 8 ตัวอักษร) *
-                      </label>
-                      <input
-                        type="password"
-                        required
-                        minLength={8}
-                        placeholder="รหัสผ่านใหม่อย่างน้อย 8 ตัวอักษร..."
-                        value={forgotNewPassword}
-                        onChange={(e) => setForgotNewPassword(e.target.value)}
-                        style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--pkh-border-default)' }}
-                      />
-                    </div>
-
-                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 12px', fontSize: '12px', color: '#64748b', lineHeight: 1.5 }}>
-                      💡 <strong>กรณีไม่ได้รับรหัส:</strong> ตรวจสอบในโฟลเดอร์ Junk/Spam หรือยืนยันว่าชื่อผู้ใช้และข้อมูลติดต่อตรงกับในระบบ (หากข้อมูลไม่ตรงกัน ระบบจะไม่ออกรหัสเพื่อความปลอดภัย)
-                    </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
-                      <button
-                        type="button"
-                        className="text-button"
-                        style={{ fontSize: '12px' }}
-                        onClick={() => {
-                          setForgotStep('request');
-                          setForgotOtp('');
-                          setForgotError('');
-                        }}
-                      >
-                        ← เปลี่ยนข้อมูล
-                      </button>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button type="button" className="button button-quiet" onClick={() => setIsForgotOpen(false)}>
-                          ยกเลิก
-                        </button>
-                        <button
-                          type="submit"
-                          className="button button-primary"
-                          disabled={forgotBusy || forgotOtp.length !== 6 || forgotNewPassword.length < 8}
-                        >
-                          {forgotBusy ? 'กำลังบันทึก…' : '🔐 ตั้งรหัสผ่านใหม่ & เข้าสู่ระบบ'}
-                        </button>
-                      </div>
-                    </div>
-                  </form>
-                )}
-              </section>
-            </div>
-          )}
-
-          <p className="login-footnote">บัญชีผู้ใช้จัดการโดยผู้ดูแลระบบ หรือเชื่อมต่อกับ Firebase Cloud</p>
-
-          {/* Firebase Setup Modal in Sign-out view */}
-          {firebaseSetupOpen && (
-            <Suspense fallback={null}>
-              <FirebaseSetupModal
-                isOpen={firebaseSetupOpen}
-                onClose={() => setFirebaseSetupOpen(false)}
-                onSaved={() => {
-                  pushToast('success', 'บันทึกการตั้งค่า Firebase สำเร็จ');
-                  setRefreshKey((k) => k + 1);
-                }}
-              />
-            </Suspense>
-          )}
+            <button
+              className="button button-primary button-wide"
+              type="submit"
+              disabled={authBusy}
+              style={{ marginTop: '6px', padding: '11px', fontSize: '14px', fontWeight: 600 }}
+            >
+              {authBusy ? 'กำลังเข้าสู่ระบบ…' : 'เข้าสู่ระบบ'}
+            </button>
+          </form>
         </section>
       </main>
     );

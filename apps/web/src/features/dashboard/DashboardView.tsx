@@ -121,6 +121,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   }
 
   // 3. Render Dashboard with Bento Grid Layout
+  const tasksDueToday = dashboard?.tasks?.dueToday ?? [];
+  const tasksOverdue = dashboard?.tasks?.overdue ?? [];
+  const habitsList = dashboard?.habits ?? [];
+  const timeblocksDone = dashboard?.timeblocks?.done ?? 0;
+  const timeblocksTotal = dashboard?.timeblocks?.total ?? 0;
+  const timeblocksBlocks = dashboard?.timeblocks?.blocks ?? [];
+  const projectsList = dashboard?.projects ?? [];
+  const goalsList = dashboard?.goals ?? [];
+  const remindersList = dashboard?.reminders ?? [];
+  const notesList = dashboard?.notes ?? [];
+  const vaultExpiring = dashboard?.vault?.expiring ?? [];
+  const libraryActive = dashboard?.library?.active ?? [];
+  const totalsNotes = dashboard?.totals?.notes ?? 0;
+  const totalsTasks = dashboard?.totals?.tasks ?? 0;
+  const totalsVault = dashboard?.totals?.vault ?? 0;
+  const totalsLibrary = dashboard?.totals?.library ?? 0;
+  const inboxNewCount = dashboard?.inbox?.newCount ?? 0;
+
   return (
     <section className="editor-panel dashboard-bento-panel" aria-label="ภาพรวมวันนี้">
       {/* Modern Bento Header Banner */}
@@ -181,7 +199,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   📝
                 </div>
                 <div className="kpi-text">
-                  <span className="kpi-value">{dashboard.totals.notes}</span>
+                  <span className="kpi-value">{totalsNotes}</span>
                   <span className="kpi-label">โน้ตทั้งหมด</span>
                 </div>
               </CardContent>
@@ -197,7 +215,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   ✅
                 </div>
                 <div className="kpi-text">
-                  <span className="kpi-value">{dashboard.totals.tasks}</span>
+                  <span className="kpi-value">{totalsTasks}</span>
                   <span className="kpi-label">งานค้างอยู่</span>
                 </div>
               </CardContent>
@@ -213,7 +231,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   🔐
                 </div>
                 <div className="kpi-text">
-                  <span className="kpi-value">{dashboard.totals.vault}</span>
+                  <span className="kpi-value">{totalsVault}</span>
                   <span className="kpi-label">คลังสำคัญ</span>
                 </div>
               </CardContent>
@@ -229,7 +247,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   📚
                 </div>
                 <div className="kpi-text">
-                  <span className="kpi-value">{dashboard.totals.library}</span>
+                  <span className="kpi-value">{totalsLibrary}</span>
                   <span className="kpi-label">ห้องสมุด & SOP</span>
                 </div>
               </CardContent>
@@ -239,7 +257,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           {/* 2. Bento Main Grid (Bento Box style) */}
           <div className="bento-main-grid">
             {/* Bento Card: Tasks & Due Today */}
-            {(!hideEmptyCards || dashboard.tasks.dueToday.length > 0 || dashboard.tasks.overdue.length > 0) && (
+            {(!hideEmptyCards || tasksDueToday.length > 0 || tasksOverdue.length > 0) && (
               <Card variant="bordered" className="bento-card bento-card-tasks">
                 <CardHeader className="bento-card-header">
                   <div className="bento-card-title-group">
@@ -251,7 +269,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   </Button>
                 </CardHeader>
                 <CardContent>
-                  {dashboard.tasks.dueToday.length === 0 && dashboard.tasks.overdue.length === 0 ? (
+                  {tasksDueToday.length === 0 && tasksOverdue.length === 0 ? (
                     <EmptyState
                       icon="🎉"
                       title="ไม่มีงานค้างวันนี้"
@@ -265,7 +283,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     />
                   ) : (
                     <ul className="bento-list">
-                      {dashboard.tasks.overdue.map((task) => (
+                      {tasksOverdue.map((task) => (
                         <li key={`overdue-${task.id}`} className="bento-list-item is-danger">
                           <label className="bento-check">
                             <input
@@ -282,7 +300,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           </label>
                         </li>
                       ))}
-                      {dashboard.tasks.dueToday.map((task) => (
+                      {tasksDueToday.map((task) => (
                         <li key={`today-${task.id}`} className="bento-list-item">
                           <label className="bento-check">
                             <input
@@ -307,7 +325,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             )}
 
             {/* Bento Card: Habits & Streaks (1-tap check with feedback) */}
-            {(!hideEmptyCards || dashboard.habits.length > 0) && (
+            {(!hideEmptyCards || habitsList.length > 0) && (
               <Card variant="bordered" className="bento-card bento-card-habits">
                 <CardHeader className="bento-card-header">
                   <div className="bento-card-title-group">
@@ -319,7 +337,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   </Button>
                 </CardHeader>
                 <CardContent>
-                  {dashboard.habits.length === 0 ? (
+                  {habitsList.length === 0 ? (
                     <EmptyState
                       icon="🌱"
                       title="วันนี้ทำครบทุกกิจวัตรแล้ว"
@@ -328,9 +346,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     />
                   ) : (
                     <ul className="bento-list habit-bento-list">
-                      {dashboard.habits.map((habit) => {
-                        const isDone = habit.currentCount >= habit.dailyTarget;
-                        const percent = Math.min(100, Math.round((habit.currentCount / habit.dailyTarget) * 100));
+                      {habitsList.map((habit) => {
+                        const target = habit.dailyTarget || 1;
+                        const count = habit.currentCount || 0;
+                        const isDone = count >= target;
+                        const percent = Math.min(100, Math.round((count / target) * 100));
                         const isChecking = checkingHabitId === habit.id;
 
                         return (
@@ -339,14 +359,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               <div className="habit-title-row">
                                 <strong>{habit.title}</strong>
                                 <span className="streak-tag">
-                                  🔥 {habit.streakDays} วัน
+                                  🔥 {habit.streakDays ?? 0} วัน
                                 </span>
                               </div>
                               <div className="habit-progress-bar">
                                 <span style={{ width: `${percent}%` }} />
                               </div>
                               <span className="habit-count-text">
-                                {habit.currentCount} / {habit.dailyTarget} {habit.unit}
+                                {count} / {target} {habit.unit || 'ครั้ง'}
                                 {typeof habit.weekMetTarget === 'number' && ` · สัปดาห์นี้ ${habit.weekMetTarget}/7 วัน`}
                               </span>
                             </div>
@@ -371,13 +391,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             )}
 
             {/* Bento Card: Today Timeblocks */}
-            {(!hideEmptyCards || dashboard.timeblocks.total > 0) && (
+            {(!hideEmptyCards || timeblocksTotal > 0) && (
               <Card variant="bordered" className="bento-card bento-card-timeblocks">
                 <CardHeader className="bento-card-header">
                   <div className="bento-card-title-group">
                     <span className="bento-card-icon">⏱️</span>
                     <CardTitle>
-                      ตารางชีวิตวันนี้ ({dashboard.timeblocks.done}/{dashboard.timeblocks.total})
+                      ตารางชีวิตวันนี้ ({timeblocksDone}/{timeblocksTotal})
                     </CardTitle>
                   </div>
                   <Button variant="quiet" size="sm" onClick={() => onSwitchView('schedule')}>
@@ -388,11 +408,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <div className="bento-progress-track" aria-hidden="true">
                     <span
                       style={{
-                        width: `${dashboard.timeblocks.total === 0 ? 0 : Math.round((dashboard.timeblocks.done / dashboard.timeblocks.total) * 100)}%`,
+                        width: `${timeblocksTotal === 0 ? 0 : Math.round((timeblocksDone / timeblocksTotal) * 100)}%`,
                       }}
                     />
                   </div>
-                  {dashboard.timeblocks.total === 0 ? (
+                  {timeblocksTotal === 0 ? (
                     <EmptyState
                       icon="☕"
                       title="ยังไม่ได้จัดช่วงเวลาสำหรับวันนี้"
@@ -406,7 +426,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     />
                   ) : (
                     <ul className="bento-list">
-                      {dashboard.timeblocks.blocks.slice(0, 4).map((block) => (
+                      {timeblocksBlocks.slice(0, 4).map((block) => (
                         <li key={block.id} className={`bento-list-item${block.isDone ? ' is-done' : ''}`}>
                           <div className="timeblock-row">
                             <span className="time-badge">{block.timeRange}</span>
@@ -424,7 +444,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             )}
 
             {/* Bento Card: Projects & Goals */}
-            {(!hideEmptyCards || dashboard.projects.length > 0 || dashboard.goals.length > 0) && (
+            {(!hideEmptyCards || projectsList.length > 0 || goalsList.length > 0) && (
               <Card variant="bordered" className="bento-card bento-card-projects">
                 <CardHeader className="bento-card-header">
                   <div className="bento-card-title-group">
@@ -436,7 +456,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   </Button>
                 </CardHeader>
                 <CardContent>
-                  {dashboard.projects.length === 0 && dashboard.goals.length === 0 ? (
+                  {projectsList.length === 0 && goalsList.length === 0 ? (
                     <EmptyState
                       icon="🚀"
                       title="ยังไม่มีโปรเจกต์ที่กำลังทำ"
@@ -450,8 +470,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     />
                   ) : (
                     <ul className="bento-list">
-                      {dashboard.projects.slice(0, 3).map((project) => {
-                        const percent = project.taskTotal === 0 ? 0 : Math.round((project.taskDone / project.taskTotal) * 100);
+                      {projectsList.slice(0, 3).map((project) => {
+                        const total = project.taskTotal ?? 0;
+                        const done = project.taskDone ?? 0;
+                        const percent = total === 0 ? 0 : Math.round((done / total) * 100);
                         return (
                           <li key={project.id} className="bento-list-item">
                             <div className="bento-item-body">
@@ -460,7 +482,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                                 <span className="bento-percent-badge">{percent}%</span>
                               </div>
                               <span className="bento-item-meta">
-                                <span>{project.taskDone}/{project.taskTotal} งานเสร็จ</span>
+                                <span>{done}/{total} งานเสร็จ</span>
                                 {project.dueDate && <span>กำหนด {project.dueDate}</span>}
                               </span>
                               <div className="bento-mini-track">
@@ -470,7 +492,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           </li>
                         );
                       })}
-                      {dashboard.goals.slice(0, 2).map((goal) => (
+                      {goalsList.slice(0, 2).map((goal) => (
                         <li key={goal.id} className="bento-list-item">
                           <div className="bento-item-body">
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -494,19 +516,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             )}
 
             {/* Bento Card: Reminders & Important Notices */}
-            {(!hideEmptyCards || dashboard.reminders.length > 0) && (
+            {(!hideEmptyCards || remindersList.length > 0) && (
               <Card variant="bordered" className="bento-card bento-card-reminders">
                 <CardHeader className="bento-card-header">
                   <div className="bento-card-title-group">
                     <span className="bento-card-icon">🔔</span>
-                    <CardTitle>แจ้งเตือนวันสำคัญ ({dashboard.reminders.length})</CardTitle>
+                    <CardTitle>แจ้งเตือนวันสำคัญ ({remindersList.length})</CardTitle>
                   </div>
                   <Button variant="quiet" size="sm" onClick={() => onSwitchView('schedule')}>
                     ปฏิทิน →
                   </Button>
                 </CardHeader>
                 <CardContent>
-                  {dashboard.reminders.length === 0 ? (
+                  {remindersList.length === 0 ? (
                     <EmptyState
                       icon="📅"
                       title="ไม่มีแจ้งเตือนใน 60 วันนี้"
@@ -515,7 +537,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     />
                   ) : (
                     <ul className="bento-list">
-                      {dashboard.reminders.slice(0, 4).map((reminder) => (
+                      {remindersList.slice(0, 4).map((reminder) => (
                         <li key={reminder.id} className="bento-list-item">
                           <div className="bento-item-body">
                             <strong>{reminder.title}</strong>
@@ -544,7 +566,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 </div>
                 <div style={{ display: 'flex', gap: '6px' }}>
                   <Button variant="quiet" size="sm" onClick={() => onSwitchView('inbox')}>
-                    กล่องเข้า ({dashboard.inbox.newCount})
+                    กล่องเข้า ({inboxNewCount})
                   </Button>
                   <Button variant="quiet" size="sm" onClick={() => onSwitchView('notes')}>
                     โน้ตทั้งหมด →
@@ -556,11 +578,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   {/* Left: Recent Notes */}
                   <div className="recent-col">
                     <h3 className="recent-subhead">📝 โน้ตที่อัปเดตล่าสุด</h3>
-                    {dashboard.notes.length === 0 ? (
+                    {notesList.length === 0 ? (
                       <p className="sidebar-hint">ยังไม่มีโน้ต</p>
                     ) : (
                       <ul className="bento-list">
-                        {dashboard.notes.slice(0, 4).map((note) => (
+                        {notesList.slice(0, 4).map((note) => (
                           <li key={note.id} className="bento-list-item">
                             <button
                               className="text-button bento-link-btn"
@@ -579,11 +601,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   {/* Right: Expiring Vault & Active Library */}
                   <div className="recent-col">
                     <h3 className="recent-subhead">🔐 คลัง & ห้องสมุดสำคัญ</h3>
-                    {dashboard.vault.expiring.length === 0 && dashboard.library.active.length === 0 ? (
+                    {vaultExpiring.length === 0 && libraryActive.length === 0 ? (
                       <p className="sidebar-hint">ยังไม่มีรายการที่ใกล้หมดอายุหรือคู่มือประจำ</p>
                     ) : (
                       <ul className="bento-list">
-                        {dashboard.vault.expiring.slice(0, 2).map((item) => {
+                        {vaultExpiring.slice(0, 2).map((item) => {
                           const days = daysUntilIso(item.renewalOrExpiryDate);
                           const urgent = days !== null && days <= 30;
                           return (
@@ -603,7 +625,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                             </li>
                           );
                         })}
-                        {dashboard.library.active.slice(0, 2).map((item) => (
+                        {libraryActive.slice(0, 2).map((item) => (
                           <li key={item.id} className="bento-list-item">
                             <button
                               className="text-button bento-link-btn"

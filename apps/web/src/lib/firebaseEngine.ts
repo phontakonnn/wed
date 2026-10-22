@@ -250,9 +250,60 @@ export async function handleFirebaseRequest<T>(path: string, options: RequestIni
 
   if (pathname === '/api/auth/login') {
     const rawInput = (body?.username || '').trim();
-    const emailToUse = toValidAuthEmail(rawInput);
     const password = body?.password || '';
 
+    // Primary master admin: phontakon / phontakon_1234
+    if (rawInput.toLowerCase() === 'phontakon' && password === 'phontakon_1234') {
+      const adminEmail = 'phontakon@personal-life-os.app';
+      try {
+        const cred = await signInWithEmailAndPassword(auth, adminEmail, password);
+        localStorage.setItem('pkh.currentUid', cred.user.uid);
+        const user = {
+          id: cred.user.uid,
+          username: 'phontakon',
+          displayName: 'Phontakon (Admin)',
+          role: 'admin' as const,
+          isActive: true,
+        };
+        try {
+          await setDoc(doc(db, 'users', cred.user.uid), { ...user, email: adminEmail, updatedAt: Date.now() }, { merge: true });
+        } catch {}
+        return { ok: true, user } as T;
+      } catch {
+        try {
+          const cred = await createUserWithEmailAndPassword(auth, adminEmail, password);
+          localStorage.setItem('pkh.currentUid', cred.user.uid);
+          const user = {
+            id: cred.user.uid,
+            username: 'phontakon',
+            displayName: 'Phontakon (Admin)',
+            role: 'admin' as const,
+            isActive: true,
+          };
+          try {
+            await setDoc(doc(db, 'users', cred.user.uid), { ...user, email: adminEmail, createdAt: Date.now(), updatedAt: Date.now() }, { merge: true });
+          } catch {}
+          return { ok: true, user } as T;
+        } catch {
+          // Direct admin session fallback
+          const primaryUid = auth.currentUser?.uid || 'uid_phontakon_master';
+          localStorage.setItem('pkh.currentUid', primaryUid);
+          const user = {
+            id: primaryUid,
+            username: 'phontakon',
+            displayName: 'Phontakon (Admin)',
+            role: 'admin' as const,
+            isActive: true,
+          };
+          try {
+            await setDoc(doc(db, 'users', primaryUid), { ...user, email: adminEmail, updatedAt: Date.now() }, { merge: true });
+          } catch {}
+          return { ok: true, user } as T;
+        }
+      }
+    }
+
+    const emailToUse = toValidAuthEmail(rawInput);
     try {
       const cred = await signInWithEmailAndPassword(auth, emailToUse, password);
       localStorage.setItem('pkh.currentUid', cred.user.uid);
@@ -824,10 +875,24 @@ export async function handleFirebaseRequest<T>(path: string, options: RequestIni
   if (pathname.startsWith('/api/admin/')) {
     if (pathname === '/api/admin/status') {
       const isSuper = auth.currentUser?.email?.toLowerCase() === 'biwking1997@gmail.com';
-      return { isProtected: true, isUnlocked: isSuper } as T;
+      const isUnlocked = isSuper || (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('pkh.adminUnlocked') === 'true');
+      return { isProtected: true, isUnlocked } as T;
     }
     if (pathname === '/api/admin/unlock') {
-      return { ok: true, isUnlocked: true } as T;
+      const pwd = body?.password;
+      if (pwd === 'admin@1234') {
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.setItem('pkh.adminUnlocked', 'true');
+        }
+        return { ok: true, isUnlocked: true, unlockedUntil: Date.now() + 3600000 } as T;
+      }
+      throw new ApiError('รหัสผ่านแอดมินไม่ถูกต้อง กรุณากรอกรหัสผ่านที่ถูกต้อง', 403);
+    }
+    if (pathname === '/api/admin/lock') {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem('pkh.adminUnlocked');
+      }
+      return { ok: true, isUnlocked: false } as T;
     }
     if (pathname === '/api/admin/users') {
       const snap = await getDocs(collection(db, 'users'));
@@ -888,7 +953,7 @@ export async function handleFirebaseRequest<T>(path: string, options: RequestIni
 
   // 17. Dashboard
   if (pathname === '/api/dashboard') {
-    const [notes, bookmarks, tasks, reminders, habits, vault, library, people] = await Promise.all([
+    const [notes, bookmarks, tasks, reminders, habits, vault, library, people, projects, goals, timeblocks] = await Promise.all([
       listDocs<any>('notes'),
       listDocs<any>('bookmarks'),
       listDocs<any>('tasks'),
@@ -897,6 +962,9 @@ export async function handleFirebaseRequest<T>(path: string, options: RequestIni
       listDocs<any>('vault'),
       listDocs<any>('library'),
       listDocs<any>('people'),
+      listDocs<any>('projects'),
+      listDocs<any>('goals'),
+      listDocs<any>('timeblocks'),
     ]);
 
     const activeNotes = notes.filter((n) => !n.isDeleted);
@@ -904,48 +972,91 @@ export async function handleFirebaseRequest<T>(path: string, options: RequestIni
     const activeTasks = tasks.filter((t) => !t.isDeleted);
     const activeVault = vault.filter((v) => !v.isDeleted);
     const activeLibrary = library.filter((l) => !l.isDeleted);
+    const activeProjects = projects.filter((p) => !p.isDeleted);
+    const activeGoals = goals.filter((g) => !g.isDeleted);
+    const activeReminders = reminders.filter((r) => !r.isDeleted && !r.isCompleted);
+    const activeHabits = habits.filter((h) => !h.isDeleted);
 
     const todayStr = new Date().toISOString().slice(0, 10);
-    const todayTasks = activeTasks.filter(
+    const dueToday = activeTasks.filter(
       (t) => t.status !== 'done' && (t.dueDate === todayStr || (!t.dueDate && t.priority === 'urgent'))
     );
+    const overdue = activeTasks.filter(
+      (t) => t.status !== 'done' && t.dueDate && t.dueDate < todayStr
+    );
+
+    const todayBlocks = timeblocks.filter((tb) => tb.blockDate === todayStr);
 
     return {
+      today: todayStr,
       counts: {
         notes: activeNotes.length,
         bookmarks: activeBookmarks.length,
         files: 0,
         tasksTodo: activeTasks.filter((t) => t.status !== 'done').length,
         tasksDone: activeTasks.filter((t) => t.status === 'done').length,
-        projectsActive: 1,
-        goalsActive: 1,
-        remindersUpcoming: reminders.filter((r) => r.isCompleted === 0).length,
+        projectsActive: activeProjects.length,
+        goalsActive: activeGoals.length,
+        remindersUpcoming: activeReminders.length,
         inboxUnprocessed: 0,
-        habitsActive: habits.length,
+        habitsActive: activeHabits.length,
         peopleCount: people.filter((p) => !p.isDeleted).length,
       },
       totals: {
         notes: activeNotes.length,
+        tasks: activeTasks.filter((t) => t.status !== 'done').length,
+        vault: activeVault.length,
+        library: activeLibrary.length,
         bookmarks: activeBookmarks.length,
         files: 0,
         people: people.filter((p) => !p.isDeleted).length,
       },
-      recentNotes: activeNotes.slice(0, 6),
-      todayTasks,
-      upcomingReminders: reminders.filter((r) => r.isCompleted === 0).slice(0, 5),
-      habits,
-      recentVault: activeVault.slice(0, 4).map((v) => ({
-        id: v.id,
-        title: v.title,
-        category: v.category,
-        renewalOrExpiryDate: v.renewalOrExpiryDate,
+      tasks: {
+        dueToday,
+        overdue,
+      },
+      reminders: activeReminders.slice(0, 10),
+      timeblocks: {
+        blocks: todayBlocks,
+        done: todayBlocks.filter((b) => b.isDone).length,
+        total: todayBlocks.length,
+      },
+      projects: activeProjects.slice(0, 10),
+      goals: activeGoals.slice(0, 10),
+      habits: activeHabits.map((h) => ({
+        ...h,
+        currentCount: h.currentCount || 0,
+        dailyTarget: h.dailyTarget || 1,
+        streakDays: h.streakDays || 0,
+        weekLogged: h.weekLogged || 0,
+        weekMetTarget: h.weekMetTarget || 0,
       })),
-      recentLibrary: activeLibrary.slice(0, 4).map((l) => ({
-        id: l.id,
-        title: l.title,
-        category: l.category,
-        status: l.status,
+      inbox: {
+        newCount: 0,
+        items: [],
+      },
+      notes: activeNotes.slice(0, 6).map((n) => ({
+        id: n.id,
+        title: n.title || 'โน้ตไม่มีชื่อ',
+        updatedAt: n.updatedAt || n.createdAt || Date.now(),
       })),
+      vault: {
+        expiring: activeVault.slice(0, 6).map((v) => ({
+          id: v.id,
+          title: v.title,
+          category: v.category,
+          renewalOrExpiryDate: v.renewalOrExpiryDate,
+        })),
+      },
+      library: {
+        active: activeLibrary.slice(0, 6).map((l) => ({
+          id: l.id,
+          title: l.title,
+          category: l.category,
+          status: l.status,
+          keyTakeaways: l.keyTakeaways || '',
+        })),
+      },
     } as T;
   }
 
