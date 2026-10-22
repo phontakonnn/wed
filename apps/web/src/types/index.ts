@@ -13,8 +13,21 @@ export type { User };
 
 export type AuthState = 'checking' | 'signed-out' | 'signed-in' | 'unavailable';
 
-export type ThemeName = 'emerald' | 'indigo' | 'rose' | 'amber' | 'violet';
+export type ThemeName = 'aurora' | 'emerald' | 'indigo' | 'rose' | 'amber' | 'violet' | 'cyberpunk' | 'dracula' | 'nord' | string;
 export type ThemeMode = 'light' | 'dark';
+
+export interface ThemeConfig {
+  theme: string;
+  mode: ThemeMode;
+  sidebarBgUrl: string;
+  mainBgUrl: string;
+  neonGlow: number; // 0 - 100
+  glassBlur: number; // 0 - 32
+  glassOpacity: number; // 30 - 100
+  borderRadius: number; // 8 - 32
+  accentColor: string;
+  buttonColor: string;
+}
 
 export interface ProfileState {
   name: string;

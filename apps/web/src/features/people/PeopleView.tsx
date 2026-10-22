@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, type ChangeEvent, type FormEvent } from 'react';
+import React, { useState, useEffect, type ChangeEvent, type FormEvent } from 'react';
 import type { Person, RelationshipGroup, Note, StoredFile, TaxonomyItem } from '../../api';
 import { getPersonTags, savePersonTags } from '../../api';
 import type { NotesView } from '../../types';
@@ -58,13 +58,13 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
   personBusy,
   personError,
   personNotice,
-  personAvatarBusy,
+  personAvatarBusy: _personAvatarBusy,
   personNotes,
   onStartNewPerson,
   onSelectPerson,
   onSavePerson,
   onDeletePerson,
-  onAvatarUpload,
+  onAvatarUpload: _onAvatarUpload,
   onCreateReminderForPerson,
   onStartNoteForPerson,
   onOpenPersonNote,
@@ -74,7 +74,6 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
   filterTagId,
   onSelectTagFilter,
 }) => {
-  const personAvatarInputRef = useRef<HTMLInputElement | null>(null);
   const [personTags, setPersonTags] = useState<Array<{ id: string; name: string; color: string }>>([]);
   const [tagManagerOpen, setTagManagerOpen] = useState(false);
   const [personTagPickerOpen, setPersonTagPickerOpen] = useState(false);
@@ -259,10 +258,8 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
                   >
                     <div className="person-card-head">
                       <div className="person-avatar-circle">
-                        {person.avatarDataUrl ? (
-                          <img src={person.avatarDataUrl} alt="" loading="lazy" decoding="async" />
-                        ) : person.avatarFileId ? (
-                          <img src={`/api/files/${person.avatarFileId}`} alt="" loading="lazy" decoding="async" />
+                        {person.avatarDataUrl || (person.avatarFileId && person.avatarFileId.startsWith('http')) ? (
+                          <img src={person.avatarDataUrl || person.avatarFileId || ''} alt="" loading="lazy" decoding="async" />
                         ) : (
                           <span>{person.avatarPreset || person.name.slice(0, 1)}</span>
                         )}
@@ -299,65 +296,67 @@ export const PeopleView: React.FC<PeopleViewProps> = ({
         <main className="notes-detail-pane" aria-label="รายละเอียดบุคคล">
           <form className="notes-editor-body" onSubmit={onSavePerson}>
             {/* Avatar & Preset Controls */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', paddingBottom: '16px', borderBottom: '1px solid var(--pkh-border-subtle)' }}>
-              <div className="person-avatar-circle" style={{ width: '60px', height: '60px', fontSize: '24px' }}>
-                {personDraft.avatarDataUrl ? (
-                  <img src={personDraft.avatarDataUrl} alt="" loading="lazy" decoding="async" />
-                ) : personDraft.avatarFileId ? (
-                  <img src={`/api/files/${personDraft.avatarFileId}`} alt="" loading="lazy" decoding="async" />
-                ) : (
-                  personDraft.avatarPreset || (personDraft.name || 'P').slice(0, 1)
-                )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', paddingBottom: '16px', borderBottom: '1px solid var(--pkh-border-subtle)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div className="person-avatar-circle" style={{ width: '60px', height: '60px', fontSize: '24px' }}>
+                  {personDraft.avatarDataUrl || (personDraft.avatarFileId && personDraft.avatarFileId.startsWith('http')) ? (
+                    <img src={personDraft.avatarDataUrl || personDraft.avatarFileId || ''} alt="" loading="lazy" decoding="async" />
+                  ) : (
+                    personDraft.avatarPreset || (personDraft.name || 'P').slice(0, 1)
+                  )}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', flex: 1 }}>
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--pkh-text-secondary)' }}>Emoji / Avatar:</label>
+                  <select
+                    value={personDraft.avatarPreset ?? ''}
+                    onChange={(e) => setPersonDraft({ ...personDraft, avatarPreset: e.target.value })}
+                    style={{
+                      fontSize: '13px',
+                      padding: '6px 10px',
+                      borderRadius: 'var(--pkh-radius-md)',
+                      border: '1px solid var(--pkh-border-default)',
+                      background: 'var(--pkh-bg-surface)',
+                    }}
+                    aria-label="อวตารสำเร็จรูป"
+                  >
+                    {['🌿', '🌸', '🦊', '🐼', '💙', '⭐', '☕', '🎯', '👑', '🚀', '💡', '🐱', '🐶', '🌈'].map((preset) => (
+                      <option value={preset} key={preset}>{preset}</option>
+                    ))}
+                  </select>
+                  {(personDraft.avatarFileId || personDraft.avatarDataUrl) && (
+                    <Button
+                      variant="danger-quiet"
+                      size="sm"
+                      type="button"
+                      onClick={() => {
+                        setPersonDraft({
+                          ...personDraft,
+                          avatarFileId: null,
+                          avatarDataUrl: null,
+                          avatarPreset: personDraft.avatarPreset || '🌿',
+                        });
+                      }}
+                    >
+                      🗑️ ล้างรูปภาพ
+                    </Button>
+                  )}
+                </div>
               </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px' }}>
-                <select
-                  value={personDraft.avatarPreset ?? ''}
-                  onChange={(e) => setPersonDraft({ ...personDraft, avatarPreset: e.target.value })}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '12px', color: 'var(--pkh-text-muted)' }}>🔗 ลิงก์รูปภาพ:</span>
+                <input
+                  type="url"
+                  placeholder="https://example.com/avatar.jpg"
+                  value={personDraft.avatarDataUrl || (personDraft.avatarFileId && personDraft.avatarFileId.startsWith('http') ? personDraft.avatarFileId : '')}
+                  onChange={(e) => setPersonDraft({ ...personDraft, avatarDataUrl: e.target.value.trim() || null, avatarFileId: null })}
                   style={{
+                    flex: 1,
                     fontSize: '13px',
                     padding: '6px 10px',
                     borderRadius: 'var(--pkh-radius-md)',
                     border: '1px solid var(--pkh-border-default)',
                     background: 'var(--pkh-bg-surface)',
                   }}
-                  aria-label="อวตารสำเร็จรูป"
-                >
-                  {['🌿', '🌸', '🦊', '🐼', '💙', '⭐', '☕', '🎯'].map((preset) => (
-                    <option value={preset} key={preset}>{preset}</option>
-                  ))}
-                </select>
-                <Button
-                  variant="quiet"
-                  size="sm"
-                  type="button"
-                  onClick={() => personAvatarInputRef.current?.click()}
-                  disabled={personAvatarBusy}
-                >
-                  {personAvatarBusy ? 'กำลังอัปโหลด…' : '📷 อัปโหลดรูป'}
-                </Button>
-                {(personDraft.avatarFileId || personDraft.avatarDataUrl) && (
-                  <Button
-                    variant="danger-quiet"
-                    size="sm"
-                    type="button"
-                    onClick={() => {
-                      setPersonDraft({
-                        ...personDraft,
-                        avatarFileId: null,
-                        avatarDataUrl: null,
-                        avatarPreset: personDraft.avatarPreset || '🌿',
-                      });
-                    }}
-                  >
-                    🗑️ ลบรูป
-                  </Button>
-                )}
-                <input
-                  ref={personAvatarInputRef}
-                  className="visually-hidden"
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => void onAvatarUpload(e)}
                 />
               </div>
             </div>

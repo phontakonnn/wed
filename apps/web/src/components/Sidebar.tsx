@@ -46,10 +46,10 @@ export interface SidebarProps {
   onStartNewPerson: () => void;
   onStartNewReminder: () => void;
   onStartNewBookmark: () => void;
-  onUploadFileClick: () => void;
-  onFileInputChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  uploadBusy: boolean;
-  fileInputRef: React.RefObject<HTMLInputElement | null>;
+  onUploadFileClick?: () => void;
+  onFileInputChange?: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  uploadBusy?: boolean;
+  fileInputRef?: React.RefObject<HTMLInputElement | null>;
   // Filters
   activeFilterCount: number;
   onClearFilters: () => void;
@@ -65,7 +65,7 @@ const NAV_GROUPS: Array<{
 }> = [
   { id: 'overview', title: 'ภาพรวม & ด่วน', views: ['home', 'inbox'] },
   { id: 'life-work', title: 'งาน & ตารางชีวิต', views: ['tasks', 'projects', 'goals', 'schedule', 'people'] },
-  { id: 'knowledge', title: 'ความรู้ & ไฟล์', views: ['notes', 'vault', 'library', 'files', 'bookmarks'] },
+  { id: 'knowledge', title: 'ความรู้ & บันทึก', views: ['notes', 'vault', 'library', 'bookmarks'] },
   { id: 'lifestyle', title: 'ไลฟ์สไตล์', views: ['watchlist', 'shopping', 'travel'] },
   { id: 'system', title: 'ระบบ & ช่วยเหลือ', views: ['favorites', 'help-support', 'trash'] },
 ];
@@ -182,8 +182,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Profile Card */}
         <button className="profile-card" type="button" onClick={onOpenProfile} title="โปรไฟล์และการตั้งค่า">
           <span className="avatar profile-avatar">
-            {profile.avatarFileId ? (
-              <img src={`/api/files/${profile.avatarFileId}`} alt="" loading="lazy" decoding="async" />
+            {profile.avatarDataUrl || (profile.avatarFileId && (profile.avatarFileId.startsWith('http') || profile.avatarFileId.startsWith('data:'))) ? (
+              <img src={profile.avatarDataUrl || profile.avatarFileId || ''} alt="" loading="lazy" decoding="async" />
             ) : (
               profile.avatarPreset || (profile.name || user?.username || 'P').slice(0, 1)
             )}

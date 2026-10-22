@@ -1,18 +1,18 @@
 {
-  "name": "PKH — Life OS",
-  "short_name": "Life OS",
-  "description": "พื้นที่จัดเก็บความรู้ งาน และเรื่องสำคัญในชีวิตของคุณ",
+  "name": "Personal Life OS — สมองของคุณ",
+  "short_name": "สมองของคุณ",
+  "description": "Personal Life OS — สมองของคุณ รันบน Firebase Serverless ไม่ต้องเปิดคอมทิ้งไว้",
   "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
+  "display_override": ["standalone", "minimal-ui", "window-controls-overlay"],
   "orientation": "any",
-  "background_color": "#f6f7f4",
-  "theme_color": "#2f7d5a",
+  "background_color": "#0b0f19",
+  "theme_color": "#10b981",
   "lang": "th",
   "dir": "ltr",
-  "categories": ["productivity", "utilities"],
+  "categories": ["productivity", "utilities", "lifestyle"],
   "icons": [
     {
       "src": "/icon-192.png",
@@ -37,12 +37,26 @@
     {
       "name": "ภาพรวมวันนี้",
       "short_name": "ภาพรวม",
-      "url": "/?view=home"
+      "url": "/?view=home",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     },
     {
-      "name": "คลังสำคัญ",
-      "short_name": "คลัง",
-      "url": "/?view=vault"
+      "name": "กล่องขาเข้า",
+      "short_name": "Inbox",
+      "url": "/?view=inbox",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "งานที่ต้องทำ",
+      "short_name": "Tasks",
+      "url": "/?view=tasks",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "คลังสำคัญ (Vault)",
+      "short_name": "Vault",
+      "url": "/?view=vault",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }

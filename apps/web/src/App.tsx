@@ -171,6 +171,7 @@ import { ToastStack, type ToastItem } from './components/ToastStack';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { Skeleton } from './components/ui/Skeleton';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { applyThemeConfig, loadStoredThemeConfig } from './lib/theme';
 
 // Code-split feature views and heavy modals via React.lazy
 const MediaLightbox = lazy(() => import('./components/MediaLightbox').then((m) => ({ default: m.MediaLightbox })));
@@ -391,8 +392,8 @@ function App() {
     lifeArea: 'health' as LifeArea,
   });
   const [habitDraft, setHabitDraft] = useState({ title: '', dailyTarget: '8', unit: 'ครั้ง' });
-  const [theme, setTheme] = useState<ThemeName>(() => (localStorage.getItem('pkh.theme') as ThemeName) || 'emerald');
-  const [themeMode, setThemeMode] = useState<ThemeMode>(() => (localStorage.getItem('pkh.themeMode') as ThemeMode) || 'light');
+  const [theme, setTheme] = useState<ThemeName>(() => (localStorage.getItem('pkh.theme') as ThemeName) || 'aurora');
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => (localStorage.getItem('pkh.themeMode') as ThemeMode) || 'dark');
   const [publicSettings, setPublicSettings] = useState<PublicSettings>({
     app_title: 'PKH / Life OS',
     app_subtitle: 'ศูนย์รวมข้อมูล บันทึก และการจัดการชีวิตส่วนบุคคล',
@@ -407,6 +408,8 @@ function App() {
         document.title = s.app_title;
       })
       .catch(() => {});
+    const cfg = loadStoredThemeConfig();
+    applyThemeConfig(cfg);
   }, []);
   const [profile, setProfile] = useState<ProfileState>(() => {
     try {
@@ -4293,11 +4296,14 @@ function App() {
   const todayDone = todayBlocks.filter((block) => block.isDone === 1).length;
   const todayProgress = todayBlocks.length === 0 ? 0 : Math.round((todayDone / todayBlocks.length) * 100);
   const themes: Array<{ name: ThemeName; label: string; color: string }> = [
-    { name: 'emerald', label: 'Emerald Forest', color: '#3f7658' },
-    { name: 'indigo', label: 'Royal Indigo', color: '#4f5fa8' },
-    { name: 'rose', label: 'Rose Quartz', color: '#a85a72' },
-    { name: 'amber', label: 'Amber Sunset', color: '#a8742c' },
-    { name: 'violet', label: 'Midnight Violet', color: '#6b4f9e' },
+    { name: 'aurora', label: '🌟 Aurora Scenic Ultra', color: '#10b981' },
+    { name: 'cyberpunk', label: '🌌 Midnight Cyberpunk', color: '#06b6d4' },
+    { name: 'emerald', label: '🌲 Emerald Forest', color: '#10b981' },
+    { name: 'indigo', label: '👑 Royal Indigo', color: '#6366f1' },
+    { name: 'rose', label: '🌸 Rose Quartz', color: '#f43f5e' },
+    { name: 'amber', label: '🌅 Amber Sunset', color: '#f59e0b' },
+    { name: 'dracula', label: '🧛 Dracula Dark', color: '#bd93f9' },
+    { name: 'nord', label: '❄️ Nord Arctic', color: '#88c0d0' },
   ];
 // menuItems is replaced by customizable sidebarNav
 
@@ -4923,6 +4929,7 @@ function App() {
       <ThemeModal
         isOpen={themeOpen}
         onClose={() => setThemeOpen(false)}
+        userUid={user?.id}
         theme={theme}
         onSelectTheme={setTheme}
         themeMode={themeMode}

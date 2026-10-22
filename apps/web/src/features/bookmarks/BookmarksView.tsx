@@ -541,24 +541,6 @@ export const BookmarksView: React.FC<BookmarksViewProps> = ({
                       {bm.title}
                     </h4>
 
-                    {/* Clean Subdued URL for E2E and subtle reference */}
-                    <span
-                      className="bookmark-card-url"
-                      style={{
-                        display: 'block',
-                        fontSize: '11px',
-                        color: 'var(--pkh-text-muted, #94a3b8)',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        maxWidth: '100%',
-                        marginBottom: '6px',
-                        opacity: 0.7,
-                      }}
-                    >
-                      {bm.url}
-                    </span>
-
                     {/* Description if present */}
                     {bm.description && (
                       <p className="bookmark-card-desc" style={{ fontSize: '12px', color: 'var(--pkh-text-muted)', margin: '4px 0 8px', lineHeight: 1.4 }}>

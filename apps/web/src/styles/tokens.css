@@ -236,3 +236,58 @@ body {
   overflow-wrap: break-word;
   line-break: loose;
 }
+
+/* 6. Ultimate Theme Studio & Real-Time Glassmorphism Tokens */
+:root {
+  --pkh-glass-blur: 16px;
+  --pkh-glass-opacity: 0.88;
+  --pkh-neon-glow: 0 0 20px rgba(16, 185, 129, 0.35);
+  --pkh-neon-border: 1px solid rgba(16, 185, 129, 0.35);
+  --pkh-btn-primary-bg: #10b981;
+}
+
+/* Modals & Pop-ups everywhere */
+.dialog-backdrop > section,
+.studio-dialog,
+.command-dialog,
+.notification-popover,
+.dialog-card,
+.modal-card {
+  backdrop-filter: blur(var(--pkh-glass-blur)) !important;
+  -webkit-backdrop-filter: blur(var(--pkh-glass-blur)) !important;
+  border-radius: var(--pkh-radius-lg) !important;
+  box-shadow: var(--pkh-shadow-xl), var(--pkh-neon-glow) !important;
+  border: var(--pkh-neon-border) !important;
+}
+
+/* Cards across the app */
+.note-card,
+.bookmark-card-modern,
+.task-card,
+.project-card,
+.person-bento-card,
+.bento-card,
+.dashboard-card,
+.login-card {
+  border-radius: var(--pkh-radius-lg) !important;
+  box-shadow: var(--pkh-neon-glow) !important;
+}
+
+/* Primary buttons */
+.button-primary,
+button.button-primary {
+  background: var(--pkh-btn-primary-bg, var(--pkh-primary)) !important;
+}
+
+/* Sidebar and Main Canvas backgrounds */
+.app-sidebar,
+.notes-sidebar {
+  background: var(--pkh-sidebar-bg, var(--pkh-bg-surface)) !important;
+}
+
+.app-shell,
+.login-background,
+.detail-panel {
+  background: var(--pkh-main-bg, var(--pkh-bg-canvas)) !important;
+}
+
