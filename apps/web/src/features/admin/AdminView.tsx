@@ -1182,6 +1182,108 @@ export const AdminView: React.FC<AdminViewProps> = ({
               </CardContent>
             </Card>
 
+            {/* SMTP & SMS Gateway Settings */}
+            <Card>
+              <CardHeader>
+                <CardTitle>📬 ตั้งค่าระบบส่งอีเมล (SMTP) และ SMS Gateway</CardTitle>
+                <CardDescription>
+                  กำหนดค่าเซิร์ฟเวอร์ SMTP สำหรับส่งรหัส OTP ทางอีเมล และ SMS Gateway สำหรับส่งรหัส OTP ทางเบอร์โทรศัพท์ (หากเว้นว่างไว้ ระบบจะใช้ระบบจำลองการส่ง Simulated Dispatch อัตโนมัติ สามารถทดสอบได้ 100%)
+                </CardDescription>
+              </CardHeader>
+              <CardContent style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '14px', borderRadius: '10px', backgroundColor: 'var(--pkh-bg-subtle, rgba(255,255,255,0.03))', border: '1px solid var(--pkh-border-subtle)' }}>
+                  <strong style={{ fontSize: '13px' }}>📧 อีเมลเกตเวย์ (SMTP Settings)</strong>
+                  <div>
+                    <label style={{ fontSize: '12px', fontWeight: 600 }}>SMTP Host</label>
+                    <Input
+                      placeholder="เช่น smtp.gmail.com หรือ mail.myhost.com"
+                      value={settings.smtp_host || ''}
+                      onChange={(e) => setSettings({ ...settings, smtp_host: e.target.value })}
+                    />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <div>
+                      <label style={{ fontSize: '12px', fontWeight: 600 }}>SMTP Port</label>
+                      <Input
+                        type="number"
+                        placeholder="587 หรือ 465"
+                        value={settings.smtp_port || 587}
+                        onChange={(e) => setSettings({ ...settings, smtp_port: parseInt(e.target.value, 10) || 587 })}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '12px', fontWeight: 600 }}>Secure SSL/TLS</label>
+                      <select
+                        className="admin-select"
+                        value={settings.smtp_secure ? '1' : '0'}
+                        onChange={(e) => setSettings({ ...settings, smtp_secure: e.target.value === '1' ? 1 : 0 })}
+                      >
+                        <option value="0">STARTTLS (Port 587)</option>
+                        <option value="1">SSL/TLS (Port 465)</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '12px', fontWeight: 600 }}>SMTP Username</label>
+                    <Input
+                      placeholder="อีเมลผู้ส่ง เช่น no-reply@example.com"
+                      value={settings.smtp_user || ''}
+                      onChange={(e) => setSettings({ ...settings, smtp_user: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '12px', fontWeight: 600 }}>SMTP Password / App Password</label>
+                    <Input
+                      type="password"
+                      placeholder="••••••••••••"
+                      value={settings.smtp_pass || ''}
+                      onChange={(e) => setSettings({ ...settings, smtp_pass: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '12px', fontWeight: 600 }}>Sender From Name / Email</label>
+                    <Input
+                      placeholder="สมองของคุณ <no-reply@example.com>"
+                      value={settings.smtp_from || ''}
+                      onChange={(e) => setSettings({ ...settings, smtp_from: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '14px', borderRadius: '10px', backgroundColor: 'var(--pkh-bg-subtle, rgba(255,255,255,0.03))', border: '1px solid var(--pkh-border-subtle)' }}>
+                  <strong style={{ fontSize: '13px' }}>📱 SMS Gateway (HTTP / REST API)</strong>
+                  <div>
+                    <label style={{ fontSize: '12px', fontWeight: 600 }}>SMS Gateway Endpoint URL</label>
+                    <Input
+                      placeholder="https://api.sms-provider.com/v1/send"
+                      value={settings.sms_api_url || ''}
+                      onChange={(e) => setSettings({ ...settings, sms_api_url: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '12px', fontWeight: 600 }}>API Key / Token</label>
+                    <Input
+                      type="password"
+                      placeholder="sk_live_••••••••••••"
+                      value={settings.sms_api_key || ''}
+                      onChange={(e) => setSettings({ ...settings, sms_api_key: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '12px', fontWeight: 600 }}>Sender ID / ชื่อผู้ส่ง</label>
+                    <Input
+                      placeholder="เช่น BRAIN, PKH"
+                      value={settings.sms_sender_name || ''}
+                      onChange={(e) => setSettings({ ...settings, sms_sender_name: e.target.value })}
+                    />
+                  </div>
+                  <div style={{ background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.2)', borderRadius: '8px', padding: '10px 12px', fontSize: '12px', color: '#2563eb', lineHeight: 1.5, marginTop: 'auto' }}>
+                    💡 <strong>โหมดทดสอบอัตโนมัติ (Simulation):</strong> หากปล่อยว่างไว้ ไม่ต้องเชื่อมต่อ SMS หรือ SMTP จริง ระบบจะสร้างรหัส OTP 6 หลักและแจ้งเตือนให้คุณในระบบ สามารถคัดลอกไปยืนยันได้ทันที
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
               <CardFooter style={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <Button variant="primary" type="submit" disabled={settingsLoading}>
                   {settingsLoading ? 'กำลังบันทึก...' : '💾 บันทึกการตั้งค่าเว็บไซต์และโมดูล'}

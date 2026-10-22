@@ -7,10 +7,10 @@ import { Skeleton } from '../../components/ui/Skeleton';
 import { TagSelector } from '../../components/TagSelector';
 
 const BOOKMARK_CATEGORY_PRESETS = [
-  '🎮 เกม',
   '🤖 แชท AI',
+  '🎮 เกม',
   '📱 โซเชียล',
-  '📚 ข้อมูล/ความรู้',
+  '📚 ข้อมูลอ้างอิง',
   '🛠️ เครื่องมือทำงาน',
   '🎬 ความบันเทิง',
   '💼 ธุรกิจ/การเงิน',
@@ -540,6 +540,24 @@ export const BookmarksView: React.FC<BookmarksViewProps> = ({
                     <h4 className="bookmark-card-title" style={{ fontSize: '14px', fontWeight: 600, margin: '4px 0 2px', color: 'var(--pkh-text-primary)' }}>
                       {bm.title}
                     </h4>
+
+                    {/* Clean Subdued URL for E2E and subtle reference */}
+                    <span
+                      className="bookmark-card-url"
+                      style={{
+                        display: 'block',
+                        fontSize: '11px',
+                        color: 'var(--pkh-text-muted, #94a3b8)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        maxWidth: '100%',
+                        marginBottom: '6px',
+                        opacity: 0.7,
+                      }}
+                    >
+                      {bm.url}
+                    </span>
 
                     {/* Description if present */}
                     {bm.description && (

@@ -1,27 +1,35 @@
-import './lib/firebaseEngine'
-import { StrictMode, lazy, Suspense } from 'react'
-import { createRoot } from 'react-dom/client'
-import './styles/tokens.css'
-import './styles/shell.css'
-import './styles/dashboard-bento.css'
-import './styles/notes-view.css'
-import './styles/files-view.css'
-import './styles/bookmarks-view.css'
-import './styles/command-palette.css'
-import './styles/life-os-views.css'
-import './index.css'
-import App from './App.tsx'
+import './lib/firebaseEngine';
+import { StrictMode, lazy, Suspense } from 'react';
+import { createRoot } from 'react-dom/client';
+import './styles/tokens.css';
+import './styles/shell.css';
+import './styles/dashboard-bento.css';
+import './styles/notes-view.css';
+import './styles/files-view.css';
+import './styles/bookmarks-view.css';
+import './styles/command-palette.css';
+import './styles/life-os-views.css';
+import './index.css';
+import App from './App.tsx';
+
+// Purge legacy caches immediately so stale offline shells don't show unavailable error
+if (typeof window !== 'undefined' && 'caches' in window) {
+  caches.keys().then((keys) => {
+    keys.forEach((key) => {
+      caches.delete(key);
+    });
+  }).catch(() => {});
+}
 
 // eslint-disable-next-line react-refresh/only-export-components
 const DesignSystemPage = lazy(() =>
   import('./pages/DesignSystemPage').then((m) => ({ default: m.DesignSystemPage }))
-)
+);
 
-// Route check for /design-system (accessible in dev/preview without modifying App.tsx)
 const isDesignSystem =
   window.location.pathname === '/design-system' ||
   window.location.pathname.startsWith('/design-system/') ||
-  window.location.hash === '#/design-system'
+  window.location.hash === '#/design-system';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -33,19 +41,19 @@ createRoot(document.getElementById('root')!).render(
       <App />
     )}
   </StrictMode>,
-)
+);
 
-// PWA: register the service worker for offline shell caching.
-// API responses are never cached by the SW; only static assets and the app shell are.
+// Register and force update service worker
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
       .register('/sw.js')
       .then((registration) => {
-        console.log('[PWA] Service Worker registered:', registration.scope)
+        registration.update().catch(() => {});
+        console.log('[PWA] Service Worker active & updated:', registration.scope);
       })
       .catch((error) => {
-        console.warn('[PWA] Service Worker registration failed:', error)
-      })
-  })
+        console.warn('[PWA] Service Worker registration failed:', error);
+      });
+  });
 }

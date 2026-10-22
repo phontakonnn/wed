@@ -201,7 +201,7 @@ export const TagManagerModal: React.FC<TagManagerModalProps> = ({
     >
       <section
         className="dialog"
-        style={{ maxWidth: '560px', width: '100%' }}
+        style={{ maxWidth: '640px', width: '100%', boxSizing: 'border-box', overflowX: 'hidden' }}
         role="dialog"
         aria-modal="true"
         aria-labelledby="tag-manager-title"

@@ -3,8 +3,8 @@
   inset: 0;
   z-index: 9999;
   background-color: rgba(15, 23, 42, 0.65);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(calc(var(--pkh-glass-blur, 16px) * 0.5));
+  -webkit-backdrop-filter: blur(calc(var(--pkh-glass-blur, 16px) * 0.5));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -14,22 +14,24 @@
 
 .pkh-modal-container {
   width: 100%;
-  max-width: 540px;
+  max-width: 580px;
   max-height: calc(100vh - 48px);
   background-color: var(--pkh-bg-surface);
   border: 1px solid var(--pkh-border-default);
-  border-radius: var(--pkh-radius-2xl);
+  border-radius: var(--pkh-card-radius, 20px) !important;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  overflow-x: hidden !important;
+  box-sizing: border-box;
   position: relative;
   outline: none;
   animation: pkh-scale-in var(--pkh-duration-normal) var(--pkh-ease-default);
 }
 
 .pkh-modal--sm {
-  max-width: 420px;
+  max-width: 440px;
 }
 
 .pkh-modal--lg {
@@ -81,6 +83,8 @@
 .pkh-modal-body {
   padding: var(--pkh-space-6);
   overflow-y: auto;
+  overflow-x: hidden !important;
+  box-sizing: border-box;
   font-family: var(--pkh-font-sans);
   font-size: var(--pkh-font-sm);
   line-height: var(--pkh-lh-base);

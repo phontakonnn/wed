@@ -276,6 +276,71 @@
   border-radius: 4px;
 }
 
+/* Scenic Twilight Mountain Gradient for Sidebar in Aurora Scenic or default */
+[data-bg-effect="aurora-scenic"] .app-sidebar,
+:root:not([data-bg-effect]) .app-sidebar {
+  background: linear-gradient(180deg, #0b0f19 0%, #1e1b4b 35%, #2e1065 70%, #0f172a 100%) !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: #f8fafc !important;
+}
+
+:root[style*="--pkh-custom-sidebar-bg"] .app-sidebar {
+  background-image: var(--pkh-custom-sidebar-bg) !important;
+  background-size: cover !important;
+  background-position: center !important;
+}
+
+[data-bg-effect="aurora-scenic"] .app-sidebar .profile-card,
+:root:not([data-bg-effect]) .app-sidebar .profile-card {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  backdrop-filter: blur(12px) !important;
+  color: #ffffff !important;
+}
+
+[data-bg-effect="aurora-scenic"] .app-sidebar .profile-card:hover,
+:root:not([data-bg-effect]) .app-sidebar .profile-card:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(56, 189, 248, 0.5) !important;
+}
+
+[data-bg-effect="aurora-scenic"] .app-sidebar .profile-name,
+:root:not([data-bg-effect]) .app-sidebar .profile-name,
+[data-bg-effect="aurora-scenic"] .app-sidebar .profile-status,
+:root:not([data-bg-effect]) .app-sidebar .profile-status {
+  color: #f8fafc !important;
+}
+
+[data-bg-effect="aurora-scenic"] .app-sidebar .nav-item,
+:root:not([data-bg-effect]) .app-sidebar .nav-item {
+  color: rgba(248, 250, 252, 0.88) !important;
+}
+
+[data-bg-effect="aurora-scenic"] .app-sidebar .nav-item:hover,
+:root:not([data-bg-effect]) .app-sidebar .nav-item:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+}
+
+[data-bg-effect="aurora-scenic"] .app-sidebar .nav-item.is-active,
+:root:not([data-bg-effect]) .app-sidebar .nav-item.is-active {
+  background: linear-gradient(135deg, #06b6d4 0%, #10b981 100%) !important;
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.55) !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+}
+
+[data-bg-effect="aurora-scenic"] .app-sidebar .nav-item.is-active .nav-count,
+:root:not([data-bg-effect]) .app-sidebar .nav-item.is-active .nav-count {
+  background: rgba(255, 255, 255, 0.25) !important;
+  color: #ffffff !important;
+}
+
+[data-bg-effect="aurora-scenic"] .app-sidebar .nav-group-title,
+:root:not([data-bg-effect]) .app-sidebar .nav-group-title {
+  color: rgba(255, 255, 255, 0.55) !important;
+}
+
 .profile-card {
   padding: 12px !important;
   border-radius: var(--pkh-radius-lg, 14px) !important;

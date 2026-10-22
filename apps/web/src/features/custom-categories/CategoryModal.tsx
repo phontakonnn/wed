@@ -63,7 +63,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
     >
       <section
         className="dialog"
-        style={{ maxWidth: '460px' }}
+        style={{ maxWidth: '520px', width: '100%', boxSizing: 'border-box', overflowX: 'hidden' }}
         role="dialog"
         aria-modal="true"
         aria-labelledby="category-modal-title"

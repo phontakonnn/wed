@@ -14,7 +14,6 @@ export type NotesView =
   | 'trash'
   | 'bookmarks'
   | 'favorites'
-  | 'files'
   | 'vault'
   | 'library'
   | 'custom-category'
@@ -39,8 +38,8 @@ export const DEFAULT_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'goals', view: 'goals', label: 'เป้าหมาย', defaultLabel: 'เป้าหมาย', icon: '🎯', enabled: true },
   { id: 'people', view: 'people', label: 'บุคคลสำคัญ', defaultLabel: 'บุคคลสำคัญ', icon: '👥', enabled: true },
   { id: 'schedule', view: 'schedule', label: 'ปฏิทิน & ตารางชีวิต', defaultLabel: 'ปฏิทิน & ตารางชีวิต', icon: '📅', enabled: true },
-  { id: 'notes', view: 'notes', label: 'โน้ตของฉัน', defaultLabel: 'โน้ตของฉัน', icon: '📝', enabled: true },
-  { id: 'bookmarks', view: 'bookmarks', label: 'บุ๊กมาร์ก', defaultLabel: 'บุ๊กมาร์ก', icon: '🔖', enabled: true },
+  { id: 'notes', view: 'notes', label: 'การ์ดข้อมูลแทนความจำ (Memory Cards)', defaultLabel: 'การ์ดข้อมูลแทนความจำ (Memory Cards)', icon: '🗂️', enabled: true },
+  { id: 'bookmarks', view: 'bookmarks', label: 'คลังลิงก์แยกหมวดหมู่ (Link Hub)', defaultLabel: 'คลังลิงก์แยกหมวดหมู่ (Link Hub)', icon: '🔖', enabled: true },
   { id: 'vault', view: 'vault', label: 'คลังสำคัญ & ทรัพย์สิน (Vault)', defaultLabel: 'คลังสำคัญ & ทรัพย์สิน (Vault)', icon: '🔐', enabled: true },
   { id: 'library', view: 'library', label: 'ห้องสมุด & คู่มือชีวิต (Library)', defaultLabel: 'ห้องสมุด & คู่มือชีวิต (Library)', icon: '📚', enabled: true },
   { id: 'watchlist', view: 'watchlist', label: 'หนัง/ซีรีส์ที่อยากดู', defaultLabel: 'หนัง/ซีรีส์ที่อยากดู', icon: '🎬', enabled: true },
@@ -51,8 +50,8 @@ export const DEFAULT_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'trash', view: 'trash', label: 'ถังขยะ', defaultLabel: 'ถังขยะ', icon: '🗑️', enabled: true },
 ];
 
-const STORAGE_KEY = 'pkh.sidebarNav.v3';
-const LEGACY_STORAGE_KEY = 'pkh.sidebarNav.v2';
+const STORAGE_KEY = 'pkh.sidebarNav.v2';
+const LEGACY_STORAGE_KEY = 'pkh.sidebarNav';
 
 export function loadSidebarNav(serverModulesConfigJson?: string): SidebarNavItem[] {
   let serverOverrides: Record<string, { enabled?: boolean; label?: string }> = {};
@@ -65,6 +64,7 @@ export function loadSidebarNav(serverModulesConfigJson?: string): SidebarNavItem
   }
 
   try {
+    // If legacy key exists, clean it up so old black & white icons are purged
     if (localStorage.getItem(LEGACY_STORAGE_KEY)) {
       localStorage.removeItem(LEGACY_STORAGE_KEY);
     }
@@ -74,7 +74,7 @@ export function loadSidebarNav(serverModulesConfigJson?: string): SidebarNavItem
     const savedMap = new Map<string, Partial<SidebarNavItem>>();
     if (Array.isArray(parsed)) {
       for (const item of parsed) {
-        if (item.id && item.id !== 'files') savedMap.set(item.id, item);
+        if (item.id) savedMap.set(item.id, item);
       }
     }
 
@@ -96,6 +96,7 @@ export function loadSidebarNav(serverModulesConfigJson?: string): SidebarNavItem
         enabled = Boolean(saved.enabled);
       }
 
+      // Always strictly enforce the new standard icon from DEFAULT_SIDEBAR_NAV
       return {
         id: def.id,
         view: def.view,
@@ -112,16 +113,16 @@ export function loadSidebarNav(serverModulesConfigJson?: string): SidebarNavItem
 
 export function saveSidebarNav(items: SidebarNavItem[]): void {
   try {
-    const sanitized = items
-      .filter((item) => item.id !== 'files')
-      .map((item) => {
-        const def = DEFAULT_SIDEBAR_NAV.find((d) => d.id === item.id);
-        return {
-          ...item,
-          icon: def ? def.icon : item.icon,
-        };
-      });
+    // Ensure icons are always kept standard and fresh
+    const sanitized = items.map((item) => {
+      const def = DEFAULT_SIDEBAR_NAV.find((d) => d.id === item.id);
+      return {
+        ...item,
+        icon: def ? def.icon : item.icon,
+      };
+    });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized));
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
   } catch {
     // ignore
   }

@@ -1,11 +1,24 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import {
+  getAuth,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
+  sendSignInLinkToEmail,
+  isSignInWithEmailLink,
+  signInWithEmailLink,
+  signInWithPhoneNumber,
+  RecaptchaVerifier,
+  onAuthStateChanged,
+  type User as FirebaseUser,
+  type ConfirmationResult,
+} from 'firebase/auth';
 import {
   initializeFirestore,
   persistentLocalCache,
   persistentMultipleTabManager,
   getFirestore,
-  Firestore,
+  type Firestore,
 } from 'firebase/firestore';
 import { getMessaging, isSupported as isMessagingSupported, type Messaging } from 'firebase/messaging';
 import { getAnalytics, isSupported as isAnalyticsSupported, type Analytics } from 'firebase/analytics';
@@ -21,8 +34,8 @@ export const firebaseConfig = {
 };
 
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-
 export const auth = getAuth(app);
+export const firebaseAuth = auth;
 
 let firestoreInstance: Firestore;
 try {
@@ -36,6 +49,61 @@ try {
 }
 
 export const db = firestoreInstance;
+export const firestoreDb = db;
+
+// Firebase Auth re-exports
+export {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
+  sendSignInLinkToEmail,
+  isSignInWithEmailLink,
+  signInWithEmailLink,
+  signInWithPhoneNumber,
+  RecaptchaVerifier,
+  onAuthStateChanged,
+  type FirebaseUser,
+  type ConfirmationResult,
+};
+
+// Firebase Config / Setup Modal Helpers
+export interface FirebaseConfig {
+  apiKey: string;
+  authDomain: string;
+  projectId: string;
+  storageBucket?: string;
+  messagingSenderId?: string;
+  appId?: string;
+  measurementId?: string;
+}
+
+export function getSavedFirebaseConfig(): FirebaseConfig | null {
+  try {
+    const raw = localStorage.getItem('pkh.firebaseConfig');
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return firebaseConfig;
+}
+
+export function saveFirebaseConfig(cfg: FirebaseConfig): void {
+  try {
+    localStorage.setItem('pkh.firebaseConfig', JSON.stringify(cfg));
+  } catch {}
+}
+
+export function clearFirebaseConfig(): void {
+  try {
+    localStorage.removeItem('pkh.firebaseConfig');
+  } catch {}
+}
+
+export function isFirebaseConfigured(): boolean {
+  return Boolean(firebaseConfig.apiKey && firebaseConfig.projectId);
+}
+
+export function initFirebase(_cfg?: FirebaseConfig): void {
+  // Config personal-life-os-68631 is already active
+}
 
 let messagingInstance: Messaging | null = null;
 export async function getFirebaseMessaging(): Promise<Messaging | null> {
@@ -47,7 +115,7 @@ export async function getFirebaseMessaging(): Promise<Messaging | null> {
         messagingInstance = getMessaging(app);
       }
     } catch (err) {
-      console.warn('Firebase Messaging is not supported in this environment:', err);
+      console.warn('Firebase Messaging is not supported:', err);
     }
   }
   return messagingInstance;
@@ -63,13 +131,12 @@ export async function getFirebaseAnalytics(): Promise<Analytics | null> {
         analyticsInstance = getAnalytics(app);
       }
     } catch (err) {
-      console.warn('Firebase Analytics is not supported in this environment:', err);
+      console.warn('Firebase Analytics is not supported:', err);
     }
   }
   return analyticsInstance;
 }
 
-// Auto-initialize analytics if supported in browser
 if (typeof window !== 'undefined') {
   void getFirebaseAnalytics();
 }

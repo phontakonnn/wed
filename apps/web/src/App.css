@@ -399,7 +399,8 @@
 .dialog {
   display: flex;
   flex-direction: column;
-  width: min(100%, 640px);
+  width: min(100%, 680px);
+  max-width: 100%;
   max-height: calc(100vh - 48px);
   padding: 24px;
   gap: 16px;
@@ -409,6 +410,8 @@
   color: var(--pkh-text-primary, var(--ink, #0f172a));
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
   overflow-y: auto;
+  overflow-x: hidden !important;
+  box-sizing: border-box;
   position: relative;
   outline: none;
 }
@@ -2362,15 +2365,16 @@ a.button {
 .studio-dialog,
 .command-dialog {
   display: grid;
-  width: min(100%, 560px);
+  width: min(100%, 680px);
   max-width: 100%;
   box-sizing: border-box;
   padding: 22px;
   gap: 14px;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: var(--pkh-card-radius, 20px) !important;
   background: var(--paper);
   box-shadow: 0 24px 80px rgba(20, 30, 21, 0.22);
+  overflow-x: hidden !important;
 }
 
 .studio-dialog h2 {

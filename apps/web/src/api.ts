@@ -1540,6 +1540,15 @@ export interface SystemSettings {
   default_theme: 'system' | 'dark' | 'light';
   modules_config?: string;
   registration_mode?: 'open' | 'invite_only';
+  smtp_host?: string;
+  smtp_port?: number;
+  smtp_user?: string;
+  smtp_pass?: string;
+  smtp_from?: string;
+  smtp_secure?: number;
+  sms_api_url?: string;
+  sms_api_key?: string;
+  sms_sender_name?: string;
 }
 
 export interface AdminUser {
@@ -1965,6 +1974,8 @@ export interface UserProfile {
   dailyStatus?: string | null;
   avatarDataUrl?: string | null;
   twoFactorEnabled?: boolean;
+  emailVerified?: boolean;
+  phoneVerified?: boolean;
 }
 
 export async function getUserProfile(): Promise<{ profile: UserProfile }> {
@@ -2027,18 +2038,36 @@ export async function verify2FALogin(tempToken: string, code: string): Promise<{
 }
 
 export async function requestForgotOtp(
-  usernameOrIdentifier: string,
+  usernameOrIdentifier?: string,
   options?: { email?: string; phone?: string; recoveryType?: 'email' | 'phone' } | string,
-): Promise<{ ok: boolean; message: string; debugOtp?: string }> {
-  let payload: Record<string, string>;
+): Promise<{
+  ok: boolean;
+  message: string;
+  debugOtp?: string;
+  simulatedOtp?: string;
+  deliveryMethod?: string;
+  note?: string;
+  username?: string;
+}> {
+  let payload: Record<string, string> = {};
   if (typeof options === 'string') {
-    payload = { username: usernameOrIdentifier, email: options };
+    if (usernameOrIdentifier) payload.username = usernameOrIdentifier;
+    payload.email = options;
   } else if (options) {
-    payload = { username: usernameOrIdentifier, ...options };
-  } else {
+    if (usernameOrIdentifier) payload.username = usernameOrIdentifier;
+    Object.assign(payload, options);
+  } else if (usernameOrIdentifier) {
     payload = { identifier: usernameOrIdentifier };
   }
-  const result = await request<{ ok: boolean; message: string; debugOtp?: string }>('/api/auth/forgot-password/request-otp', {
+  const result = await request<{
+    ok: boolean;
+    message: string;
+    debugOtp?: string;
+    simulatedOtp?: string;
+    deliveryMethod?: string;
+    note?: string;
+    username?: string;
+  }>('/api/auth/forgot-password/request-otp', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
@@ -2047,12 +2076,15 @@ export async function requestForgotOtp(
 }
 
 export async function resetPasswordWithOtp(
-  usernameOrIdentifier: string,
+  usernameOrIdentifier: string | undefined,
   otp: string,
   newPassword: string,
   options?: { email?: string; phone?: string } | string,
 ): Promise<{ ok: boolean; message: string }> {
-  const payload: Record<string, string> = { username: usernameOrIdentifier, otp, newPassword };
+  const payload: Record<string, string> = { otp, newPassword };
+  if (usernameOrIdentifier) {
+    payload.username = usernameOrIdentifier;
+  }
   if (typeof options === 'string') {
     payload.email = options;
   } else if (options) {
@@ -2062,6 +2094,64 @@ export async function resetPasswordWithOtp(
   const result = await request<{ ok: boolean; message: string }>('/api/auth/forgot-password/reset', {
     method: 'POST',
     body: JSON.stringify(payload),
+  });
+  if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
+  return result;
+}
+
+export async function requestEmailVerificationOtp(): Promise<{
+  ok: boolean;
+  message: string;
+  simulatedOtp?: string;
+  deliveryMethod?: string;
+  note?: string;
+}> {
+  const result = await request<{
+    ok: boolean;
+    message: string;
+    simulatedOtp?: string;
+    deliveryMethod?: string;
+    note?: string;
+  }>('/api/user/verify-email/request-otp', {
+    method: 'POST',
+  });
+  if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
+  return result;
+}
+
+export async function confirmEmailVerificationOtp(otp: string): Promise<{ ok: boolean; message: string }> {
+  const result = await request<{ ok: boolean; message: string }>('/api/user/verify-email/confirm', {
+    method: 'POST',
+    body: JSON.stringify({ otp }),
+  });
+  if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
+  return result;
+}
+
+export async function requestPhoneVerificationOtp(): Promise<{
+  ok: boolean;
+  message: string;
+  simulatedOtp?: string;
+  deliveryMethod?: string;
+  note?: string;
+}> {
+  const result = await request<{
+    ok: boolean;
+    message: string;
+    simulatedOtp?: string;
+    deliveryMethod?: string;
+    note?: string;
+  }>('/api/user/verify-phone/request-otp', {
+    method: 'POST',
+  });
+  if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
+  return result;
+}
+
+export async function confirmPhoneVerificationOtp(otp: string): Promise<{ ok: boolean; message: string }> {
+  const result = await request<{ ok: boolean; message: string }>('/api/user/verify-phone/confirm', {
+    method: 'POST',
+    body: JSON.stringify({ otp }),
   });
   if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
   return result;

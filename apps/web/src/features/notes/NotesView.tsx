@@ -1,7 +1,6 @@
 import React, { type FormEvent, useState } from 'react';
-import { type Note, type Favorite, type TaxonomyItem, type Person, type CustomCategory, type StoredFile, createTag, createCategory } from '../../api';
+import { type Note, type Favorite, type TaxonomyItem, type Person, type CustomCategory, createTag, createCategory } from '../../api';
 import { formatDate } from '../../lib/formatters';
-import { EntityAttachments } from '../../components/EntityAttachments';
 import { MarkdownViewer } from '../../components/MarkdownViewer';
 import { NoteVersionHistoryModal } from './NoteVersionHistoryModal';
 import { ShareItemModal } from '../../components/ShareItemModal';
@@ -75,8 +74,6 @@ export interface NotesViewProps {
   onCategoryCreated?: (cat: TaxonomyItem) => void;
   content: string;
   setContent: (content: string) => void;
-  files: StoredFile[];
-  onFilesChanged: () => void;
 }
 
 export const NotesView: React.FC<NotesViewProps> = ({
@@ -143,8 +140,6 @@ export const NotesView: React.FC<NotesViewProps> = ({
   onCategoryCreated,
   content,
   setContent,
-  files,
-  onFilesChanged,
 }) => {
   // Mode: edit or preview
   const [editorTab, setEditorTab] = useState<'edit' | 'preview'>('edit');
@@ -157,6 +152,24 @@ export const NotesView: React.FC<NotesViewProps> = ({
   const [creatingTag, setCreatingTag] = useState(false);
   const [newCategoryInput, setNewCategoryInput] = useState('');
   const [creatingCategory, setCreatingCategory] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [revealedIds, setRevealedIds] = useState<Record<string, boolean>>({});
+
+  const handleCopyContent = (id: string, text: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      void navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 1800);
+    } catch {
+      // fallback
+    }
+  };
+
+  const handleToggleSecret = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setRevealedIds((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
 
   const handleCreateCategorySubmit = async () => {
     const trimmed = newCategoryInput.trim();
@@ -317,6 +330,16 @@ export const NotesView: React.FC<NotesViewProps> = ({
               filteredNotes.map((note) => {
                 const isFav = favorites.some((f) => f.itemType === 'note' && f.itemId === note.id);
                 const isActive = activeNote?.id === note.id;
+                const isSecret =
+                  note.title.includes('🔐') ||
+                  note.title.includes('รหัส') ||
+                  note.title.includes('บัญชี') ||
+                  note.title.includes('PIN') ||
+                  note.content.includes('[SECRET]');
+                const isRevealed = Boolean(revealedIds[note.id]);
+                const displayContent = isSecret && !isRevealed
+                  ? '•••••••••••• (ข้อมูลลับ: คลิก 👁️ เพื่อแสดง)'
+                  : note.content ? note.content.slice(0, 110) : 'ไม่มีเนื้อหา';
 
                 return (
                   <article
@@ -342,26 +365,52 @@ export const NotesView: React.FC<NotesViewProps> = ({
                       </button>
                     </div>
 
-                    <p className="note-item-preview">
-                      {note.content ? note.content.slice(0, 100) : 'ไม่มีเนื้อหา'}
+                    <p className="note-item-preview" style={{ fontFamily: isSecret && !isRevealed ? 'monospace' : 'inherit' }}>
+                      {displayContent}
                     </p>
 
-                    <div className="note-item-footer">
-                      <time dateTime={new Date(note.updatedAt).toISOString()}>
-                        {formatDate(note.updatedAt)}
-                      </time>
-                      <button
-                        className="button button-danger-quiet"
-                        type="button"
-                        style={{ padding: '1px 6px', minHeight: '20px', fontSize: '10px' }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void onMoveToTrash(note);
-                        }}
-                        title="ย้ายลงถังขยะ"
-                      >
-                        🗑️
-                      </button>
+                    <div className="note-item-footer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Button
+                          variant="quiet"
+                          size="sm"
+                          type="button"
+                          style={{ padding: '2px 8px', height: '22px', fontSize: '11px' }}
+                          onClick={(e) => handleCopyContent(note.id, note.content, e)}
+                          title="คัดลอกข้อความใน 1 คลิก"
+                        >
+                          {copiedId === note.id ? '✓ คัดลอกแล้ว!' : '📋 คัดลอก'}
+                        </Button>
+                        {isSecret && (
+                          <Button
+                            variant="quiet"
+                            size="sm"
+                            type="button"
+                            style={{ padding: '2px 6px', height: '22px', fontSize: '11px' }}
+                            onClick={(e) => handleToggleSecret(note.id, e)}
+                            title={isRevealed ? 'ซ่อนข้อความ' : 'แสดงข้อความลับ'}
+                          >
+                            {isRevealed ? '🙈 ซ่อน' : '👁️ แสดง'}
+                          </Button>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <time dateTime={new Date(note.updatedAt).toISOString()} style={{ fontSize: '11px', color: 'var(--pkh-text-muted)' }}>
+                          {formatDate(note.updatedAt)}
+                        </time>
+                        <button
+                          className="button button-danger-quiet"
+                          type="button"
+                          style={{ padding: '1px 6px', minHeight: '20px', fontSize: '10px' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void onMoveToTrash(note);
+                          }}
+                          title="ย้ายลงถังขยะ"
+                        >
+                          🗑️
+                        </button>
+                      </div>
                     </div>
                   </article>
                 );
@@ -989,18 +1038,6 @@ export const NotesView: React.FC<NotesViewProps> = ({
                   />
                 )}
               </form>
-
-              {/* Attachments Section */}
-              {activeNote && (
-                <div style={{ padding: '0 24px 24px' }}>
-                  <EntityAttachments
-                    entityType="note"
-                    entityId={activeNote.id}
-                    availableFiles={files}
-                    onFilesChanged={onFilesChanged}
-                  />
-                </div>
-              )}
             </>
           ) : (
             <div className="notes-empty-selection">

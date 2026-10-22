@@ -1356,6 +1356,26 @@ export const HabitsView: React.FC<HabitsViewProps> = ({
                   ＋ เพิ่ม
                 </Button>
               </div>
+
+              {(reminderDraft.recurrence === 'monthly' || reminderDraft.recurrence === 'yearly') && (
+                <div style={{
+                  padding: '6px 10px',
+                  borderRadius: 'var(--pkh-radius-md)',
+                  background: 'rgba(56, 189, 248, 0.12)',
+                  border: '1px solid rgba(56, 189, 248, 0.3)',
+                  color: 'var(--pkh-text-primary)',
+                  fontSize: '12px',
+                  fontWeight: 500,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  marginTop: '6px',
+                }}>
+                  {reminderDraft.recurrence === 'monthly'
+                    ? '📌 แจ้งเตือนประจำทุกเดือน: ระบบจะแจ้งเตือนตรงวันที่กำหนดของทุกเดือนอย่างแม่นยำ (วันคงที่ • ไม่มีการเลื่อนวัน)'
+                    : '📌 แจ้งเตือนประจำทุกปี: ระบบจะแจ้งเตือนตรงวันที่และเดือนที่กำหนดของทุกปีอย่างแม่นยำ (วันคงที่ • ไม่มีการเลื่อนวัน)'}
+                </div>
+              )}
             </form>
 
             {/* Reminders List */}
@@ -1381,22 +1401,50 @@ export const HabitsView: React.FC<HabitsViewProps> = ({
                         onChange={() => void onToggleReminder(reminder)}
                       />
                       <div>
-                        <strong style={{ fontSize: '13px', color: 'var(--pkh-text-primary)' }}>
-                          {reminder.title}
-                        </strong>
-                        <div style={{ fontSize: '11px', color: 'var(--pkh-text-muted)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                          <strong style={{ fontSize: '13px', color: 'var(--pkh-text-primary)' }}>
+                            {reminder.title}
+                          </strong>
+                          {reminder.recurrence === 'monthly' && (
+                            <span style={{
+                              fontSize: '11px',
+                              padding: '1px 6px',
+                              borderRadius: '4px',
+                              background: 'rgba(56, 189, 248, 0.15)',
+                              color: 'var(--pkh-accent-primary, #0284c7)',
+                              fontWeight: 600,
+                              border: '1px solid rgba(56, 189, 248, 0.3)',
+                            }}>
+                              🔒 ประจำทุกเดือน (วันคงที่ • ไม่มีการเลื่อนวัน)
+                            </span>
+                          )}
+                          {reminder.recurrence === 'yearly' && (
+                            <span style={{
+                              fontSize: '11px',
+                              padding: '1px 6px',
+                              borderRadius: '4px',
+                              background: 'rgba(168, 85, 247, 0.15)',
+                              color: '#a855f7',
+                              fontWeight: 600,
+                              border: '1px solid rgba(168, 85, 247, 0.3)',
+                            }}>
+                              🔒 ประจำทุกปี (วันคงที่ • ไม่มีการเลื่อนวัน)
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: '11px', color: 'var(--pkh-text-muted)', marginTop: '2px' }}>
                           {reminder.snoozedUntil
                             ? `เลื่อนไป ${reminder.snoozedUntil} (เดิม ${reminder.targetDate})`
                             : reminder.targetDate}
                           {' · '}{reminderCategoryLabel(reminder.category)}
-                          {reminder.recurrence && reminder.recurrence !== 'none' ? ` · 🔁 ${reminder.recurrence}` : ''}
+                          {reminder.recurrence && reminder.recurrence !== 'none' && reminder.recurrence !== 'monthly' && reminder.recurrence !== 'yearly' ? ` · 🔁 ${reminder.recurrence}` : ''}
                           {reminder.linkedPersonName ? ` · 👤 ${reminder.linkedPersonName}` : ''}
                         </div>
                       </div>
                     </div>
 
                     <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                      {reminder.isCompleted !== 1 && (
+                      {reminder.isCompleted !== 1 && reminder.recurrence !== 'monthly' && reminder.recurrence !== 'yearly' && (
                         <Button
                           variant="quiet"
                           size="sm"
@@ -1509,6 +1557,25 @@ export const HabitsView: React.FC<HabitsViewProps> = ({
                   </select>
                 </div>
               </div>
+
+              {(quickEventRecurrence === 'monthly' || quickEventRecurrence === 'yearly') && (
+                <div style={{
+                  padding: '8px 12px',
+                  borderRadius: 'var(--pkh-radius-md)',
+                  background: 'rgba(56, 189, 248, 0.12)',
+                  border: '1px solid rgba(56, 189, 248, 0.3)',
+                  color: 'var(--pkh-text-primary)',
+                  fontSize: '12px',
+                  fontWeight: 500,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}>
+                  {quickEventRecurrence === 'monthly'
+                    ? '📌 แจ้งเตือนประจำทุกเดือน: ระบบจะแจ้งเตือนตรงวันที่กำหนดของทุกเดือนอย่างแม่นยำ (วันคงที่ • ไม่มีการเลื่อนวัน)'
+                    : '📌 แจ้งเตือนประจำทุกปี: ระบบจะแจ้งเตือนตรงวันที่และเดือนที่กำหนดของทุกปีอย่างแม่นยำ (วันคงที่ • ไม่มีการเลื่อนวัน)'}
+                </div>
+              )}
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>

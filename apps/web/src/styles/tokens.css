@@ -237,57 +237,298 @@ body {
   line-break: loose;
 }
 
-/* 6. Ultimate Theme Studio & Real-Time Glassmorphism Tokens */
+/* ==========================================================================
+   6. Vibrant Studio Themes & Background Effects
+   ========================================================================== */
+
 :root {
+  --pkh-neon-glow-opacity: 0.7;
+  --pkh-glow-intensity: 70%;
   --pkh-glass-blur: 16px;
-  --pkh-glass-opacity: 0.88;
-  --pkh-neon-glow: 0 0 20px rgba(16, 185, 129, 0.35);
-  --pkh-neon-border: 1px solid rgba(16, 185, 129, 0.35);
-  --pkh-btn-primary-bg: #10b981;
+  --pkh-glass-opacity: 0.75;
+  --pkh-card-radius: 20px;
+  --pkh-accent-color: #10b981;
+  --pkh-accent-rgb: 16, 185, 129;
+  --pkh-btn-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
 }
 
-/* Modals & Pop-ups everywhere */
-.dialog-backdrop > section,
-.studio-dialog,
-.command-dialog,
-.notification-popover,
-.dialog-card,
-.modal-card {
-  backdrop-filter: blur(var(--pkh-glass-blur)) !important;
-  -webkit-backdrop-filter: blur(var(--pkh-glass-blur)) !important;
-  border-radius: var(--pkh-radius-lg) !important;
-  box-shadow: var(--pkh-shadow-xl), var(--pkh-neon-glow) !important;
-  border: var(--pkh-neon-border) !important;
+/* 🌟 Aurora Scenic Ultra - Flagship Default Theme */
+[data-bg-effect="aurora-scenic"],
+:root:not([data-bg-effect]) {
+  --pkh-bg-canvas: #090e1a;
+  --pkh-theme-bg-gradient: radial-gradient(at 0% 0%, rgba(147, 51, 234, 0.28) 0px, transparent 55%),
+    radial-gradient(at 100% 0%, rgba(56, 189, 248, 0.32) 0px, transparent 50%),
+    radial-gradient(at 50% 50%, rgba(99, 102, 241, 0.22) 0px, transparent 60%),
+    radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.22) 0px, transparent 50%),
+    radial-gradient(at 0% 100%, rgba(244, 63, 94, 0.24) 0px, transparent 55%);
 }
 
-/* Cards across the app */
+[data-mode="light"][data-bg-effect="aurora-scenic"] {
+  --pkh-bg-canvas: #f6f8fe;
+  --pkh-theme-bg-gradient: radial-gradient(at 0% 0%, rgba(168, 85, 247, 0.16) 0px, transparent 55%),
+    radial-gradient(at 100% 0%, rgba(56, 189, 248, 0.20) 0px, transparent 50%),
+    radial-gradient(at 50% 50%, rgba(99, 102, 241, 0.12) 0px, transparent 60%),
+    radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.14) 0px, transparent 50%),
+    radial-gradient(at 0% 100%, rgba(244, 63, 94, 0.16) 0px, transparent 55%);
+}
+
+/* 🏔️ Mountain Twilight */
+[data-bg-effect="mountain-twilight"] {
+  --pkh-bg-canvas: #070913;
+  --pkh-theme-bg-gradient: radial-gradient(at 20% 10%, rgba(99, 102, 241, 0.25) 0px, transparent 50%),
+    radial-gradient(at 80% 20%, rgba(168, 85, 247, 0.22) 0px, transparent 45%),
+    radial-gradient(at 50% 80%, rgba(30, 58, 138, 0.28) 0px, transparent 60%),
+    radial-gradient(at 100% 90%, rgba(56, 189, 248, 0.18) 0px, transparent 40%);
+}
+
+[data-mode="light"][data-bg-effect="mountain-twilight"] {
+  --pkh-bg-canvas: #f3f4f9;
+  --pkh-theme-bg-gradient: radial-gradient(at 20% 10%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+    radial-gradient(at 80% 20%, rgba(168, 85, 247, 0.12) 0px, transparent 45%),
+    radial-gradient(at 50% 80%, rgba(191, 219, 254, 0.4) 0px, transparent 60%);
+}
+
+/* 💎 Neon Glass Bento */
+[data-bg-effect="neon-glass"] {
+  --pkh-bg-canvas: #060914;
+  --pkh-theme-bg-gradient: radial-gradient(at 0% 20%, rgba(6, 182, 212, 0.32) 0px, transparent 50%),
+    radial-gradient(at 100% 30%, rgba(236, 72, 153, 0.28) 0px, transparent 50%),
+    radial-gradient(at 40% 90%, rgba(16, 185, 129, 0.25) 0px, transparent 55%),
+    radial-gradient(at 90% 90%, rgba(139, 92, 246, 0.25) 0px, transparent 50%);
+}
+
+[data-mode="light"][data-bg-effect="neon-glass"] {
+  --pkh-bg-canvas: #f0f7ff;
+  --pkh-theme-bg-gradient: radial-gradient(at 0% 20%, rgba(6, 182, 212, 0.18) 0px, transparent 50%),
+    radial-gradient(at 100% 30%, rgba(236, 72, 153, 0.15) 0px, transparent 50%),
+    radial-gradient(at 40% 90%, rgba(16, 185, 129, 0.14) 0px, transparent 55%);
+}
+
+/* Classic Aurora Mesh Gradient */
+[data-bg-effect="aurora"] {
+  --pkh-bg-canvas: #f8faff;
+  --pkh-theme-bg-gradient: radial-gradient(at 0% 0%, rgba(147, 51, 234, 0.12) 0px, transparent 55%),
+    radial-gradient(at 100% 0%, rgba(59, 130, 246, 0.14) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.10) 0px, transparent 50%),
+    radial-gradient(at 0% 100%, rgba(244, 63, 94, 0.12) 0px, transparent 55%);
+}
+
+[data-mode="dark"][data-bg-effect="aurora"] {
+  --pkh-bg-canvas: #090d16;
+  --pkh-theme-bg-gradient: radial-gradient(at 0% 0%, rgba(147, 51, 234, 0.22) 0px, transparent 55%),
+    radial-gradient(at 100% 0%, rgba(59, 130, 246, 0.22) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.16) 0px, transparent 50%),
+    radial-gradient(at 0% 100%, rgba(244, 63, 94, 0.18) 0px, transparent 55%);
+}
+
+/* Floating Ambient Orbs */
+[data-bg-effect="orbs"] {
+  --pkh-bg-canvas: #f6f8fd;
+  --pkh-theme-bg-gradient: radial-gradient(circle at 20% 25%, rgba(99, 102, 241, 0.18) 0%, transparent 35%),
+    radial-gradient(circle at 80% 75%, rgba(236, 72, 153, 0.15) 0%, transparent 40%),
+    radial-gradient(circle at 50% 50%, rgba(14, 165, 233, 0.12) 0%, transparent 45%);
+}
+
+[data-mode="dark"][data-bg-effect="orbs"] {
+  --pkh-bg-canvas: #070b14;
+  --pkh-theme-bg-gradient: radial-gradient(circle at 20% 25%, rgba(99, 102, 241, 0.28) 0%, transparent 35%),
+    radial-gradient(circle at 80% 75%, rgba(236, 72, 153, 0.24) 0%, transparent 40%),
+    radial-gradient(circle at 50% 50%, rgba(14, 165, 233, 0.20) 0%, transparent 45%);
+}
+
+/* Crystal Glassmorphism */
+[data-bg-effect="glass"] {
+  --pkh-bg-canvas: #f0f4ff;
+  --pkh-theme-bg-gradient: linear-gradient(135deg, rgba(224, 231, 255, 0.7) 0%, rgba(243, 232, 255, 0.7) 50%, rgba(254, 226, 226, 0.5) 100%);
+}
+
+[data-mode="dark"][data-bg-effect="glass"] {
+  --pkh-bg-canvas: #0c1122;
+  --pkh-theme-bg-gradient: linear-gradient(135deg, rgba(30, 41, 79, 0.7) 0%, rgba(46, 26, 71, 0.6) 50%, rgba(15, 23, 42, 0.8) 100%);
+}
+
+/* Pastel Candy */
+[data-bg-effect="pastel"] {
+  --pkh-bg-canvas: #fdf8f9;
+  --pkh-theme-bg-gradient: radial-gradient(at 0% 0%, #ffe4e6 0%, transparent 50%),
+    radial-gradient(at 100% 0%, #fef3c7 0%, transparent 50%),
+    radial-gradient(at 100% 100%, #e0e7ff 0%, transparent 50%),
+    radial-gradient(at 0% 100%, #d1fae5 0%, transparent 50%);
+}
+
+[data-mode="dark"][data-bg-effect="pastel"] {
+  --pkh-bg-canvas: #120d18;
+  --pkh-theme-bg-gradient: radial-gradient(at 0% 0%, rgba(251, 113, 133, 0.2) 0%, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(245, 158, 11, 0.18) 0%, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(129, 140, 248, 0.2) 0%, transparent 50%),
+    radial-gradient(at 0% 100%, rgba(52, 211, 153, 0.18) 0%, transparent 50%);
+}
+
+/* Ocean Emerald */
+[data-bg-effect="ocean"] {
+  --pkh-bg-canvas: #f0fdfa;
+  --pkh-theme-bg-gradient: radial-gradient(at 0% 20%, rgba(20, 184, 166, 0.18) 0%, transparent 50%),
+    radial-gradient(at 100% 80%, rgba(14, 165, 233, 0.18) 0%, transparent 50%),
+    radial-gradient(at 50% 100%, rgba(16, 185, 129, 0.15) 0%, transparent 50%);
+}
+
+[data-mode="dark"][data-bg-effect="ocean"] {
+  --pkh-bg-canvas: #041315;
+  --pkh-theme-bg-gradient: radial-gradient(at 0% 20%, rgba(20, 184, 166, 0.28) 0%, transparent 50%),
+    radial-gradient(at 100% 80%, rgba(14, 165, 233, 0.26) 0%, transparent 50%),
+    radial-gradient(at 50% 100%, rgba(16, 185, 129, 0.22) 0%, transparent 50%);
+}
+
+/* Sunset Vibrant */
+[data-bg-effect="sunset"] {
+  --pkh-bg-canvas: #fffaf5;
+  --pkh-theme-bg-gradient: radial-gradient(at 10% 10%, rgba(249, 115, 22, 0.18) 0%, transparent 50%),
+    radial-gradient(at 90% 30%, rgba(236, 72, 153, 0.16) 0%, transparent 50%),
+    radial-gradient(at 50% 90%, rgba(168, 85, 247, 0.14) 0%, transparent 55%);
+}
+
+[data-mode="dark"][data-bg-effect="sunset"] {
+  --pkh-bg-canvas: #15090f;
+  --pkh-theme-bg-gradient: radial-gradient(at 10% 10%, rgba(249, 115, 22, 0.28) 0%, transparent 50%),
+    radial-gradient(at 90% 30%, rgba(236, 72, 153, 0.25) 0%, transparent 50%),
+    radial-gradient(at 50% 90%, rgba(168, 85, 247, 0.22) 0%, transparent 55%);
+}
+
+/* Cyber Neon Dark */
+[data-bg-effect="neon"] {
+  --pkh-bg-canvas: #05060b;
+  --pkh-theme-bg-gradient: radial-gradient(at 0% 0%, rgba(6, 182, 212, 0.25) 0%, transparent 45%),
+    radial-gradient(at 100% 100%, rgba(236, 72, 153, 0.25) 0%, transparent 45%),
+    radial-gradient(at 50% 50%, rgba(139, 92, 246, 0.20) 0%, transparent 55%);
+}
+
+/* Minimal Clean */
+[data-bg-effect="minimal"] {
+  --pkh-bg-canvas: #f8fafc;
+  --pkh-theme-bg-gradient: none;
+}
+
+[data-mode="dark"][data-bg-effect="minimal"] {
+  --pkh-bg-canvas: #0b0f19;
+  --pkh-theme-bg-gradient: none;
+}
+
+/* Global Application of Background Gradient */
+body,
+.app-shell,
+.workspace,
+.detail-panel {
+  background-color: var(--pkh-bg-canvas) !important;
+  background-image: var(--pkh-theme-bg-gradient) !important;
+  background-attachment: fixed !important;
+  background-size: cover !important;
+}
+
+/* Custom Canvas Wallpaper Override */
+:root[style*="--pkh-custom-canvas-bg"] body,
+:root[style*="--pkh-custom-canvas-bg"] .app-shell,
+:root[style*="--pkh-custom-canvas-bg"] .workspace,
+:root[style*="--pkh-custom-canvas-bg"] .detail-panel {
+  background-image: var(--pkh-custom-canvas-bg) !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-attachment: fixed !important;
+}
+
+/* 7. Special Effect Toggles */
+
+/* A: Animated Background Glow */
+[data-animated-glow="true"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at 30% 40%, rgba(99, 102, 241, 0.12), transparent 45%),
+              radial-gradient(circle at 70% 60%, rgba(236, 72, 153, 0.10), transparent 45%),
+              radial-gradient(circle at 50% 80%, rgba(16, 185, 129, 0.08), transparent 45%);
+  animation: pkh-ambient-shift 18s ease-in-out infinite alternate;
+}
+
+@keyframes pkh-ambient-shift {
+  0% {
+    transform: scale(1) translate(0, 0);
+  }
+  50% {
+    transform: scale(1.08) translate(-2%, 2%);
+  }
+  100% {
+    transform: scale(1.03) translate(2%, -1.5%);
+  }
+}
+
+/* Card & Pop-up Modal Geometry, Glass & Neon Glow */
+.bento-tile,
+.card,
 .note-card,
 .bookmark-card-modern,
-.task-card,
-.project-card,
-.person-bento-card,
-.bento-card,
-.dashboard-card,
-.login-card {
-  border-radius: var(--pkh-radius-lg) !important;
-  box-shadow: var(--pkh-neon-glow) !important;
+.dialog,
+.studio-dialog,
+.pkh-modal-container {
+  border-radius: var(--pkh-card-radius, 20px) !important;
+  box-shadow: 0 0 0 1px rgba(var(--pkh-accent-rgb, 16, 185, 129), calc(var(--pkh-neon-glow-opacity, 0.7) * 0.4)),
+              0 8px calc(20px * var(--pkh-neon-glow-opacity, 0.7)) -4px rgba(var(--pkh-accent-rgb, 16, 185, 129), calc(var(--pkh-neon-glow-opacity, 0.7) * 0.35)) !important;
 }
 
-/* Primary buttons */
+/* B: Glass Card Blur & Dynamic Opacity */
+[data-glass-card="true"] .bento-tile,
+[data-glass-card="true"] .card,
+[data-glass-card="true"] .note-card,
+[data-glass-card="true"] .bookmark-card-modern,
+[data-glass-card="true"] .dialog,
+[data-glass-card="true"] .studio-dialog,
+[data-glass-card="true"] .pkh-modal-container {
+  backdrop-filter: blur(var(--pkh-glass-blur, 16px)) !important;
+  -webkit-backdrop-filter: blur(var(--pkh-glass-blur, 16px)) !important;
+  background-color: rgba(255, 255, 255, var(--pkh-glass-opacity, 0.75)) !important;
+  border-color: rgba(255, 255, 255, 0.45) !important;
+}
+
+[data-mode="dark"][data-glass-card="true"] .bento-tile,
+[data-mode="dark"][data-glass-card="true"] .card,
+[data-mode="dark"][data-glass-card="true"] .note-card,
+[data-mode="dark"][data-glass-card="true"] .bookmark-card-modern,
+[data-mode="dark"][data-glass-card="true"] .dialog,
+[data-mode="dark"][data-glass-card="true"] .studio-dialog,
+[data-mode="dark"][data-glass-card="true"] .pkh-modal-container {
+  backdrop-filter: blur(var(--pkh-glass-blur, 16px)) !important;
+  -webkit-backdrop-filter: blur(var(--pkh-glass-blur, 16px)) !important;
+  background-color: rgba(17, 24, 39, var(--pkh-glass-opacity, 0.72)) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* Custom Button Styling with Gradient */
 .button-primary,
-button.button-primary {
-  background: var(--pkh-btn-primary-bg, var(--pkh-primary)) !important;
+button.button-primary,
+.pkh-btn--primary {
+  background: var(--pkh-btn-gradient, linear-gradient(135deg, var(--pkh-primary, #10b981) 0%, #059669 100%)) !important;
+  border-color: var(--pkh-accent-color, var(--pkh-primary)) !important;
+  border-radius: calc(var(--pkh-card-radius, 20px) * 0.45) !important;
+  color: #ffffff !important;
 }
 
-/* Sidebar and Main Canvas backgrounds */
-.app-sidebar,
-.notes-sidebar {
-  background: var(--pkh-sidebar-bg, var(--pkh-bg-surface)) !important;
+/* Modal Backdrops with Glass Blur */
+.dialog-backdrop,
+.pkh-modal-backdrop {
+  backdrop-filter: blur(calc(var(--pkh-glass-blur, 16px) * 0.5)) !important;
+  -webkit-backdrop-filter: blur(calc(var(--pkh-glass-blur, 16px) * 0.5)) !important;
 }
 
-.app-shell,
-.login-background,
-.detail-panel {
-  background: var(--pkh-main-bg, var(--pkh-bg-canvas)) !important;
+/* C: 3D Hover Lift & Glow */
+[data-hover-lift="true"] .bento-tile,
+[data-hover-lift="true"] .note-card,
+[data-hover-lift="true"] .button-primary,
+[data-hover-lift="true"] .sidebar-quick-btn {
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
+[data-hover-lift="true"] .bento-tile:hover,
+[data-hover-lift="true"] .note-card:hover {
+  transform: translateY(-4px) scale(1.01) !important;
+  box-shadow: 0 12px 28px -4px rgba(59, 130, 246, 0.2), 0 4px 10px -2px rgba(0, 0, 0, 0.08) !important;
+}

@@ -134,7 +134,7 @@ export const QuickAddCategoryModal: React.FC<QuickAddCategoryModalProps> = ({
     >
       <section
         className="dialog"
-        style={{ maxWidth: '640px', width: '100%' }}
+        style={{ maxWidth: '680px', width: '100%', boxSizing: 'border-box', overflowX: 'hidden' }}
         role="dialog"
         aria-modal="true"
         aria-labelledby="quick-add-cat-title"

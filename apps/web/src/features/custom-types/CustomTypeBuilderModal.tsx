@@ -159,8 +159,9 @@ export const CustomTypeBuilderModal: React.FC<CustomTypeBuilderModalProps> = ({
         if (!busy) onClose();
       }}
       title={typeToEdit ? '✎ แก้ไขประเภทข้อมูล' : '＋ สร้างประเภทข้อมูลใหม่ (Custom Data Type)'}
+      size="lg"
     >
-      <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '75vh', overflowY: 'auto', paddingRight: '4px' }}>
+      <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '78vh', overflowY: 'auto', overflowX: 'hidden', padding: '16px 20px', width: '100%', boxSizing: 'border-box' }}>
         {error && (
           <div
             style={{
@@ -176,77 +177,118 @@ export const CustomTypeBuilderModal: React.FC<CustomTypeBuilderModalProps> = ({
           </div>
         )}
 
-        {/* Basic Information */}
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-          <div style={{ flex: '0 0 auto' }}>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--pkh-text-secondary)' }}>
-              ไอคอน
+        {/* Row 1: Dedicated Icon Selection */}
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            padding: '12px 14px',
+            borderRadius: '10px',
+            backgroundColor: 'var(--pkh-bg-subtle, rgba(255,255,255,0.03))',
+            border: '1px solid var(--pkh-border-subtle)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--pkh-text-primary)' }}>
+              ไอคอนประจำประเภทข้อมูล
             </label>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'center' }}>
+            <span style={{ fontSize: '12px', color: 'var(--pkh-text-muted)' }}>
+              เลือกไอคอนแนะนำ หรือพิมพ์ Emoji ที่ต้องการ
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div
+                style={{
+                  width: '54px',
+                  height: '54px',
+                  fontSize: '28px',
+                  borderRadius: '12px',
+                  border: '2px solid var(--pkh-border-default)',
+                  backgroundColor: 'var(--pkh-bg-surface)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                  flexShrink: 0,
+                }}
+              >
+                {icon || '🧩'}
+              </div>
               <input
                 type="text"
                 value={icon}
                 onChange={(e) => setIcon(e.target.value)}
                 maxLength={4}
+                placeholder="Emoji"
+                aria-label="ไอคอนประเภทข้อมูล"
                 style={{
-                  width: '52px',
-                  height: '52px',
-                  fontSize: '24px',
+                  width: '54px',
+                  height: '38px',
+                  fontSize: '18px',
                   textAlign: 'center',
-                  borderRadius: '10px',
+                  borderRadius: '8px',
                   border: '1px solid var(--pkh-border-subtle)',
                   backgroundColor: 'var(--pkh-bg-surface)',
                   color: 'var(--pkh-text-primary)',
                 }}
-                aria-label="ไอคอนประเภทข้อมูล"
               />
-              <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', width: '110px' }}>
-                {PRESET_ICONS.map((emoji) => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    onClick={() => setIcon(emoji)}
-                    style={{
-                      border: 'none',
-                      background: 'none',
-                      cursor: 'pointer',
-                      fontSize: '16px',
-                      padding: '2px',
-                      borderRadius: '4px',
-                    }}
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', flex: '1 1 260px' }}>
+              {PRESET_ICONS.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => setIcon(emoji)}
+                  style={{
+                    width: '38px',
+                    height: '38px',
+                    border: icon === emoji ? '2px solid var(--pkh-primary, #3b82f6)' : '1px solid var(--pkh-border-subtle)',
+                    backgroundColor: icon === emoji ? 'rgba(59, 130, 246, 0.15)' : 'var(--pkh-bg-surface)',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '18px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {emoji}
+                </button>
+              ))}
             </div>
           </div>
+        </div>
 
-          <div style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '4px', color: 'var(--pkh-text-secondary)' }}>
-                ชื่อประเภทข้อมูล <span style={{ color: '#ef4444' }}>*</span>
-              </label>
-              <Input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="เช่น คลังสูตรอาหาร, อุปกรณ์ไอที, บันทึกการออกกำลังกาย"
-                required
-              />
-            </div>
+        {/* Row 2: Name and Description (Full width, clear and readable) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: 'var(--pkh-text-secondary)' }}>
+              ชื่อประเภทข้อมูล <span style={{ color: '#ef4444' }}>*</span>
+            </label>
+            <Input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="เช่น คลังสูตรอาหาร, อุปกรณ์ไอที, บันทึกการออกกำลังกาย"
+              required
+              style={{ width: '100%' }}
+            />
+          </div>
 
-            <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '4px', color: 'var(--pkh-text-secondary)' }}>
-                คำอธิบายสั้น
-              </label>
-              <Input
-                type="text"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="ระบุวัตถุประสงค์ของการจัดเก็บข้อมูลนี้..."
-              />
-            </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: 'var(--pkh-text-secondary)' }}>
+              คำอธิบายสั้น
+            </label>
+            <Input
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="ระบุวัตถุประสงค์ของการจัดเก็บข้อมูลนี้..."
+              style={{ width: '100%' }}
+            />
           </div>
         </div>
 
@@ -348,8 +390,8 @@ export const CustomTypeBuilderModal: React.FC<CustomTypeBuilderModalProps> = ({
                   border: '1px solid var(--pkh-border-subtle)',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '12px', color: 'var(--pkh-text-muted)', width: '20px' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
+                  <span style={{ fontSize: '12px', color: 'var(--pkh-text-muted)', width: '22px', flexShrink: 0 }}>
                     #{idx + 1}
                   </span>
                   <input
@@ -358,7 +400,8 @@ export const CustomTypeBuilderModal: React.FC<CustomTypeBuilderModalProps> = ({
                     onChange={(e) => updateField(idx, { name: e.target.value })}
                     placeholder="ชื่อฟิลด์ เช่น วันหมดอายุ, แคลอรี่"
                     style={{
-                      flex: '1 1 140px',
+                      flex: '1 1 180px',
+                      minWidth: '130px',
                       padding: '6px 10px',
                       borderRadius: '6px',
                       border: '1px solid var(--pkh-border-subtle)',
@@ -372,7 +415,8 @@ export const CustomTypeBuilderModal: React.FC<CustomTypeBuilderModalProps> = ({
                     value={field.type}
                     onChange={(e) => updateField(idx, { type: e.target.value as CustomFieldType })}
                     style={{
-                      flex: '0 0 160px',
+                      flex: '0 1 180px',
+                      minWidth: '130px',
                       padding: '6px 8px',
                       borderRadius: '6px',
                       border: '1px solid var(--pkh-border-subtle)',
@@ -388,7 +432,7 @@ export const CustomTypeBuilderModal: React.FC<CustomTypeBuilderModalProps> = ({
                     ))}
                   </select>
 
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap', userSelect: 'none' }}>
                     <input
                       type="checkbox"
                       checked={Boolean(field.required)}
@@ -397,12 +441,12 @@ export const CustomTypeBuilderModal: React.FC<CustomTypeBuilderModalProps> = ({
                     <span>จำเป็น</span>
                   </label>
 
-                  <div style={{ display: 'flex', gap: '2px', marginLeft: 'auto' }}>
+                  <div style={{ display: 'flex', gap: '4px', marginLeft: 'auto', alignItems: 'center' }}>
                     <button
                       type="button"
                       onClick={() => moveField(idx, 'up')}
                       disabled={idx === 0}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: idx === 0 ? 0.3 : 0.8 }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: idx === 0 ? 0.3 : 0.8, padding: '4px', borderRadius: '4px' }}
                       title="เลื่อนขึ้น"
                     >
                       ▲
@@ -411,7 +455,7 @@ export const CustomTypeBuilderModal: React.FC<CustomTypeBuilderModalProps> = ({
                       type="button"
                       onClick={() => moveField(idx, 'down')}
                       disabled={idx === fields.length - 1}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: idx === fields.length - 1 ? 0.3 : 0.8 }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: idx === fields.length - 1 ? 0.3 : 0.8, padding: '4px', borderRadius: '4px' }}
                       title="เลื่อนลง"
                     >
                       ▼
@@ -420,7 +464,7 @@ export const CustomTypeBuilderModal: React.FC<CustomTypeBuilderModalProps> = ({
                       type="button"
                       onClick={() => removeField(idx)}
                       disabled={fields.length <= 1}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', opacity: fields.length <= 1 ? 0.3 : 0.8, marginLeft: '4px' }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', opacity: fields.length <= 1 ? 0.3 : 0.8, padding: '4px 6px', borderRadius: '4px', marginLeft: '4px' }}
                       title="ลบฟิลด์นี้"
                     >
                       ✕

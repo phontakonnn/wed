@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState, useCallback, lazy, Suspense, type ChangeEvent, type FormEvent } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
 import {
-  auth,
   ApiError,
   checkHealth,
   type HealthDiskInfo,
@@ -17,7 +15,6 @@ import {
   createReminder,
   createTimeblock,
   deleteBookmark,
-  deleteFile,
   deleteGoal,
   deleteHabit,
   deleteInboxItem,
@@ -173,12 +170,32 @@ import { ToastStack, type ToastItem } from './components/ToastStack';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { Skeleton } from './components/ui/Skeleton';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { applyThemeConfig, loadStoredThemeConfig } from './lib/theme';
+import {
+  firebaseAuth,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
+  sendSignInLinkToEmail,
+  isSignInWithEmailLink,
+  signInWithEmailLink,
+  signInWithPhoneNumber,
+  RecaptchaVerifier,
+  onAuthStateChanged,
+  type FirebaseUser,
+  type ConfirmationResult,
+} from './lib/firebase';
+import {
+  subscribeUserLinks,
+  subscribeUserDataCards,
+  subscribeUserTheme,
+  saveUserTheme,
+} from './lib/firestore-db';
 
 // Code-split feature views and heavy modals via React.lazy
 const MediaLightbox = lazy(() => import('./components/MediaLightbox').then((m) => ({ default: m.MediaLightbox })));
 const ThemeModal = lazy(() => import('./features/settings/ThemeModal').then((m) => ({ default: m.ThemeModal })));
 const ProfileModal = lazy(() => import('./features/settings/ProfileModal').then((m) => ({ default: m.ProfileModal })));
+const FirebaseSetupModal = lazy(() => import('./features/settings/FirebaseSetupModal').then((m) => ({ default: m.FirebaseSetupModal })));
 const CommandSearchModal = lazy(() => import('./features/search/CommandSearchModal').then((m) => ({ default: m.CommandSearchModal })));
 const PermanentDeleteModal = lazy(() => import('./components/modals/PermanentDeleteModal').then((m) => ({ default: m.PermanentDeleteModal })));
 const SidebarNavModal = lazy(() => import('./components/modals/SidebarNavModal').then((m) => ({ default: m.SidebarNavModal })));
@@ -198,7 +215,6 @@ const HabitsView = lazy(() => import('./features/habits/HabitsView').then((m) =>
 const NotesViewComponent = lazy(() => import('./features/notes/NotesView').then((m) => ({ default: m.NotesView })));
 const BookmarksView = lazy(() => import('./features/bookmarks/BookmarksView').then((m) => ({ default: m.BookmarksView })));
 const FavoritesView = lazy(() => import('./features/bookmarks/FavoritesView').then((m) => ({ default: m.FavoritesView })));
-const FilesView = lazy(() => import('./features/files/FilesView').then((m) => ({ default: m.FilesView })));
 const TrashView = lazy(() => import('./features/trash/TrashView').then((m) => ({ default: m.TrashView })));
 const AdminView = lazy(() => import('./features/admin/AdminView').then((m) => ({ default: m.AdminView })));
 const WatchlistView = lazy(() => import('./features/lifestyle/WatchlistView').then((m) => ({ default: m.WatchlistView })));
@@ -234,10 +250,24 @@ function App() {
   const [diskWarning, setDiskWarning] = useState<HealthDiskInfo | null>(null);
   const [activeFavorite, setActiveFavorite] = useState<Favorite | null>(null);
   const [files, setFiles] = useState<StoredFile[]>([]);
-  const [filesTotal, setFilesTotal] = useState(0);
-  const [filesBusy, setFilesBusy] = useState(false);
+  const [_filesTotal, setFilesTotal] = useState(0);
+  const [_filesBusy, setFilesBusy] = useState(false);
   const [activeFile, setActiveFile] = useState<StoredFile | null>(null);
   const [uploadBusy, setUploadBusy] = useState(false);
+
+  // Firebase Authentication & Serverless States
+  const [firebaseSetupOpen, setFirebaseSetupOpen] = useState(false);
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [authMethod, setAuthMethod] = useState<'firebase' | 'local'>('firebase');
+  const [fbAuthTab, setFbAuthTab] = useState<'password' | 'email-link' | 'phone'>('password');
+  const [fbEmail, setFbEmail] = useState('');
+  const [fbPassword, setFbPassword] = useState('');
+  const [fbPhone, setFbPhone] = useState('');
+  const [fbPhoneCode, setFbPhoneCode] = useState('');
+  const [fbConfirmationResult, setFbConfirmationResult] = useState<ConfirmationResult | null>(null);
+  const [fbStatusMessage, setFbStatusMessage] = useState('');
+  const [fbErrorMessage, setFbErrorMessage] = useState('');
+  const [fbBusy, setFbBusy] = useState(false);
   const [noteFavoriteState, setNoteFavoriteState] = useState<{ id: string; favorited: boolean } | null>(null);
   const [bookmarkFavoriteState, setBookmarkFavoriteState] = useState<{ id: string; favorited: boolean } | null>(null);
   const [favoriteBusy, setFavoriteBusy] = useState(false);
@@ -285,7 +315,7 @@ function App() {
   const [taskDraftCustomCatId, setTaskDraftCustomCatId] = useState<string>('');
   const [vaultCustomCatId, setVaultCustomCatId] = useState<string>('');
   const [libraryCustomCatId, setLibraryCustomCatId] = useState<string>('');
-  const [fileCustomCatId, setFileCustomCatId] = useState<string | null>(null);
+  const [_fileCustomCatId, setFileCustomCatId] = useState<string | null>(null);
   const [customDataTypes, setCustomDataTypes] = useState<CustomDataType[]>([]);
   const [selectedCustomTypeId, setSelectedCustomTypeId] = useState<string | null>(null);
   const [isCreateCustomTypeOpen, setIsCreateCustomTypeOpen] = useState(false);
@@ -394,8 +424,36 @@ function App() {
     lifeArea: 'health' as LifeArea,
   });
   const [habitDraft, setHabitDraft] = useState({ title: '', dailyTarget: '8', unit: 'ครั้ง' });
-  const [theme, setTheme] = useState<ThemeName>(() => (localStorage.getItem('pkh.theme') as ThemeName) || 'aurora');
-  const [themeMode, setThemeMode] = useState<ThemeMode>(() => (localStorage.getItem('pkh.themeMode') as ThemeMode) || 'dark');
+  const [theme, setTheme] = useState<ThemeName>(() => {
+    const saved = localStorage.getItem('pkh.theme') as ThemeName | null;
+    return saved || 'aurora-scenic';
+  });
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => (localStorage.getItem('pkh.themeMode') as ThemeMode) || 'light');
+  const [animatedGlow, setAnimatedGlow] = useState<boolean>(() => localStorage.getItem('pkh.animatedGlow') !== 'false');
+  const [glassCard, setGlassCard] = useState<boolean>(() => localStorage.getItem('pkh.glassCard') !== 'false');
+  const [hoverLift, setHoverLift] = useState<boolean>(() => localStorage.getItem('pkh.hoverLift') !== 'false');
+  const [accentColor, setAccentColor] = useState<string>(() => localStorage.getItem('pkh.accentColor') || '#10b981');
+  const [neonGlowOpacity, setNeonGlowOpacity] = useState<number>(() => {
+    const saved = localStorage.getItem('pkh.neonGlowOpacity');
+    return saved !== null ? Number(saved) : 70;
+  });
+  const [glassBlur, setGlassBlur] = useState<number>(() => {
+    const saved = localStorage.getItem('pkh.glassBlur');
+    return saved !== null ? Number(saved) : 16;
+  });
+  const [glassOpacity, setGlassOpacity] = useState<number>(() => {
+    const saved = localStorage.getItem('pkh.glassOpacity');
+    return saved !== null ? Number(saved) : 75;
+  });
+  const [cardRadius, setCardRadius] = useState<number>(() => {
+    const saved = localStorage.getItem('pkh.cardRadius');
+    return saved !== null ? Number(saved) : 20;
+  });
+  const [btnGradient, setBtnGradient] = useState<string>(() => {
+    return localStorage.getItem('pkh.btnGradient') || 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+  });
+  const [customCanvasBg, setCustomCanvasBg] = useState<string>(() => localStorage.getItem('pkh.customCanvasBg') || '');
+  const [customSidebarBg, setCustomSidebarBg] = useState<string>(() => localStorage.getItem('pkh.customSidebarBg') || '');
   const [publicSettings, setPublicSettings] = useState<PublicSettings>({
     app_title: 'PKH / Life OS',
     app_subtitle: 'ศูนย์รวมข้อมูล บันทึก และการจัดการชีวิตส่วนบุคคล',
@@ -410,8 +468,6 @@ function App() {
         document.title = s.app_title;
       })
       .catch(() => {});
-    const cfg = loadStoredThemeConfig();
-    applyThemeConfig(cfg);
   }, []);
   const [profile, setProfile] = useState<ProfileState>(() => {
     try {
@@ -548,29 +604,20 @@ function App() {
 
   useEffect(() => {
     let active = true;
-    const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
+    getCurrentUser().then((currentUser) => {
       if (!active) return;
-      if (fbUser) {
-        getCurrentUser()
-          .then((currentUser) => {
-            if (!active) return;
-            setUser(currentUser);
-            setNotesBusy(true);
-            setAuthState('signed-in');
-          })
-          .catch(() => {
-            if (!active) return;
-            setAuthState('signed-out');
-          });
-      } else {
-        setUser(null);
-        setAuthState('signed-out');
+      setUser(currentUser);
+      setNotesBusy(true);
+      setAuthState('signed-in');
+    }).catch((error: unknown) => {
+      if (!active) return;
+      if (!(error instanceof ApiError && error.status === 401)) {
+        console.warn('Initial session check:', error);
       }
+      setAuthState('signed-out');
     });
-
     return () => {
       active = false;
-      unsubscribe();
     };
   }, []);
 
@@ -831,25 +878,18 @@ function App() {
 
   useEffect(() => {
     if (authState !== 'signed-in') return;
-    if (viewMode !== 'favorites' && viewMode !== 'files') return;
+    if (viewMode !== 'favorites') return;
     let active = true;
     const requestId = ++notesRequestId.current;
-    const request = viewMode === 'favorites' ? listFavorites(page) : listFiles(page);
-    request.then((result) => {
+    listFavorites(page).then((result) => {
       if (!active || requestId !== notesRequestId.current) return;
-      if ('favorites' in result) {
-        setFavorites(result.favorites);
-        setFavoritesTotal(result.total);
-        setActiveFavorite((current) => (
-          result.favorites.find((item) => item.itemType === current?.itemType && item.itemId === current?.itemId)
-          ?? result.favorites[0]
-          ?? null
-        ));
-      } else {
-        setFiles(result.files);
-        setFilesTotal(result.total);
-        setActiveFile((current) => result.files.find((item) => item.id === current?.id) ?? result.files[0] ?? null);
-      }
+      setFavorites(result.favorites);
+      setFavoritesTotal(result.total);
+      setActiveFavorite((current) => (
+        result.favorites.find((item) => item.itemType === current?.itemType && item.itemId === current?.itemId)
+        ?? result.favorites[0]
+        ?? null
+      ));
       setNotesError('');
     }).catch((error: unknown) => {
       if (!active || requestId !== notesRequestId.current) return;
@@ -948,11 +988,105 @@ function App() {
   }, [authState, filterCategoryIds, filterTagIds, notes, viewMode]);
 
   useEffect(() => {
+    // Helper to compute RGB from accentColor for neon glowing shadow
+    const cleanHex = accentColor.replace('#', '');
+    let accentRgb = '16, 185, 129';
+    if (cleanHex.length === 6) {
+      accentRgb = `${parseInt(cleanHex.substring(0, 2), 16)}, ${parseInt(cleanHex.substring(2, 4), 16)}, ${parseInt(cleanHex.substring(4, 6), 16)}`;
+    } else if (cleanHex.length === 3) {
+      accentRgb = `${parseInt(cleanHex[0] + cleanHex[0], 16)}, ${parseInt(cleanHex[1] + cleanHex[1], 16)}, ${parseInt(cleanHex[2] + cleanHex[2], 16)}`;
+    }
+
     document.documentElement.dataset.theme = theme;
+    document.documentElement.dataset.bgEffect = theme;
     document.documentElement.dataset.mode = themeMode;
+    document.documentElement.dataset.animatedGlow = String(animatedGlow);
+    document.documentElement.dataset.glassCard = String(glassCard);
+    document.documentElement.dataset.hoverLift = String(hoverLift);
+    document.documentElement.style.setProperty('--pkh-primary', accentColor);
+    document.documentElement.style.setProperty('--pkh-accent', accentColor);
+    document.documentElement.style.setProperty('--pkh-accent-color', accentColor);
+    document.documentElement.style.setProperty('--pkh-accent-rgb', accentRgb);
+    document.documentElement.style.setProperty('--pkh-neon-glow-opacity', `${neonGlowOpacity / 100}`);
+    document.documentElement.style.setProperty('--pkh-glow-intensity', `${neonGlowOpacity}%`);
+    document.documentElement.style.setProperty('--pkh-glass-blur', `${glassBlur}px`);
+    document.documentElement.style.setProperty('--pkh-glass-opacity', `${glassOpacity / 100}`);
+    document.documentElement.style.setProperty('--pkh-card-radius', `${cardRadius}px`);
+    document.documentElement.style.setProperty('--pkh-btn-gradient', btnGradient);
+
+    if (customCanvasBg) {
+      document.documentElement.style.setProperty('--pkh-custom-canvas-bg', `url("${customCanvasBg}")`);
+      document.documentElement.style.setProperty('--pkh-canvas-bg', `url("${customCanvasBg}")`);
+    } else {
+      document.documentElement.style.removeProperty('--pkh-custom-canvas-bg');
+      document.documentElement.style.removeProperty('--pkh-canvas-bg');
+    }
+
+    if (customSidebarBg) {
+      document.documentElement.style.setProperty('--pkh-custom-sidebar-bg', `url("${customSidebarBg}")`);
+      document.documentElement.style.setProperty('--pkh-sidebar-bg', `url("${customSidebarBg}")`);
+    } else {
+      document.documentElement.style.removeProperty('--pkh-custom-sidebar-bg');
+      document.documentElement.style.removeProperty('--pkh-sidebar-bg');
+    }
+
     localStorage.setItem('pkh.theme', theme);
+    localStorage.setItem('pkh.bgEffect', theme);
     localStorage.setItem('pkh.themeMode', themeMode);
-  }, [theme, themeMode]);
+    localStorage.setItem('pkh.animatedGlow', String(animatedGlow));
+    localStorage.setItem('pkh.glassCard', String(glassCard));
+    localStorage.setItem('pkh.hoverLift', String(hoverLift));
+    localStorage.setItem('pkh.accentColor', accentColor);
+    localStorage.setItem('pkh.neonGlowOpacity', String(neonGlowOpacity));
+    localStorage.setItem('pkh.glassBlur', String(glassBlur));
+    localStorage.setItem('pkh.glassOpacity', String(glassOpacity));
+    localStorage.setItem('pkh.cardRadius', String(cardRadius));
+    localStorage.setItem('pkh.btnGradient', btnGradient);
+    localStorage.setItem('pkh.customCanvasBg', customCanvasBg);
+    localStorage.setItem('pkh.customSidebarBg', customSidebarBg);
+
+    // Sync theme to Firestore if Firebase user is logged in
+    if (firebaseUser?.uid) {
+      void saveUserTheme(firebaseUser.uid, {
+        theme,
+        themeMode,
+        animatedGlow,
+        glassCard,
+        hoverLift,
+        accentColor,
+        neonGlowOpacity,
+        glassBlur,
+        glassOpacity,
+        cardRadius,
+        btnGradient,
+        customCanvasBg,
+        customSidebarBg,
+      });
+    }
+  }, [theme, themeMode, animatedGlow, glassCard, hoverLift, accentColor, neonGlowOpacity, glassBlur, glassOpacity, cardRadius, btnGradient, customCanvasBg, customSidebarBg, firebaseUser?.uid]);
+
+  // Sync theme from Firestore on initial login / cross-device change
+  useEffect(() => {
+    if (!firebaseUser?.uid) return;
+    const unsubTheme = subscribeUserTheme(firebaseUser.uid, (remoteTheme) => {
+      if (remoteTheme) {
+        if (remoteTheme.theme) setTheme(remoteTheme.theme as ThemeName);
+        if (remoteTheme.themeMode) setThemeMode(remoteTheme.themeMode);
+        if (typeof remoteTheme.animatedGlow === 'boolean') setAnimatedGlow(remoteTheme.animatedGlow);
+        if (typeof remoteTheme.glassCard === 'boolean') setGlassCard(remoteTheme.glassCard);
+        if (typeof remoteTheme.hoverLift === 'boolean') setHoverLift(remoteTheme.hoverLift);
+        if (remoteTheme.accentColor) setAccentColor(remoteTheme.accentColor);
+        if (typeof remoteTheme.neonGlowOpacity === 'number') setNeonGlowOpacity(remoteTheme.neonGlowOpacity);
+        if (typeof remoteTheme.glassBlur === 'number') setGlassBlur(remoteTheme.glassBlur);
+        if (typeof remoteTheme.glassOpacity === 'number') setGlassOpacity(remoteTheme.glassOpacity);
+        if (typeof remoteTheme.cardRadius === 'number') setCardRadius(remoteTheme.cardRadius);
+        if (remoteTheme.btnGradient) setBtnGradient(remoteTheme.btnGradient);
+        if (typeof remoteTheme.customCanvasBg === 'string') setCustomCanvasBg(remoteTheme.customCanvasBg);
+        if (typeof remoteTheme.customSidebarBg === 'string') setCustomSidebarBg(remoteTheme.customSidebarBg);
+      }
+    });
+    return () => unsubTheme();
+  }, [firebaseUser?.uid]);
 
   useEffect(() => {
     if (authState !== 'signed-in') return;
@@ -1224,7 +1358,7 @@ function App() {
 
   useEffect(() => {
     if (authState !== 'signed-in' || searchSettling) return;
-    if (viewMode === 'favorites' || viewMode === 'files') return;
+    if (viewMode === 'favorites') return;
     let active = true;
     const requestId = ++notesRequestId.current;
     const request = viewMode === 'trash'
@@ -1377,21 +1511,29 @@ function App() {
 
   async function handleRequestForgotOtp(event?: FormEvent<HTMLFormElement>) {
     if (event) event.preventDefault();
-    if (!forgotUsername.trim()) return;
     if (forgotRecoveryType === 'email' && !forgotEmail.trim()) return;
     if (forgotRecoveryType === 'phone' && !forgotPhone.trim()) return;
 
     setForgotBusy(true);
     setForgotError('');
     try {
-      const res = await requestForgotOtp(forgotUsername.trim(), {
+      const res = await requestForgotOtp(forgotUsername.trim() || undefined, {
         email: forgotEmail.trim() || undefined,
         phone: forgotPhone.trim() || undefined,
         recoveryType: forgotRecoveryType,
       });
       setForgotStep('reset');
-      setOtpCountdown(60);
-      setForgotMessage(res.message + (res.debugOtp ? ` (รหัส OTP สำหรับทดสอบ: ${res.debugOtp})` : ''));
+      setOtpCountdown(300);
+      const simulated = res.simulatedOtp || res.debugOtp;
+      if (simulated) {
+        setForgotMessage(res.message + ` (รหัส OTP จำลองสำหรับทดสอบ: ${simulated})`);
+        setForgotOtp(simulated);
+      } else {
+        setForgotMessage(res.message);
+      }
+      if (res.username && !forgotUsername.trim()) {
+        setForgotUsername(res.username);
+      }
     } catch (error) {
       setForgotError(errorMessage(error));
     } finally {
@@ -1401,11 +1543,11 @@ function App() {
 
   async function handleResetPasswordWithOtp(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!forgotUsername.trim() || !forgotOtp.trim() || !forgotNewPassword) return;
+    if (!forgotOtp.trim() || !forgotNewPassword) return;
     setForgotBusy(true);
     setForgotError('');
     try {
-      const res = await resetPasswordWithOtp(forgotUsername.trim(), forgotOtp.trim(), forgotNewPassword, {
+      const res = await resetPasswordWithOtp(forgotUsername.trim() || undefined, forgotOtp.trim(), forgotNewPassword, {
         email: forgotEmail.trim() || undefined,
         phone: forgotPhone.trim() || undefined,
       });
@@ -1426,6 +1568,207 @@ function App() {
       setForgotError(errorMessage(error));
     } finally {
       setForgotBusy(false);
+    }
+  }
+
+  // Firebase Auth State Listener & Email Link Sign-in Check
+  useEffect(() => {
+    if (!firebaseAuth) return;
+    const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
+      if (user) {
+        setFirebaseUser(user);
+        setUser({
+          id: user.uid,
+          username: user.email || user.phoneNumber || 'User',
+          displayName: user.displayName || user.email?.split('@')[0] || 'User',
+          role: 'user',
+        });
+        setAuthState('signed-in');
+        setNotesBusy(false);
+      } else {
+        setFirebaseUser(null);
+      }
+    });
+
+    try {
+      if (isSignInWithEmailLink(firebaseAuth, window.location.href)) {
+        let email = window.localStorage.getItem('pkh.emailForSignIn');
+        if (!email) {
+          email = window.prompt('กรุณายืนยันอีเมลของคุณสำหรับการเข้าสู่ระบบ:');
+        }
+        if (email) {
+          signInWithEmailLink(firebaseAuth, email, window.location.href)
+            .then(() => {
+              window.localStorage.removeItem('pkh.emailForSignIn');
+              pushToast('success', 'เข้าสู่ระบบด้วยลิงก์อีเมลสำเร็จ');
+            })
+            .catch((err) => {
+              console.error('Email link sign in error:', err);
+            });
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    return () => unsubscribe();
+  }, []);
+
+  // Sync with Firestore Real-time Collections when Firebase user is active
+  useEffect(() => {
+    if (!firebaseUser?.uid) return;
+    const unsubLinks = subscribeUserLinks(firebaseUser.uid, (fbLinks) => {
+      if (fbLinks && fbLinks.length > 0) {
+        setBookmarks(fbLinks.map((l) => ({
+          id: l.id,
+          title: l.title,
+          url: l.url,
+          description: l.description || '',
+          category: l.category,
+          tags: l.tags || [],
+          isFavorite: l.isFavorite,
+          createdAt: typeof l.createdAt === 'number' ? l.createdAt : Date.now(),
+          updatedAt: typeof l.updatedAt === 'number' ? l.updatedAt : Date.now(),
+        })));
+      }
+    });
+
+    const unsubCards = subscribeUserDataCards(firebaseUser.uid, (fbCards) => {
+      if (fbCards && fbCards.length > 0) {
+        setNotes(fbCards.map((c) => ({
+          id: c.id,
+          title: c.title,
+          content: c.content,
+          createdAt: typeof c.createdAt === 'number' ? c.createdAt : Date.now(),
+          updatedAt: typeof c.updatedAt === 'number' ? c.updatedAt : Date.now(),
+        })));
+      }
+    });
+
+    return () => {
+      unsubLinks();
+      unsubCards();
+    };
+  }, [firebaseUser?.uid]);
+
+  // Firebase Auth Action Handlers
+  async function handleFirebaseEmailPassword(isRegister: boolean) {
+    if (!firebaseAuth) {
+      setFbErrorMessage('ยังไม่ได้ตั้งค่า Firebase API Key กรุณากดปุ่ม "⚙️ ตั้งค่า Firebase" ด้านล่าง');
+      return;
+    }
+    if (!fbEmail.trim() || !fbPassword.trim()) {
+      setFbErrorMessage('กรุณากรอกอีเมลและรหัสผ่านให้ครบถ้วน');
+      return;
+    }
+    setFbBusy(true);
+    setFbErrorMessage('');
+    setFbStatusMessage('');
+    try {
+      if (isRegister) {
+        await createUserWithEmailAndPassword(firebaseAuth, fbEmail.trim(), fbPassword);
+        setFbStatusMessage('สมัครสมาชิกและเข้าสู่ระบบสำเร็จ');
+      } else {
+        await signInWithEmailAndPassword(firebaseAuth, fbEmail.trim(), fbPassword);
+        setFbStatusMessage('เข้าสู่ระบบสำเร็จ');
+      }
+    } catch (err: unknown) {
+      setFbErrorMessage(errorMessage(err));
+    } finally {
+      setFbBusy(false);
+    }
+  }
+
+  async function handleFirebasePasswordReset() {
+    if (!firebaseAuth) {
+      setFbErrorMessage('ยังไม่ได้ตั้งค่า Firebase API Key กรุณากดปุ่ม "⚙️ ตั้งค่า Firebase" ด้านล่าง');
+      return;
+    }
+    if (!fbEmail.trim()) {
+      setFbErrorMessage('กรุณากรอกอีเมลในช่องด้านบน เพื่อรับลิงก์รีเซ็ตรหัสผ่าน');
+      return;
+    }
+    setFbBusy(true);
+    setFbErrorMessage('');
+    setFbStatusMessage('');
+    try {
+      await sendPasswordResetEmail(firebaseAuth, fbEmail.trim());
+      setFbStatusMessage(`ส่งลิงก์สำหรับตั้งรหัสผ่านใหม่ไปยัง ${fbEmail.trim()} แล้ว กรุณาตรวจสอบกล่องจดหมายของคุณ`);
+    } catch (err: unknown) {
+      setFbErrorMessage(errorMessage(err));
+    } finally {
+      setFbBusy(false);
+    }
+  }
+
+  async function handleFirebaseEmailLinkSignIn() {
+    if (!firebaseAuth) {
+      setFbErrorMessage('ยังไม่ได้ตั้งค่า Firebase API Key กรุณากดปุ่ม "⚙️ ตั้งค่า Firebase" ด้านล่าง');
+      return;
+    }
+    if (!fbEmail.trim()) {
+      setFbErrorMessage('กรุณากรอกอีเมลที่ต้องการรับลิงก์');
+      return;
+    }
+    setFbBusy(true);
+    setFbErrorMessage('');
+    setFbStatusMessage('');
+    try {
+      const actionCodeSettings = {
+        url: window.location.href,
+        handleCodeInApp: true,
+      };
+      await sendSignInLinkToEmail(firebaseAuth, fbEmail.trim(), actionCodeSettings);
+      window.localStorage.setItem('pkh.emailForSignIn', fbEmail.trim());
+      setFbStatusMessage(`ส่งลิงก์เข้าสู่ระบบไปยัง ${fbEmail.trim()} เรียบร้อยแล้ว กรุณาเปิดอีเมลและคลิกลิงก์เพื่อเข้าใช้งานทันที`);
+    } catch (err: unknown) {
+      setFbErrorMessage(errorMessage(err));
+    } finally {
+      setFbBusy(false);
+    }
+  }
+
+  async function handleSendPhoneOtp() {
+    if (!firebaseAuth) {
+      setFbErrorMessage('ยังไม่ได้ตั้งค่า Firebase API Key กรุณากดปุ่ม "⚙️ ตั้งค่า Firebase" ด้านล่าง');
+      return;
+    }
+    if (!fbPhone.trim()) {
+      setFbErrorMessage('กรุณาระบุเบอร์โทรศัพท์ (เช่น +66812345678)');
+      return;
+    }
+    setFbBusy(true);
+    setFbErrorMessage('');
+    setFbStatusMessage('');
+    try {
+      const verifier = (window as unknown as { recaptchaVerifier?: RecaptchaVerifier }).recaptchaVerifier
+        || new RecaptchaVerifier(firebaseAuth, 'recaptcha-container', { size: 'invisible' });
+      (window as unknown as { recaptchaVerifier: RecaptchaVerifier }).recaptchaVerifier = verifier;
+
+      const confirmation = await signInWithPhoneNumber(firebaseAuth, fbPhone.trim(), verifier);
+      setFbConfirmationResult(confirmation);
+      setFbStatusMessage('ส่งรหัส OTP ไปยังโทรศัพท์ของคุณแล้ว');
+    } catch (err: unknown) {
+      setFbErrorMessage(errorMessage(err));
+    } finally {
+      setFbBusy(false);
+    }
+  }
+
+  async function handleVerifyPhoneOtp() {
+    if (!fbConfirmationResult || !fbPhoneCode.trim()) {
+      setFbErrorMessage('กรุณากรอกรหัส OTP 6 หลัก');
+      return;
+    }
+    setFbBusy(true);
+    setFbErrorMessage('');
+    try {
+      await fbConfirmationResult.confirm(fbPhoneCode.trim());
+      setFbStatusMessage('ยืนยัน OTP และเข้าสู่ระบบสำเร็จ');
+    } catch (err: unknown) {
+      setFbErrorMessage(errorMessage(err));
+    } finally {
+      setFbBusy(false);
     }
   }
 
@@ -1875,7 +2218,6 @@ function App() {
     setGoalsNotice('');
     const workViews: NotesView[] = ['home', 'inbox', 'tasks', 'projects', 'goals', 'people', 'schedule'];
     if (nextView === 'favorites') setFavoritesBusy(true);
-    else if (nextView === 'files') setFilesBusy(true);
     else if (nextView === 'all') setAllBusy(true);
     else if (!workViews.includes(nextView)) setNotesBusy(true);
     setNotesError('');
@@ -1897,7 +2239,6 @@ function App() {
 
   function markListBusy() {
     if (viewMode === 'favorites') setFavoritesBusy(true);
-    else if (viewMode === 'files') setFilesBusy(true);
     else setNotesBusy(true);
   }
 
@@ -1964,8 +2305,7 @@ function App() {
       setBookmarkTitle(entry.bookmark.title);
       setBookmarkUrl(entry.bookmark.url);
       setBookmarkDescription(entry.bookmark.description);
-    } else {
-      setViewMode('files');
+    } else if (entry.kind === 'file') {
       setActiveFile(entry.file);
     }
   }
@@ -2975,10 +3315,6 @@ function App() {
       return;
     }
     if (kind === 'file') {
-      const existing = files.find((item) => item.id === id);
-      setViewMode('files');
-      if (existing) setActiveFile(existing);
-      setMobileDetailOpen(true);
       return;
     }
     if (kind === 'vault') {
@@ -3443,7 +3779,6 @@ function App() {
       return;
     }
     if (favorite.itemType === 'file') {
-      setViewMode('files');
       return;
     }
     if (favorite.itemType === 'custom_record') {
@@ -3495,33 +3830,6 @@ function App() {
       }
     } finally {
       setUploadBusy(false);
-    }
-  }
-
-  async function handleDeleteFile(file: StoredFile) {
-    if (!window.confirm(`ลบไฟล์ “${file.displayName}” หรือไม่? ไฟล์จะถูกลบถาวร`)) return;
-    setNotesError('');
-    setNotice('');
-    try {
-      await deleteFile(file.id);
-      setActiveFile(null);
-      setFiles((current) => current.filter((item) => item.id !== file.id));
-      setFilesTotal((current) => Math.max(0, current - 1));
-      if (files.length === 1 && page > 1) setPage((current) => current - 1);
-      else {
-        setFilesBusy(true);
-        setRefreshKey((key) => key + 1);
-      }
-      setNotice('ลบไฟล์แล้ว');
-      pushToast('success', 'ลบไฟล์เรียบร้อยแล้ว');
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
-        setUser(null);
-        setAuthState('signed-out');
-        setAuthError('เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้ง');
-      } else {
-        setNotesError(errorMessage(error));
-      }
     }
   }
 
@@ -3672,22 +3980,7 @@ function App() {
     return <main className="center-state" aria-live="polite">กำลังตรวจสอบเซสชัน…</main>;
   }
 
-  if (authState === 'unavailable') {
-    return (
-      <main className="center-state">
-        <section className="message-card">
-          <span className="eyebrow">PERSONAL KNOWLEDGE HUB</span>
-          <h1>เชื่อมต่อเซิร์ฟเวอร์ไม่ได้</h1>
-          <p role="alert">{authError}</p>
-          <button className="button button-primary" type="button" onClick={() => window.location.reload()}>
-            ลองอีกครั้ง
-          </button>
-        </section>
-      </main>
-    );
-  }
-
-  if (authState === 'signed-out') {
+  if (authState !== 'signed-in') {
     return (
       <main className="center-state login-background">
         <section className="login-card">
@@ -3696,8 +3989,211 @@ function App() {
           <h1>ยินดีต้อนรับกลับ</h1>
           <p className="muted">เข้าสู่ระบบเพื่อเปิดพื้นที่จัดเก็บความรู้ส่วนตัว</p>
 
-          {/* 2FA Challenge Form */}
-          {twoFactorTempToken ? (
+          {/* Auth Method Switcher: Firebase Cloud vs Local Server */}
+          <div style={{ display: 'flex', gap: '8px', background: 'rgba(0,0,0,0.04)', padding: '4px', borderRadius: '10px', marginBottom: '16px' }}>
+            <button
+              type="button"
+              className={`button ${authMethod === 'firebase' ? 'button-primary' : 'button-quiet'}`}
+              style={{ flex: 1, fontSize: '13px', padding: '6px 10px', borderRadius: '8px' }}
+              onClick={() => setAuthMethod('firebase')}
+            >
+              🔥 Firebase Cloud
+            </button>
+            <button
+              type="button"
+              className={`button ${authMethod === 'local' ? 'button-primary' : 'button-quiet'}`}
+              style={{ flex: 1, fontSize: '13px', padding: '6px 10px', borderRadius: '8px' }}
+              onClick={() => setAuthMethod('local')}
+            >
+              🖥️ Local / Server
+            </button>
+          </div>
+
+          {authMethod === 'firebase' ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {/* Firebase Sub-tabs */}
+              <div style={{ display: 'flex', gap: '6px', borderBottom: '1px solid var(--pkh-border-subtle)', paddingBottom: '8px' }}>
+                <button
+                  type="button"
+                  className={`button ${fbAuthTab === 'password' ? 'button-primary' : 'button-quiet'}`}
+                  style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '6px' }}
+                  onClick={() => { setFbAuthTab('password'); setFbErrorMessage(''); setFbStatusMessage(''); }}
+                >
+                  🔑 อีเมล & รหัสผ่าน
+                </button>
+                <button
+                  type="button"
+                  className={`button ${fbAuthTab === 'email-link' ? 'button-primary' : 'button-quiet'}`}
+                  style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '6px' }}
+                  onClick={() => { setFbAuthTab('email-link'); setFbErrorMessage(''); setFbStatusMessage(''); }}
+                >
+                  ✉️ ลิงก์อีเมล
+                </button>
+                <button
+                  type="button"
+                  className={`button ${fbAuthTab === 'phone' ? 'button-primary' : 'button-quiet'}`}
+                  style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '6px' }}
+                  onClick={() => { setFbAuthTab('phone'); setFbErrorMessage(''); setFbStatusMessage(''); }}
+                >
+                  📱 เบอร์โทร SMS
+                </button>
+              </div>
+
+              {fbStatusMessage && (
+                <div style={{ background: '#dcfce7', color: '#166534', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', lineHeight: 1.4 }}>
+                  ✓ {fbStatusMessage}
+                </div>
+              )}
+              {fbErrorMessage && (
+                <div style={{ background: '#fee2e2', color: '#991b1b', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', lineHeight: 1.4 }}>
+                  ⚠️ {fbErrorMessage}
+                </div>
+              )}
+
+              {fbAuthTab === 'password' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <label htmlFor="fb-email" style={{ fontSize: '13px' }}>อีเมล (Email)</label>
+                  <input
+                    id="fb-email"
+                    type="email"
+                    autoComplete="email"
+                    value={fbEmail}
+                    onChange={(e) => setFbEmail(e.target.value)}
+                    placeholder="user@example.com"
+                  />
+                  <label htmlFor="fb-pass" style={{ fontSize: '13px' }}>รหัสผ่าน (Password)</label>
+                  <input
+                    id="fb-pass"
+                    type="password"
+                    autoComplete="current-password"
+                    value={fbPassword}
+                    onChange={(e) => setFbPassword(e.target.value)}
+                    placeholder="รหัสผ่านอย่างน้อย 6 ตัวอักษร"
+                  />
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                    <button
+                      type="button"
+                      className="button button-primary"
+                      style={{ flex: 1 }}
+                      disabled={fbBusy}
+                      onClick={() => handleFirebaseEmailPassword(false)}
+                    >
+                      {fbBusy ? 'กำลังเข้าสู่ระบบ…' : 'เข้าสู่ระบบ'}
+                    </button>
+                    <button
+                      type="button"
+                      className="button button-quiet"
+                      style={{ flex: 1 }}
+                      disabled={fbBusy}
+                      onClick={() => handleFirebaseEmailPassword(true)}
+                    >
+                      {fbBusy ? 'กำลังสร้าง…' : '✨ สมัครใหม่'}
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    className="text-button"
+                    style={{ fontSize: '12px', color: 'var(--pkh-text-secondary)', textDecoration: 'underline', marginTop: '4px', textAlign: 'center' }}
+                    onClick={handleFirebasePasswordReset}
+                    disabled={fbBusy}
+                  >
+                    ลืมรหัสผ่าน? ส่งลิงก์รีเซ็ตไปที่อีเมลจริง
+                  </button>
+                </div>
+              )}
+
+              {fbAuthTab === 'email-link' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <p style={{ fontSize: '12px', color: 'var(--pkh-text-secondary)', margin: 0 }}>
+                    ไม่ต้องจำรหัสผ่าน! ระบบจะส่งลิงก์เข้าสู่ระบบตรงไปยังกล่องจดหมายของคุณ เพียงคลิกลิงก์ก็เข้าสู่ระบบได้ทันที
+                  </p>
+                  <label htmlFor="fb-link-email" style={{ fontSize: '13px' }}>อีเมลของคุณ</label>
+                  <input
+                    id="fb-link-email"
+                    type="email"
+                    value={fbEmail}
+                    onChange={(e) => setFbEmail(e.target.value)}
+                    placeholder="user@example.com"
+                  />
+                  <button
+                    type="button"
+                    className="button button-primary button-wide"
+                    disabled={fbBusy || !fbEmail.trim()}
+                    onClick={handleFirebaseEmailLinkSignIn}
+                  >
+                    {fbBusy ? 'กำลังส่ง…' : '📩 ส่งลิงก์เข้าสู่ระบบทางอีเมล'}
+                  </button>
+                </div>
+              )}
+
+              {fbAuthTab === 'phone' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div id="recaptcha-container"></div>
+                  {!fbConfirmationResult ? (
+                    <>
+                      <label htmlFor="fb-phone" style={{ fontSize: '13px' }}>หมายเลขโทรศัพท์ (พร้อมรหัสประเทศ)</label>
+                      <input
+                        id="fb-phone"
+                        type="tel"
+                        value={fbPhone}
+                        onChange={(e) => setFbPhone(e.target.value)}
+                        placeholder="เช่น +66812345678"
+                      />
+                      <button
+                        type="button"
+                        className="button button-primary button-wide"
+                        disabled={fbBusy || !fbPhone.trim()}
+                        onClick={handleSendPhoneOtp}
+                      >
+                        {fbBusy ? 'กำลังส่ง OTP…' : '📲 ส่งรหัสยืนยัน SMS OTP'}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <label htmlFor="fb-otp" style={{ fontSize: '13px' }}>กรอกรหัส OTP 6 หลักที่ได้รับทาง SMS</label>
+                      <input
+                        id="fb-otp"
+                        type="text"
+                        value={fbPhoneCode}
+                        onChange={(e) => setFbPhoneCode(e.target.value)}
+                        placeholder="123456"
+                        maxLength={6}
+                        style={{ textAlign: 'center', fontSize: '18px', letterSpacing: '4px' }}
+                      />
+                      <button
+                        type="button"
+                        className="button button-primary button-wide"
+                        disabled={fbBusy || !fbPhoneCode.trim()}
+                        onClick={handleVerifyPhoneOtp}
+                      >
+                        {fbBusy ? 'กำลังตรวจสอบ…' : '✓ ยืนยันรหัสเข้าสู่ระบบ'}
+                      </button>
+                      <button
+                        type="button"
+                        className="text-button"
+                        style={{ fontSize: '12px', color: 'var(--pkh-text-secondary)', textAlign: 'center' }}
+                        onClick={() => setFbConfirmationResult(null)}
+                      >
+                        ← เปลี่ยนเบอร์โทรศัพท์
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Firebase Setup Link */}
+              <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--pkh-border-subtle)', textAlign: 'center' }}>
+                <button
+                  type="button"
+                  className="text-button"
+                  style={{ fontSize: '12px', color: '#f59e0b', fontWeight: 600, cursor: 'pointer', background: 'none', border: 'none' }}
+                  onClick={() => setFirebaseSetupOpen(true)}
+                >
+                  ⚙️ ตั้งค่าการเชื่อมต่อ Firebase (Config)
+                </button>
+              </div>
+            </div>
+          ) : twoFactorTempToken ? (
             <form className="login-form" onSubmit={handle2FAVerify}>
               <div style={{ background: '#eff6ff', padding: '10px 12px', borderRadius: '8px', border: '1px solid #bfdbfe', fontSize: '12px', color: '#1e40af', marginBottom: '8px', lineHeight: 1.4 }}>
                 🔐 บัญชีนี้เปิดใช้งาน 2FA กรุณากรอกรหัส 6 หลักจากแอป Authenticator หรือรหัส Recovery Code 8 หลัก
@@ -3964,16 +4460,14 @@ function App() {
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                       <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--pkh-text-main)' }}>
-                        ชื่อผู้ใช้ระบบ (Username) *
+                        ชื่อผู้ใช้ (Username) <span style={{ fontWeight: 400, color: 'var(--pkh-text-muted)' }}>(ระบุหรือไม่ก็ได้)</span>
                       </label>
                       <input
                         type="text"
-                        required
-                        placeholder="เช่น admin หรือ username ของคุณ"
+                        placeholder="หากจำได้ระบุชื่อผู้ใช้ (ไม่จำเป็น)"
                         value={forgotUsername}
                         onChange={(e) => setForgotUsername(e.target.value)}
                         style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--pkh-border-default)' }}
-                        autoFocus
                       />
                     </div>
 
@@ -4023,7 +4517,7 @@ function App() {
                         <button
                           type="submit"
                           className="button button-primary"
-                          disabled={forgotBusy || !forgotUsername.trim() || (forgotRecoveryType === 'email' ? !forgotEmail.trim() : !forgotPhone.trim())}
+                          disabled={forgotBusy || (forgotRecoveryType === 'email' ? !forgotEmail.trim() : !forgotPhone.trim())}
                         >
                           {forgotBusy ? 'กำลังส่ง OTP…' : 'ขอรับรหัส OTP →'}
                         </button>
@@ -4083,13 +4577,13 @@ function App() {
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                       <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--pkh-text-main)' }}>
-                        รหัสผ่านใหม่ (อย่างน้อย 12 ตัวอักษรตามมาตรฐาน OWASP) *
+                        รหัสผ่านใหม่ (อย่างน้อย 8 ตัวอักษร) *
                       </label>
                       <input
                         type="password"
                         required
-                        minLength={12}
-                        placeholder="รหัสผ่านใหม่อย่างน้อย 12 ตัวอักษร..."
+                        minLength={8}
+                        placeholder="รหัสผ่านใหม่อย่างน้อย 8 ตัวอักษร..."
                         value={forgotNewPassword}
                         onChange={(e) => setForgotNewPassword(e.target.value)}
                         style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--pkh-border-default)' }}
@@ -4120,9 +4614,9 @@ function App() {
                         <button
                           type="submit"
                           className="button button-primary"
-                          disabled={forgotBusy || forgotOtp.length !== 6 || forgotNewPassword.length < 12}
+                          disabled={forgotBusy || forgotOtp.length !== 6 || forgotNewPassword.length < 8}
                         >
-                          {forgotBusy ? 'กำลังบันทึก…' : '✓ ตั้งรหัสผ่านใหม่'}
+                          {forgotBusy ? 'กำลังบันทึก…' : '🔐 ตั้งรหัสผ่านใหม่ & เข้าสู่ระบบ'}
                         </button>
                       </div>
                     </div>
@@ -4132,7 +4626,21 @@ function App() {
             </div>
           )}
 
-          <p className="login-footnote">บัญชีผู้ใช้จัดการโดยผู้ดูแลระบบ</p>
+          <p className="login-footnote">บัญชีผู้ใช้จัดการโดยผู้ดูแลระบบ หรือเชื่อมต่อกับ Firebase Cloud</p>
+
+          {/* Firebase Setup Modal in Sign-out view */}
+          {firebaseSetupOpen && (
+            <Suspense fallback={null}>
+              <FirebaseSetupModal
+                isOpen={firebaseSetupOpen}
+                onClose={() => setFirebaseSetupOpen(false)}
+                onSaved={() => {
+                  pushToast('success', 'บันทึกการตั้งค่า Firebase สำเร็จ');
+                  setRefreshKey((k) => k + 1);
+                }}
+              />
+            </Suspense>
+          )}
         </section>
       </main>
     );
@@ -4154,13 +4662,11 @@ function App() {
         ? upcomingReminders.length
         : viewMode === 'favorites'
           ? favoritesTotal
-          : viewMode === 'files'
-            ? filesTotal
-            : viewMode === 'vault'
-              ? vaultItems.length
-              : viewMode === 'library'
-                ? libraryItems.length
-                : total;
+          : viewMode === 'vault'
+            ? vaultItems.length
+            : viewMode === 'library'
+              ? libraryItems.length
+              : total;
   const pageCount = viewMode === 'all' || viewMode === 'people' || viewMode === 'schedule'
     || viewMode === 'vault' || viewMode === 'library' || viewMode === 'custom-category'
     ? 1
@@ -4187,10 +4693,8 @@ function App() {
             ? 'ลิงก์'
             : viewMode === 'favorites'
               ? 'รายการโปรด'
-              : viewMode === 'files'
-                ? 'ไฟล์'
-                : viewMode === 'vault'
-                  ? 'คลังสำคัญ & ทรัพย์สิน'
+              : viewMode === 'vault'
+                ? 'คลังสำคัญ & ทรัพย์สิน'
                   : viewMode === 'library'
                     ? 'ห้องสมุด & คู่มือชีวิต'
                     : viewMode === 'custom-category'
@@ -4220,10 +4724,8 @@ function App() {
             ? 'รายการบุ๊กมาร์ก'
             : viewMode === 'favorites'
               ? 'รายการโปรด'
-              : viewMode === 'files'
-                ? 'รายการไฟล์'
-                : viewMode === 'vault'
-                  ? 'รายการในคลังสำคัญและทรัพย์สิน'
+              : viewMode === 'vault'
+                ? 'รายการในคลังสำคัญและทรัพย์สิน'
                   : viewMode === 'library'
                     ? 'รายการในห้องสมุดและคู่มือชีวิต'
                     : viewMode === 'custom-category'
@@ -4249,10 +4751,8 @@ function App() {
         ? scheduleBusy
         : viewMode === 'favorites'
           ? favoritesBusy
-          : viewMode === 'files'
-            ? filesBusy
-            : viewMode === 'vault'
-              ? vaultBusy
+          : viewMode === 'vault'
+            ? vaultBusy
               : viewMode === 'library'
                 ? libraryBusy
                 : viewMode === 'custom-category'
@@ -4278,10 +4778,8 @@ function App() {
         ? upcomingReminders.length
         : viewMode === 'favorites'
           ? favorites.length
-          : viewMode === 'files'
-            ? files.length
-            : viewMode === 'vault'
-              ? vaultItems.length
+          : viewMode === 'vault'
+            ? vaultItems.length
               : viewMode === 'library'
                 ? libraryItems.length
                 : viewMode === 'custom-category'
@@ -4304,16 +4802,6 @@ function App() {
   const selectedPeople = people.filter((item) => selectedPersonIds.includes(item.id));
   const todayDone = todayBlocks.filter((block) => block.isDone === 1).length;
   const todayProgress = todayBlocks.length === 0 ? 0 : Math.round((todayDone / todayBlocks.length) * 100);
-  const themes: Array<{ name: ThemeName; label: string; color: string }> = [
-    { name: 'aurora', label: '🌟 Aurora Scenic Ultra', color: '#10b981' },
-    { name: 'cyberpunk', label: '🌌 Midnight Cyberpunk', color: '#06b6d4' },
-    { name: 'emerald', label: '🌲 Emerald Forest', color: '#10b981' },
-    { name: 'indigo', label: '👑 Royal Indigo', color: '#6366f1' },
-    { name: 'rose', label: '🌸 Rose Quartz', color: '#f43f5e' },
-    { name: 'amber', label: '🌅 Amber Sunset', color: '#f59e0b' },
-    { name: 'dracula', label: '🧛 Dracula Dark', color: '#bd93f9' },
-    { name: 'nord', label: '❄️ Nord Arctic', color: '#88c0d0' },
-  ];
 // menuItems is replaced by customizable sidebarNav
 
   return (
@@ -4771,8 +5259,6 @@ function App() {
             onRetryTaxonomyLoad={retryTaxonomyLoad}
             content={content}
             setContent={setContent}
-            files={files}
-            onFilesChanged={() => setRefreshKey((k) => k + 1)}
           />
         ) : viewMode === 'bookmarks' ? (
           <BookmarksView
@@ -4834,36 +5320,6 @@ function App() {
             listLength={listLength}
             allEntries={allEntries}
             onSelectAllEntry={selectAllEntry}
-          />
-        ) : viewMode === 'files' ? (
-          <FilesView
-            files={files}
-            activeFile={activeFile}
-            setActiveFile={setActiveFile}
-            onSetMediaLightboxFile={setMediaLightboxFile}
-            onDeleteFile={handleDeleteFile}
-            notesError={notesError}
-            notice={notice}
-            onUploadFiles={handleUpload}
-            fileCustomCatId={fileCustomCatId}
-            onFileCustomCatChange={async (newCatId) => {
-              if (!activeFile) return;
-              try {
-                await setItemCustomCategory('file', activeFile.id, newCatId);
-                setFileCustomCatId(newCatId);
-                pushToast('success', 'อัปเดตหมวดหมู่ของไฟล์แล้ว');
-                setRefreshKey((k) => k + 1);
-              } catch (err) {
-                pushToast('error', errorMessage(err));
-              }
-            }}
-            customCategories={customCategories}
-            onUploadSuccess={(uploaded) => {
-              setFiles((prev) => [uploaded, ...prev]);
-              setNotice(`อัปโหลด "${uploaded.displayName}" สำเร็จ`);
-              pushToast('success', `อัปโหลด "${uploaded.displayName}" สำเร็จ`);
-              setRefreshKey((k) => k + 1);
-            }}
           />
         ) : viewMode === 'watchlist' ? (
           <WatchlistView />
@@ -4938,12 +5394,32 @@ function App() {
       <ThemeModal
         isOpen={themeOpen}
         onClose={() => setThemeOpen(false)}
-        userUid={user?.id}
         theme={theme}
         onSelectTheme={setTheme}
         themeMode={themeMode}
         onSelectThemeMode={setThemeMode}
-        themes={themes}
+        animatedGlow={animatedGlow}
+        onToggleAnimatedGlow={setAnimatedGlow}
+        glassCard={glassCard}
+        onToggleGlassCard={setGlassCard}
+        hoverLift={hoverLift}
+        onToggleHoverLift={setHoverLift}
+        accentColor={accentColor}
+        onSelectAccentColor={setAccentColor}
+        neonGlowOpacity={neonGlowOpacity}
+        onChangeNeonGlowOpacity={setNeonGlowOpacity}
+        glassBlur={glassBlur}
+        onChangeGlassBlur={setGlassBlur}
+        glassOpacity={glassOpacity}
+        onChangeGlassOpacity={setGlassOpacity}
+        cardRadius={cardRadius}
+        onChangeCardRadius={setCardRadius}
+        btnGradient={btnGradient}
+        onChangeBtnGradient={setBtnGradient}
+        customCanvasBg={customCanvasBg}
+        onChangeCustomCanvasBg={setCustomCanvasBg}
+        customSidebarBg={customSidebarBg}
+        onChangeCustomSidebarBg={setCustomSidebarBg}
       />
 
       {/* Profile Modal */}
@@ -4959,9 +5435,22 @@ function App() {
           setViewMode('admin');
           setMobileDetailOpen(true);
         }}
+        onOpenFirebaseSetup={() => setFirebaseSetupOpen(true)}
         postSaveBehavior={postSaveBehavior}
         onSetPostSaveBehavior={handleSetPostSaveBehavior}
       />
+
+      {/* Firebase Setup Modal */}
+      {firebaseSetupOpen && (
+        <FirebaseSetupModal
+          isOpen={firebaseSetupOpen}
+          onClose={() => setFirebaseSetupOpen(false)}
+          onSaved={() => {
+            pushToast('success', 'บันทึกการตั้งค่า Firebase สำเร็จ');
+            setRefreshKey((k) => k + 1);
+          }}
+        />
+      )}
 
       {isCreateCustomTypeOpen && (
         <CustomTypeBuilderModal

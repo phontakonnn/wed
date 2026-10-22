@@ -171,12 +171,96 @@
 }
 
 .bento-card {
-  border-radius: var(--pkh-radius-xl, 20px) !important;
-  border: 1px solid var(--pkh-border-default, #e2e8f0) !important;
-  background: var(--pkh-bg-surface, #ffffff) !important;
+  border-radius: var(--pkh-card-radius, 20px) !important;
+  border: 1px solid var(--pkh-border-default, #e2e8f0);
+  background: var(--pkh-bg-surface, #ffffff);
+  backdrop-filter: blur(var(--pkh-glass-blur, 16px));
+  -webkit-backdrop-filter: blur(var(--pkh-glass-blur, 16px));
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  transition: all 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-glass-card="true"] .bento-card,
+[data-bg-effect="aurora-scenic"] .bento-card,
+:root:not([data-bg-effect]) .bento-card {
+  background: rgba(255, 255, 255, 0.75) !important;
+}
+
+[data-mode="dark"] .bento-card,
+[data-mode="dark"][data-bg-effect="aurora-scenic"] .bento-card {
+  background: rgba(15, 23, 42, 0.78) !important;
+}
+
+/* Glowing Neon Borders by Card Category */
+.bento-card-tasks,
+.bento-kpi-card.is-tasks {
+  border: 1px solid rgba(16, 185, 129, calc(0.45 * var(--pkh-neon-glow-opacity, 0.7))) !important;
+  box-shadow: 0 4px 20px rgba(16, 185, 129, calc(0.22 * var(--pkh-neon-glow-opacity, 0.7))),
+              inset 0 0 14px rgba(6, 182, 212, calc(0.12 * var(--pkh-neon-glow-opacity, 0.7))) !important;
+}
+.bento-card-tasks:hover,
+.bento-kpi-card.is-tasks:hover {
+  border-color: rgba(16, 185, 129, calc(0.75 * var(--pkh-neon-glow-opacity, 0.7))) !important;
+  box-shadow: 0 8px 30px rgba(16, 185, 129, calc(0.38 * var(--pkh-neon-glow-opacity, 0.7))),
+              inset 0 0 18px rgba(6, 182, 212, calc(0.20 * var(--pkh-neon-glow-opacity, 0.7))) !important;
+}
+
+.bento-card-habits,
+.bento-card-reminders,
+.bento-card-timeblocks,
+.bento-kpi-card.is-habits,
+.bento-kpi-card.is-vault {
+  border: 1px solid rgba(244, 63, 94, calc(0.45 * var(--pkh-neon-glow-opacity, 0.7))) !important;
+  box-shadow: 0 4px 20px rgba(236, 72, 153, calc(0.22 * var(--pkh-neon-glow-opacity, 0.7))),
+              inset 0 0 14px rgba(249, 115, 22, calc(0.12 * var(--pkh-neon-glow-opacity, 0.7))) !important;
+}
+.bento-card-habits:hover,
+.bento-card-reminders:hover,
+.bento-card-timeblocks:hover,
+.bento-kpi-card.is-habits:hover,
+.bento-kpi-card.is-vault:hover {
+  border-color: rgba(244, 63, 94, calc(0.75 * var(--pkh-neon-glow-opacity, 0.7))) !important;
+  box-shadow: 0 8px 30px rgba(236, 72, 153, calc(0.38 * var(--pkh-neon-glow-opacity, 0.7))),
+              inset 0 0 18px rgba(249, 115, 22, calc(0.20 * var(--pkh-neon-glow-opacity, 0.7))) !important;
+}
+
+.bento-card-projects,
+.bento-card-goals,
+.bento-kpi-card.is-library,
+.bento-kpi-card.is-notes {
+  border: 1px solid rgba(99, 102, 241, calc(0.45 * var(--pkh-neon-glow-opacity, 0.7))) !important;
+  box-shadow: 0 4px 20px rgba(99, 102, 241, calc(0.22 * var(--pkh-neon-glow-opacity, 0.7))),
+              inset 0 0 14px rgba(6, 182, 212, calc(0.12 * var(--pkh-neon-glow-opacity, 0.7))) !important;
+}
+.bento-card-projects:hover,
+.bento-card-goals:hover,
+.bento-kpi-card.is-library:hover,
+.bento-kpi-card.is-notes:hover {
+  border-color: rgba(99, 102, 241, calc(0.75 * var(--pkh-neon-glow-opacity, 0.7))) !important;
+  box-shadow: 0 8px 30px rgba(99, 102, 241, calc(0.38 * var(--pkh-neon-glow-opacity, 0.7))),
+              inset 0 0 18px rgba(6, 182, 212, calc(0.20 * var(--pkh-neon-glow-opacity, 0.7))) !important;
+}
+
+/* Pill Action Buttons */
+.bento-pill-action,
+.button-pill,
+.banner-action-pill {
+  border-radius: var(--pkh-radius-full, 9999px) !important;
+  background: linear-gradient(135deg, #38bdf8 0%, #6366f1 50%, #a855f7 100%) !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  border: none !important;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35) !important;
+  transition: all 0.2s ease !important;
+  cursor: pointer;
+}
+.bento-pill-action:hover,
+.button-pill:hover,
+.banner-action-pill:hover {
+  transform: translateY(-1px) scale(1.02);
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5) !important;
 }
 
 .bento-card.span-2 {

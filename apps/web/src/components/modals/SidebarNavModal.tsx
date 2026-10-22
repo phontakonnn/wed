@@ -28,7 +28,7 @@ export const SidebarNavModal: React.FC<SidebarNavModalProps> = ({
     <div className="dialog-backdrop" onClick={onClose}>
       <section
         className="dialog studio-dialog"
-        style={{ maxWidth: '640px', width: '95vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}
+        style={{ maxWidth: '680px', width: '95vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflowX: 'hidden', boxSizing: 'border-box' }}
         role="dialog"
         aria-modal="true"
         aria-labelledby="customize-nav-title"

@@ -23,7 +23,6 @@ export interface TopbarProps {
     name: string;
     avatarPreset?: string;
     avatarFileId?: string | null;
-    avatarDataUrl?: string | null;
   };
   notifications?: NotificationItem[];
   unreadCount?: number;
@@ -530,8 +529,8 @@ export const Topbar: React.FC<TopbarProps> = ({
             aria-label="เปิดโปรไฟล์"
           >
             <span className="topbar-avatar" aria-hidden="true">
-              {profile?.avatarDataUrl || (profile?.avatarFileId && (profile.avatarFileId.startsWith('http') || profile.avatarFileId.startsWith('data:'))) ? (
-                <img src={profile.avatarDataUrl || profile.avatarFileId || ''} alt="" loading="lazy" decoding="async" />
+              {profile?.avatarFileId ? (
+                <img src={`/api/files/${profile.avatarFileId}`} alt="" loading="lazy" decoding="async" />
               ) : (
                 profile?.avatarPreset || (profile?.name || user?.username || 'P').slice(0, 1)
               )}

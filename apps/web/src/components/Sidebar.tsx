@@ -24,7 +24,7 @@ export interface SidebarProps {
   goalsCount: number;
   vaultCount: number;
   libraryCount: number;
-  filesCount: number;
+  filesCount?: number;
   bookmarksCount: number;
   favoritesCount: number;
   onOpenCustomizeNav: () => void;
@@ -42,14 +42,14 @@ export interface SidebarProps {
   onSelectCustomType?: (id: string) => void;
   onOpenCreateCustomType?: () => void;
   // Quick add & actions
-  onStartNewNote: () => void;
+  onStartNewNote?: () => void;
   onStartNewPerson: () => void;
   onStartNewReminder: () => void;
   onStartNewBookmark: () => void;
-  onUploadFileClick?: () => void;
-  onFileInputChange?: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  uploadBusy?: boolean;
-  fileInputRef?: React.RefObject<HTMLInputElement | null>;
+  onUploadFileClick: () => void;
+  onFileInputChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  uploadBusy: boolean;
+  fileInputRef: React.RefObject<HTMLInputElement | null>;
   // Filters
   activeFilterCount: number;
   onClearFilters: () => void;
@@ -65,7 +65,7 @@ const NAV_GROUPS: Array<{
 }> = [
   { id: 'overview', title: 'ภาพรวม & ด่วน', views: ['home', 'inbox'] },
   { id: 'life-work', title: 'งาน & ตารางชีวิต', views: ['tasks', 'projects', 'goals', 'schedule', 'people'] },
-  { id: 'knowledge', title: 'ความรู้ & บันทึก', views: ['notes', 'vault', 'library', 'bookmarks'] },
+  { id: 'knowledge', title: 'การ์ดข้อมูล & ลิงก์', views: ['notes', 'vault', 'library', 'bookmarks'] },
   { id: 'lifestyle', title: 'ไลฟ์สไตล์', views: ['watchlist', 'shopping', 'travel'] },
   { id: 'system', title: 'ระบบ & ช่วยเหลือ', views: ['favorites', 'help-support', 'trash'] },
 ];
@@ -91,7 +91,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   goalsCount,
   vaultCount,
   libraryCount,
-  filesCount,
+  filesCount: _filesCount,
   bookmarksCount,
   favoritesCount,
   onOpenCustomizeNav,
@@ -106,7 +106,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   selectedCustomTypeId,
   onSelectCustomType,
   onOpenCreateCustomType,
-  onStartNewNote,
+  onStartNewNote: _onStartNewNote,
   onOpenAbout,
 }) => {
   const countForView = (view: NotesView): number | null => {
@@ -118,7 +118,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       case 'goals': return goalsCount;
       case 'vault': return vaultCount;
       case 'library': return libraryCount;
-      case 'files': return filesCount;
       case 'bookmarks': return bookmarksCount;
       case 'favorites': return favoritesCount;
       default: return null;
@@ -182,8 +181,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Profile Card */}
         <button className="profile-card" type="button" onClick={onOpenProfile} title="โปรไฟล์และการตั้งค่า">
           <span className="avatar profile-avatar">
-            {profile.avatarDataUrl || (profile.avatarFileId && (profile.avatarFileId.startsWith('http') || profile.avatarFileId.startsWith('data:'))) ? (
-              <img src={profile.avatarDataUrl || profile.avatarFileId || ''} alt="" loading="lazy" decoding="async" />
+            {profile.avatarFileId ? (
+              <img src={`/api/files/${profile.avatarFileId}`} alt="" loading="lazy" decoding="async" />
             ) : (
               profile.avatarPreset || (profile.name || user?.username || 'P').slice(0, 1)
             )}
@@ -198,15 +197,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <small className="profile-meta">{todayDone}/{todayBlocksCount} ช่วงวันนี้</small>
         </button>
 
-        {/* Quick Add Bar (New Note & New Task) */}
+        {/* Quick Access Bar (Bookmarks & Inbox) */}
         <div className="sidebar-quick-bar">
           <button
             className="sidebar-quick-btn button-primary"
             type="button"
-            onClick={onStartNewNote}
-            title="สร้างโน้ตใหม่ด่วน"
+            onClick={() => onSwitchView('bookmarks')}
+            title="เปิดหน้าบุ๊กมาร์ก / ลิงก์ด่วน"
           >
-            <span>＋ โน้ตใหม่</span>
+            <span>🔖 บุ๊กมาร์ก</span>
           </button>
           <button
             className="sidebar-quick-btn button-quiet"
