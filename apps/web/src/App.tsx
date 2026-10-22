@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, useCallback, lazy, Suspense, type ChangeEvent, type FormEvent } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
 import {
+  auth,
   ApiError,
   checkHealth,
   type HealthDiskInfo,
@@ -546,22 +548,29 @@ function App() {
 
   useEffect(() => {
     let active = true;
-    getCurrentUser().then((currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
       if (!active) return;
-      setUser(currentUser);
-      setNotesBusy(true);
-      setAuthState('signed-in');
-    }).catch((error: unknown) => {
-      if (!active) return;
-      if (error instanceof ApiError && error.status === 401) {
-        setAuthState('signed-out');
+      if (fbUser) {
+        getCurrentUser()
+          .then((currentUser) => {
+            if (!active) return;
+            setUser(currentUser);
+            setNotesBusy(true);
+            setAuthState('signed-in');
+          })
+          .catch(() => {
+            if (!active) return;
+            setAuthState('signed-out');
+          });
       } else {
-        setAuthError(errorMessage(error));
-        setAuthState('unavailable');
+        setUser(null);
+        setAuthState('signed-out');
       }
     });
+
     return () => {
       active = false;
+      unsubscribe();
     };
   }, []);
 

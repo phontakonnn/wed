@@ -363,15 +363,8 @@ export interface FilePage {
   total: number;
 }
 
-export class ApiError extends Error {
-  readonly status: number;
-
-  constructor(message: string, status: number) {
-    super(message);
-    this.status = status;
-    this.name = 'ApiError';
-  }
-}
+import { ApiError } from './lib/errors';
+export { ApiError };
 
 import { handleFirebaseRequest } from './lib/firebaseEngine';
 export { auth, db } from './lib/firebase';
