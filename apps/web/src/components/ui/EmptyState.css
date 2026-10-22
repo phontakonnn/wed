@@ -1,0 +1,57 @@
+.pkh-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--pkh-space-10) var(--pkh-space-6);
+  border-radius: var(--pkh-radius-xl);
+  border: 1px dashed var(--pkh-border-default);
+  background-color: var(--pkh-bg-subtle);
+  width: 100%;
+}
+
+.pkh-empty-state--borderless {
+  border: none;
+  background-color: transparent;
+}
+
+.pkh-empty-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--pkh-radius-full);
+  background-color: var(--pkh-primary-light);
+  color: var(--pkh-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  margin-bottom: var(--pkh-space-4);
+  box-shadow: var(--pkh-shadow-xs);
+}
+
+.pkh-empty-title {
+  font-family: var(--pkh-font-sans);
+  font-size: var(--pkh-font-lg);
+  font-weight: 600;
+  line-height: var(--pkh-lh-lg);
+  color: var(--pkh-text-primary);
+  margin: 0 0 var(--pkh-space-2);
+  word-break: break-word;
+}
+
+.pkh-empty-description {
+  font-family: var(--pkh-font-sans);
+  font-size: var(--pkh-font-sm);
+  line-height: var(--pkh-lh-sm);
+  color: var(--pkh-text-secondary);
+  max-width: 440px;
+  margin: 0 0 var(--pkh-space-6);
+  word-break: break-word;
+}
+
+.pkh-empty-action {
+  display: flex;
+  gap: var(--pkh-space-3);
+  align-items: center;
+}

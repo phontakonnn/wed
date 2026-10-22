@@ -1,0 +1,44 @@
+#!/usr/bin/env sh
+# PKH / Life OS pre-push hook
+# Prevents broken code from being pushed to the remote repository.
+
+echo "=================================================="
+echo "🔍 Running pre-push quality gates for Life OS..."
+echo "=================================================="
+
+# 1. Run Server Unit Tests
+echo "➡️ [1/4] Running server unit tests (vitest)..."
+npm --prefix apps/server test
+if [ $? -ne 0 ]; then
+  echo "❌ Error: Server unit tests failed! Push aborted."
+  exit 1
+fi
+
+# 2. Run Web Linter
+echo "➡️ [2/4] Running web linter (eslint)..."
+npm --prefix apps/web run lint
+if [ $? -ne 0 ]; then
+  echo "❌ Error: Web linter failed! Push aborted."
+  exit 1
+fi
+
+# 3. Run Web Build & Typecheck
+echo "➡️ [3/4] Running web build (tsc & vite)..."
+npm --prefix apps/web run build
+if [ $? -ne 0 ]; then
+  echo "❌ Error: Web build failed! Push aborted."
+  exit 1
+fi
+
+# 4. Run E2E Tests
+echo "➡️ [4/4] Running Playwright E2E tests..."
+npm run test:e2e
+if [ $? -ne 0 ]; then
+  echo "❌ Error: Playwright E2E tests failed! Push aborted."
+  exit 1
+fi
+
+echo "=================================================="
+echo "✅ All pre-push quality gates passed! Pushing code..."
+echo "=================================================="
+exit 0

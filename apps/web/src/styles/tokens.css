@@ -1,0 +1,238 @@
+/* ==========================================================================
+   Design System Tokens - PKH (Life OS)
+   Pure CSS Design Tokens: Color, Spacing, Typography, Radii, Shadows
+   ========================================================================== */
+
+/* 1. Self-hosted Thai Fonts (Anuphan) - Fully offline & Tailscale compatible */
+@font-face {
+  font-family: 'Anuphan';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/anuphan-regular.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Anuphan';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/anuphan-medium.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Anuphan';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/anuphan-semibold.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Anuphan';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/anuphan-bold.ttf') format('truetype');
+}
+
+/* 2. Global Root Tokens */
+:root {
+  /* Typography Stack */
+  --pkh-font-sans: 'Anuphan', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --pkh-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* Font Sizes & Line Heights (Optimized for Thai typography) */
+  --pkh-font-xs: 0.75rem;     /* 12px */
+  --pkh-lh-xs: 1.15rem;      /* 18px */
+  --pkh-font-sm: 0.875rem;    /* 14px */
+  --pkh-lh-sm: 1.375rem;     /* 22px */
+  --pkh-font-base: 1rem;      /* 16px */
+  --pkh-lh-base: 1.625rem;   /* 26px - comfortable for Thai tone marks */
+  --pkh-font-lg: 1.125rem;    /* 18px */
+  --pkh-lh-lg: 1.75rem;      /* 28px */
+  --pkh-font-xl: 1.25rem;     /* 20px */
+  --pkh-lh-xl: 1.875rem;     /* 30px */
+  --pkh-font-2xl: 1.5rem;     /* 24px */
+  --pkh-lh-2xl: 2.125rem;    /* 34px */
+  --pkh-font-3xl: 1.875rem;   /* 30px */
+  --pkh-lh-3xl: 2.5rem;      /* 40px */
+
+  /* 8px-based Spacing Scale */
+  --pkh-space-1: 4px;
+  --pkh-space-2: 8px;
+  --pkh-space-3: 12px;
+  --pkh-space-4: 16px;
+  --pkh-space-5: 20px;
+  --pkh-space-6: 24px;
+  --pkh-space-8: 32px;
+  --pkh-space-10: 40px;
+  --pkh-space-12: 48px;
+  --pkh-space-16: 64px;
+
+  /* Modern Rounded Radii */
+  --pkh-radius-xs: 4px;
+  --pkh-radius-sm: 6px;
+  --pkh-radius-md: 10px;
+  --pkh-radius-lg: 14px;
+  --pkh-radius-xl: 20px;
+  --pkh-radius-2xl: 28px;
+  --pkh-radius-full: 9999px;
+
+  /* Transitions & Animation */
+  --pkh-ease-default: cubic-bezier(0.16, 1, 0.3, 1);
+  --pkh-duration-fast: 150ms;
+  --pkh-duration-normal: 220ms;
+}
+
+/* 3. Light Theme (Default) */
+:root,
+[data-theme="light"],
+[data-mode="light"] {
+  /* Surfaces & Canvas */
+  --pkh-bg-canvas: #f8fafc;        /* Slate 50 - clean & bright */
+  --pkh-bg-surface: #ffffff;       /* Pure white card surface */
+  --pkh-bg-subtle: #f1f5f9;        /* Slate 100 - chips & secondary */
+  --pkh-bg-muted: #e2e8f0;         /* Slate 200 - subtle dividers */
+  --pkh-bg-hover: #f1f5f9;
+  --pkh-bg-active: #e2e8f0;
+
+  /* Borders */
+  --pkh-border-subtle: #f1f5f9;
+  --pkh-border-default: #e2e8f0;   /* Slate 200 */
+  --pkh-border-strong: #cbd5e1;    /* Slate 300 */
+
+  /* Text & Foreground (WCAG AA Compliant) */
+  --pkh-text-primary: #0f172a;     /* Slate 900 (Contrast > 15:1 against white) */
+  --pkh-text-secondary: #475569;   /* Slate 600 (Contrast ~ 6:1 against white) */
+  --pkh-text-muted: #64748b;       /* Slate 500 (Contrast > 4.5:1 against white) */
+  --pkh-text-disabled: #94a3b8;    /* Slate 400 */
+  --pkh-text-inverse: #ffffff;
+
+  /* Primary Brand (Emerald / Notion Modern Green) */
+  --pkh-primary: #10b981;          /* Emerald 500 */
+  --pkh-primary-hover: #059669;    /* Emerald 600 */
+  --pkh-primary-dark: #047857;     /* Emerald 700 */
+  --pkh-primary-light: #ecfdf5;    /* Emerald 50 */
+  --pkh-primary-border: #a7f3d0;   /* Emerald 200 */
+  --pkh-primary-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  --pkh-primary-text: #ffffff;
+
+  /* Secondary / Accent */
+  --pkh-accent: #3b82f6;           /* Blue 500 */
+  --pkh-accent-light: #eff6ff;     /* Blue 50 */
+  --pkh-accent-text: #1d4ed8;
+
+  /* Status: Danger / Error */
+  --pkh-danger: #ef4444;           /* Red 500 */
+  --pkh-danger-hover: #dc2626;     /* Red 600 */
+  --pkh-danger-light: #fef2f2;     /* Red 50 */
+  --pkh-danger-border: #fecaca;    /* Red 200 */
+  --pkh-danger-text: #b91c1c;
+
+  /* Status: Warning */
+  --pkh-warning: #f59e0b;          /* Amber 500 */
+  --pkh-warning-light: #fffbeb;    /* Amber 50 */
+  --pkh-warning-border: #fde68a;
+  --pkh-warning-text: #b45309;
+
+  /* Status: Success */
+  --pkh-success: #10b981;
+  --pkh-success-light: #ecfdf5;
+  --pkh-success-text: #047857;
+
+  /* Focus Ring */
+  --pkh-ring: rgba(16, 185, 129, 0.35);
+  --pkh-ring-danger: rgba(239, 68, 68, 0.35);
+
+  /* Shadows (Soft 3D Bento Elevation) */
+  --pkh-shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --pkh-shadow-sm: 0 2px 6px rgba(15, 23, 42, 0.05), 0 1px 2px rgba(15, 23, 42, 0.03);
+  --pkh-shadow-md: 0 8px 20px -3px rgba(15, 23, 42, 0.07), 0 3px 8px -2px rgba(15, 23, 42, 0.04);
+  --pkh-shadow-lg: 0 16px 32px -4px rgba(15, 23, 42, 0.09), 0 6px 14px -3px rgba(15, 23, 42, 0.05);
+  --pkh-shadow-xl: 0 24px 48px -8px rgba(15, 23, 42, 0.12);
+  --pkh-shadow-inner: inset 0 2px 4px 0 rgba(15, 23, 42, 0.04);
+
+  /* Modal Backdrop */
+  --pkh-backdrop: rgba(15, 23, 42, 0.45);
+}
+
+/* 4. Dark Theme */
+[data-theme="dark"],
+[data-mode="dark"] {
+  /* Surfaces & Canvas */
+  --pkh-bg-canvas: #0b0f19;        /* Deep slate background */
+  --pkh-bg-surface: #111827;       /* Gray 900 card surface */
+  --pkh-bg-subtle: #1e293b;        /* Slate 800 subtle elements */
+  --pkh-bg-muted: #334155;         /* Slate 700 */
+  --pkh-bg-hover: #1f293d;
+  --pkh-bg-active: #27354f;
+
+  /* Borders */
+  --pkh-border-subtle: #1e293b;
+  --pkh-border-default: #2d3748;   /* Subtle boundary */
+  --pkh-border-strong: #4a5568;
+
+  /* Text & Foreground (WCAG AA Compliant) */
+  --pkh-text-primary: #f8fafc;     /* Slate 50 (Contrast > 15:1 against #0b0f19) */
+  --pkh-text-secondary: #cbd5e1;   /* Slate 300 (Contrast ~ 9:1) */
+  --pkh-text-muted: #94a3b8;       /* Slate 400 (Contrast > 5.5:1) */
+  --pkh-text-disabled: #64748b;    /* Slate 500 */
+  --pkh-text-inverse: #0f172a;
+
+  /* Primary Brand (Lighter, Vibrant in Dark Mode) */
+  --pkh-primary: #10b981;          /* Emerald 500 */
+  --pkh-primary-hover: #34d399;    /* Emerald 400 */
+  --pkh-primary-dark: #059669;
+  --pkh-primary-light: rgba(16, 185, 129, 0.14);
+  --pkh-primary-border: rgba(16, 185, 129, 0.35);
+  --pkh-primary-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  --pkh-primary-text: #ffffff;
+
+  /* Secondary / Accent */
+  --pkh-accent: #60a5fa;           /* Blue 400 */
+  --pkh-accent-light: rgba(96, 165, 250, 0.14);
+  --pkh-accent-text: #93c5fd;
+
+  /* Status: Danger / Error */
+  --pkh-danger: #f87171;           /* Red 400 */
+  --pkh-danger-hover: #ef4444;
+  --pkh-danger-light: rgba(239, 68, 68, 0.16);
+  --pkh-danger-border: rgba(239, 68, 68, 0.35);
+  --pkh-danger-text: #fca5a5;
+
+  /* Status: Warning */
+  --pkh-warning: #fbbf24;          /* Amber 400 */
+  --pkh-warning-light: rgba(245, 158, 11, 0.16);
+  --pkh-warning-border: rgba(245, 158, 11, 0.35);
+  --pkh-warning-text: #fde68a;
+
+  /* Status: Success */
+  --pkh-success: #34d399;
+  --pkh-success-light: rgba(52, 211, 153, 0.16);
+  --pkh-success-text: #a7f3d0;
+
+  /* Focus Ring */
+  --pkh-ring: rgba(16, 185, 129, 0.5);
+  --pkh-ring-danger: rgba(248, 113, 113, 0.5);
+
+  /* Shadows (Adapted for dark contrast with soft depth) */
+  --pkh-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --pkh-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --pkh-shadow-md: 0 8px 24px -2px rgba(0, 0, 0, 0.45), 0 3px 8px -2px rgba(0, 0, 0, 0.3);
+  --pkh-shadow-lg: 0 16px 36px -4px rgba(0, 0, 0, 0.55), 0 6px 16px -3px rgba(0, 0, 0, 0.35);
+  --pkh-shadow-xl: 0 24px 52px -8px rgba(0, 0, 0, 0.7);
+  --pkh-shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.3);
+
+  /* Modal Backdrop */
+  --pkh-backdrop: rgba(0, 0, 0, 0.65);
+}
+
+/* 5. Base Typography Utility for Thai Word Wrapping */
+.pkh-thai-text,
+body {
+  font-family: var(--pkh-font-sans);
+  word-break: break-word;
+  overflow-wrap: break-word;
+  line-break: loose;
+}
