@@ -1,7 +1,7 @@
 {
-  "name": "Personal Life OS — สมองของคุณ",
-  "short_name": "สมองของคุณ",
-  "description": "Personal Life OS — สมองของคุณ รันบน Firebase Serverless ไม่ต้องเปิดคอมทิ้งไว้",
+  "name": "สมองที่สอง — Personal Knowledge Hub",
+  "short_name": "สมองที่สอง",
+  "description": "พื้นที่บันทึกและเตือนความจำส่วนตัว ทำงานออฟไลน์ได้ ติดตั้งเป็นแอปได้",
   "id": "/",
   "start_url": "/",
   "scope": "/",
@@ -38,25 +38,25 @@
       "name": "ภาพรวมวันนี้",
       "short_name": "ภาพรวม",
       "url": "/?view=home",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "กล่องขาเข้า",
       "short_name": "Inbox",
       "url": "/?view=inbox",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "งานที่ต้องทำ",
       "short_name": "Tasks",
       "url": "/?view=tasks",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "คลังสำคัญ (Vault)",
       "short_name": "Vault",
       "url": "/?view=vault",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]
 }

@@ -1,6 +1,7 @@
 import './lib/firebaseEngine';
 import { scheduleAnalyticsWarmup } from './lib/firebase';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { PwaUpdatePrompt } from './components/PwaUpdatePrompt';
 import { StrictMode, lazy, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles/tokens.css';
@@ -13,15 +14,6 @@ import './styles/command-palette.css';
 import './styles/life-os-views.css';
 import './index.css';
 import App from './App.tsx';
-
-// Purge legacy caches immediately so stale offline shells don't show unavailable error
-if (typeof window !== 'undefined' && 'caches' in window) {
-  caches.keys().then((keys) => {
-    keys.forEach((key) => {
-      caches.delete(key);
-    });
-  }).catch(() => {});
-}
 
 // eslint-disable-next-line react-refresh/only-export-components
 const DesignSystemPage = lazy(() =>
@@ -43,24 +35,10 @@ createRoot(document.getElementById('root')!).render(
       ) : (
         <App />
       )}
+      <PwaUpdatePrompt />
     </ErrorBoundary>
   </StrictMode>,
 );
 
 // Analytics is optional and must never delay the first paint.
 scheduleAnalyticsWarmup();
-
-// Register and force update service worker
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker
-      .register('/sw.js')
-      .then((registration) => {
-        registration.update().catch(() => {});
-        console.log('[PWA] Service Worker active & updated:', registration.scope);
-      })
-      .catch((error) => {
-        console.warn('[PWA] Service Worker registration failed:', error);
-      });
-  });
-}
