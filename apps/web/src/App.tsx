@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback, lazy, Suspense, type ChangeEvent, type FormEvent } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ApiError,
   checkHealth,
@@ -530,6 +531,16 @@ function App() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
+  const queryClient = useQueryClient();
+  /**
+   * Single refresh entry point. Queries migrated to TanStack Query refetch from the
+   * cache, while the legacy `refreshKey` counter still drives the effects that have
+   * not been migrated yet. Both are bumped together so a save never misses a screen.
+   */
+  const bumpRefresh = useCallback(() => {
+    setRefreshKey((key) => key + 1);
+    void queryClient.invalidateQueries();
+  }, [queryClient]);
   const [notesBusy, setNotesBusy] = useState(false);
   const [saveBusy, setSaveBusy] = useState(false);
   const [notesError, setNotesError] = useState('');
@@ -1157,24 +1168,25 @@ function App() {
     vaultCategory, vaultQuery, libraryCategory, libraryStatus, libraryQuery,
   ]);
 
+  const dashboardQuery = useQuery({
+    queryKey: ['dashboard', authState],
+    enabled: authState === 'signed-in' && viewMode === 'home',
+    queryFn: getDashboard,
+  });
+
   useEffect(() => {
-    if (authState !== 'signed-in' || viewMode !== 'home') return;
-    let active = true;
-    const controller = new AbortController();
-    getDashboard().then((data) => {
-      if (!active) return;
-      setDashboard(data);
-      setDashboardError('');
-    }).catch((error: unknown) => {
-      if (active) setDashboardError(errorMessage(error));
-    }).finally(() => {
-      if (active) setDashboardBusy(false);
-    });
-    return () => {
-      active = false;
-      controller.abort();
-    };
-  }, [authState, viewMode, refreshKey]);
+    if (!dashboardQuery.data) return;
+    setDashboard(dashboardQuery.data);
+    setDashboardError('');
+    setDashboardBusy(false);
+  }, [dashboardQuery.data]);
+
+  useEffect(() => {
+    if (!dashboardQuery.error) return;
+    setDashboardError(errorMessage(dashboardQuery.error));
+    setDashboardBusy(false);
+  }, [dashboardQuery.error]);
+
 
   // Autosave only applies to notes that already exist on the server: a brand-new note is still
   // created by the explicit save button, so autosave can never spawn empty notes.
@@ -1302,72 +1314,87 @@ function App() {
     return () => window.clearTimeout(timeout);
   }, [searchInput, searchQuery, viewMode]);
 
-  useEffect(() => {
-    if (authState !== 'signed-in' || searchSettling) return;
-    if (viewMode === 'favorites') return;
-    let active = true;
-    const requestId = ++notesRequestId.current;
-    const request = viewMode === 'trash'
-      ? listTrash(page)
-      : viewMode === 'bookmarks'
-        ? listBookmarks(page)
-        : searchQuery
-          ? searchNotes(searchQuery, page)
-          : listNotes(page);
-    request.then((result) => {
-      if (!active || requestId !== notesRequestId.current) return;
-      const visibleNotes = 'bookmarks' in result
-        ? result.bookmarks.map((bookmark) => ({
-          id: bookmark.id,
-          title: bookmark.title,
-          content: bookmark.url,
-          createdAt: bookmark.createdAt,
-          updatedAt: bookmark.updatedAt,
-        }))
-        : result.notes;
-      if ('bookmarks' in result) setBookmarks(result.bookmarks);
-      setNotes(visibleNotes);
-      setTotal(result.total);
-      if (viewMode === 'trash') return;
+  // Notes, bookmarks and trash share one query because only one of them is visible at a time.
+  // TanStack Query owns the request lifecycle, so switching views or saving only refetches the
+  // active key instead of replaying every effect that used to depend on `refreshKey`.
+  const notesListQuery = useQuery({
+    queryKey: ['notes-list', authState, viewMode, page, searchQuery],
+    enabled: authState === 'signed-in' && !searchSettling && viewMode !== 'favorites',
+    queryFn: async () => {
+      if (viewMode === 'trash') {
+        const result = await listTrash(page);
+        return { mode: 'trash' as const, total: result.total, notes: result.notes, bookmarks: null };
+      }
       if (viewMode === 'bookmarks') {
-        if (isNewBookmarkRef.current) return;
-        const selected = result.bookmarks.find((bookmark) => bookmark.id === activeBookmark?.id)
-          ?? result.bookmarks[0]
-          ?? null;
-        if (!activeBookmark || !result.bookmarks.some((bookmark) => bookmark.id === activeBookmark.id)) {
-          setBookmarkTitle(selected?.title ?? '');
-          setBookmarkUrl(selected?.url ?? '');
-          setBookmarkDescription(selected?.description ?? '');
-        }
-        setActiveBookmark(selected);
-        return;
+        const result = await listBookmarks(page);
+        return { mode: 'bookmarks' as const, total: result.total, notes: null, bookmarks: result.bookmarks };
       }
-      if (isNewNoteRef.current) return;
-      const current = activeNoteRef.current;
-      const selected = result.notes.find((note) => note.id === current?.id) ?? result.notes[0] ?? null;
-      if (!current || !result.notes.some((note) => note.id === current.id)) {
-        setTitle(selected?.title ?? '');
-        setContent(selected?.content ?? '');
+      if (searchQuery) {
+        const result = await searchNotes(searchQuery, page);
+        return { mode: 'notes' as const, total: result.total, notes: result.notes, bookmarks: null };
       }
-      activateNote(selected);
-    }).catch((error: unknown) => {
-      if (!active || requestId !== notesRequestId.current) return;
-      if (error instanceof ApiError && error.status === 401) {
-        setUser(null);
-        setAuthState('signed-out');
-        setAuthError('เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้ง');
-      } else {
-        setNotesError(errorMessage(error));
+      const result = await listNotes(page);
+      return { mode: 'notes' as const, total: result.total, notes: result.notes, bookmarks: null };
+    },
+  });
+
+  useEffect(() => {
+    const result = notesListQuery.data;
+    if (!result) return;
+    const visibleNotes = result.bookmarks
+      ? result.bookmarks.map((bookmark) => ({
+        id: bookmark.id,
+        title: bookmark.title,
+        content: bookmark.url,
+        createdAt: bookmark.createdAt,
+        updatedAt: bookmark.updatedAt,
+      }))
+      : result.notes ?? [];
+    if (result.bookmarks) setBookmarks(result.bookmarks);
+    setNotes(visibleNotes);
+    setTotal(result.total);
+    setNotesBusy(false);
+    if (result.mode === 'trash') return;
+    if (result.mode === 'bookmarks') {
+      const bookmarkList = result.bookmarks ?? [];
+      if (isNewBookmarkRef.current) return;
+      const selected = bookmarkList.find((bookmark) => bookmark.id === activeBookmark?.id)
+        ?? bookmarkList[0]
+        ?? null;
+      if (!activeBookmark || !bookmarkList.some((bookmark) => bookmark.id === activeBookmark.id)) {
+        setBookmarkTitle(selected?.title ?? '');
+        setBookmarkUrl(selected?.url ?? '');
+        setBookmarkDescription(selected?.description ?? '');
       }
-    }).finally(() => {
-      if (active && requestId === notesRequestId.current) setNotesBusy(false);
-    });
-    return () => {
-      active = false;
-    };
-    // activateNote is a stable local function; depending on it would re-run this loader every render.
+      setActiveBookmark(selected);
+      return;
+    }
+    const noteList = result.notes ?? [];
+    if (isNewNoteRef.current) return;
+    const current = activeNoteRef.current;
+    const selected = noteList.find((note) => note.id === current?.id) ?? noteList[0] ?? null;
+    if (!current || !noteList.some((note) => note.id === current.id)) {
+      setTitle(selected?.title ?? '');
+      setContent(selected?.content ?? '');
+    }
+    activateNote(selected);
+    // activateNote is a stable local function; depending on it would re-run this sync every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeBookmark, authState, page, refreshKey, searchQuery, searchSettling, viewMode]);
+  }, [activeBookmark, notesListQuery.data, viewMode]);
+
+  useEffect(() => {
+    const error = notesListQuery.error;
+    if (!error) return;
+    setNotesBusy(false);
+    if (error instanceof ApiError && error.status === 401) {
+      setUser(null);
+      setAuthState('signed-out');
+      setAuthError('เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้ง');
+    } else {
+      setNotesError(errorMessage(error));
+    }
+  }, [notesListQuery.error]);
+
 
   function activateNote(note: Note | null, creating = false) {
     // Flush any pending autosave for the note being left behind, so switching never loses typing.
@@ -1706,7 +1733,7 @@ function App() {
       await deleteCustomCategory(cat.id);
       setCustomCategories((curr) => curr.filter((c) => c.id !== cat.id && c.parentId !== cat.id));
       setToasts((t) => [...t, { id: ++toastSeqRef.current, kind: 'success', message: 'ลบหมวดหมู่เรียบร้อย' }]);
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
       if (selectedCustomCategoryId === cat.id) {
         switchView('home');
       }
@@ -1791,8 +1818,8 @@ function App() {
       setQuickAddCatOpen(false);
       setToasts((t) => [...t, { id: ++toastSeqRef.current, kind: 'success', message: 'เพิ่มข้อมูลในหมวดหมู่แล้ว' }]);
       // refresh items & global counts
-      setRefreshKey((key) => key + 1);
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
+      bumpRefresh();
       const refreshed = await getCustomCategoryItems(selectedCustomCategoryId);
       setCustomCategoryData(refreshed);
     } catch (err) {
@@ -2072,7 +2099,7 @@ function App() {
           }
         },
       });
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
       void getPersonNotes(saved.id).then(setPersonNotes).catch(() => undefined);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
@@ -2098,7 +2125,7 @@ function App() {
       setPersonNotes([]);
       setPersonNotice('ลบข้อมูลบุคคลแล้ว');
       pushToast('success', 'ลบข้อมูลบุคคลเรียบร้อยแล้ว');
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       setPersonError(errorMessage(error));
     } finally {
@@ -2147,7 +2174,7 @@ function App() {
         notifyDaysBefore: 7,
       });
       setPersonNotice('เพิ่มแจ้งเตือนวันสำคัญแล้ว');
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       setPersonError(errorMessage(error));
     } finally {
@@ -2182,7 +2209,7 @@ function App() {
       });
       setScheduleNotice('เพิ่มแจ้งเตือนแล้ว');
       pushToast('success', 'เพิ่มแจ้งเตือนเรียบร้อยแล้ว');
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       setScheduleError(errorMessage(error));
     } finally {
@@ -2194,7 +2221,7 @@ function App() {
     try {
       await updateReminder(reminder.id, { isCompleted: reminder.isCompleted ? 0 : 1 });
       pushToast('success', reminder.isCompleted ? 'เปิดแจ้งเตือนอีกครั้ง' : 'ปิดการแจ้งเตือนแล้ว');
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       setScheduleError(errorMessage(error));
     }
@@ -2206,7 +2233,7 @@ function App() {
       await deleteReminder(reminder.id);
       setScheduleNotice('ลบแจ้งเตือนแล้ว');
       pushToast('success', 'ลบแจ้งเตือนเรียบร้อยแล้ว');
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       setScheduleError(errorMessage(error));
     }
@@ -2227,7 +2254,7 @@ function App() {
       setBlockDraft({ timeRange: '06:30 - 07:30', title: '', lifeArea: 'health' });
       setScheduleNotice('เพิ่มช่วงเวลาแล้ว');
       pushToast('success', 'เพิ่มช่วงเวลาเรียบร้อยแล้ว');
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       setScheduleError(errorMessage(error));
     } finally {
@@ -2239,7 +2266,7 @@ function App() {
     try {
       await updateTimeblock(block.id, { isDone: block.isDone ? 0 : 1 });
       pushToast('success', block.isDone ? 'ยกเลิกการทำ' : 'ทำเสร็จเรียบร้อย');
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       setScheduleError(errorMessage(error));
     }
@@ -2251,7 +2278,7 @@ function App() {
       await deleteTimeblock(block.id);
       setScheduleNotice('ลบช่วงเวลาแล้ว');
       pushToast('success', 'ลบช่วงเวลาเรียบร้อยแล้ว');
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       setScheduleError(errorMessage(error));
     }
@@ -2271,7 +2298,7 @@ function App() {
       setHabitDraft({ title: '', dailyTarget: '8', unit: 'ครั้ง' });
       setScheduleNotice('เพิ่มกิจวัตรแล้ว');
       pushToast('success', 'เพิ่มกิจวัตรเรียบร้อยแล้ว');
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       setScheduleError(errorMessage(error));
     } finally {
@@ -2283,7 +2310,7 @@ function App() {
     try {
       await checkHabit(habit.id, localToday());
       pushToast('success', `เช็กอิน “${habit.title}” สำเร็จ! 🔥`);
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       setScheduleError(errorMessage(error));
     }
@@ -2295,7 +2322,7 @@ function App() {
       await deleteHabit(habit.id);
       setScheduleNotice('ลบกิจวัตรแล้ว');
       pushToast('success', 'ลบกิจวัตรเรียบร้อยแล้ว');
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       setScheduleError(errorMessage(error));
     }
@@ -2303,7 +2330,7 @@ function App() {
 
   async function refreshDashboard() {
     setDashboardBusy(true);
-    setRefreshKey((key) => key + 1);
+    bumpRefresh();
   }
 
   async function openNoteById(noteId: string) {
@@ -2352,7 +2379,7 @@ function App() {
       setActiveNote(saved);
       setNotes((current) => current.map((note) => (note.id === saved.id ? saved : note)));
       setSaveState('saved');
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         setUser(null);
@@ -2378,7 +2405,7 @@ function App() {
       const result = await snoozeReminder(reminder.id, days, reminder.effectiveDate ?? reminder.targetDate);
       setScheduleNotice(`เลื่อนแจ้งเตือนไป ${result.snoozedUntil} แล้ว`);
       pushToast('success', `เลื่อนไป ${result.snoozedUntil} แล้ว`);
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
         setScheduleError('รายการนี้ถูกเลื่อนไปแล้ว กรุณารีเฟรช');
@@ -2398,7 +2425,7 @@ function App() {
       const next = current && current > 0 ? 0 : habit.dailyTarget;
       await setHabitLog(habit.id, date, next);
       setScheduleNotice('บันทึกประวัติแล้ว');
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       setScheduleError(errorMessage(error));
     } finally {
@@ -2419,7 +2446,7 @@ function App() {
       setInboxDraft('');
       setInboxNotice('เก็บเข้ากล่องขาเข้าแล้ว');
       pushToast('success', 'เก็บเข้ากล่องขาเข้าแล้ว');
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       setInboxError(errorMessage(error));
     } finally {
@@ -2436,7 +2463,7 @@ function App() {
       await convertInboxItem(item.id, target, { url: item.body });
       setInboxNotice('แปลงรายการแล้ว');
       pushToast('success', 'แปลงรายการและย้ายออกจากกล่องแล้ว');
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       setInboxError(errorMessage(error));
     } finally {
@@ -2450,7 +2477,7 @@ function App() {
     try {
       await updateInboxItem(item.id, { status: 'archived' });
       setInboxNotice('เก็บเข้าคลังแล้ว');
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       setInboxError(errorMessage(error));
     } finally {
@@ -2465,7 +2492,7 @@ function App() {
     try {
       await deleteInboxItem(item.id);
       setInboxNotice('ลบรายการแล้ว');
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       setInboxError(errorMessage(error));
     } finally {
@@ -2499,7 +2526,7 @@ function App() {
       setTaskDraftCustomCatId('');
       setTasksNotice('เพิ่มงานแล้ว');
       pushToast('success', 'เพิ่มงานแล้ว');
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       setTasksError(errorMessage(error));
     } finally {
@@ -2517,7 +2544,7 @@ function App() {
         ? `ปิดงานแล้ว และสร้างรอบถัดไปวันที่ ${result.nextTask.dueDate ?? '-'}`
         : 'อัปเดตงานแล้ว');
       pushToast('success', result.nextTask ? 'ปิดงานแล้ว และสร้างรอบถัดไปให้อัตโนมัติ' : 'อัปเดตงานแล้ว');
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       setTasksError(errorMessage(error));
     } finally {
@@ -2533,7 +2560,7 @@ function App() {
       await deleteTask(task.id);
       setTasksNotice('ลบงานแล้ว');
       pushToast('success', 'ลบงานเรียบร้อยแล้ว');
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       setTasksError(errorMessage(error));
     } finally {
@@ -2558,7 +2585,7 @@ function App() {
       setProjectDraft({ name: '', outcome: '', dueDate: '', goalId: '' });
       setProjectsNotice('สร้างโปรเจกต์แล้ว');
       pushToast('success', 'สร้างโปรเจกต์แล้ว');
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       setProjectsError(errorMessage(error));
     } finally {
@@ -2573,7 +2600,7 @@ function App() {
       await updateProject(project.id, { status: 'done' });
       setProjectsNotice('ปิดโปรเจกต์แล้ว');
       pushToast('success', 'ปิดโปรเจกต์เรียบร้อยแล้ว');
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       setProjectsError(errorMessage(error));
     } finally {
@@ -2589,7 +2616,7 @@ function App() {
       await deleteProject(project.id);
       setProjectsNotice('ลบโปรเจกต์แล้ว');
       pushToast('success', 'ลบโปรเจกต์เรียบร้อยแล้ว');
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       setProjectsError(errorMessage(error));
     } finally {
@@ -2615,7 +2642,7 @@ function App() {
       setGoalDraft({ title: '', metric: '', targetValue: '', unit: '' });
       setGoalsNotice('เพิ่มเป้าหมายแล้ว');
       pushToast('success', 'เพิ่มเป้าหมายแล้ว');
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       setGoalsError(errorMessage(error));
     } finally {
@@ -2629,7 +2656,7 @@ function App() {
     try {
       await updateGoal(goal.id, { currentValue: Math.max(0, goal.currentValue + delta) });
       pushToast('success', delta > 0 ? 'ปรับความคืบหน้า +1' : 'ปรับความคืบหน้า -1');
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       setGoalsError(errorMessage(error));
     } finally {
@@ -2645,7 +2672,7 @@ function App() {
       await deleteGoal(goal.id);
       setGoalsNotice('ลบเป้าหมายแล้ว');
       pushToast('success', 'ลบเป้าหมายเรียบร้อยแล้ว');
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       setGoalsError(errorMessage(error));
     } finally {
@@ -2751,7 +2778,7 @@ function App() {
           }
         },
       });
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       setVaultError(errorMessage(error));
     } finally {
@@ -2769,7 +2796,7 @@ function App() {
         setVaultDraft(emptyVaultDraft);
       }
       pushToast('success', 'ลบรายการออกจากคลังแล้ว');
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       setVaultError(errorMessage(error));
     } finally {
@@ -2830,7 +2857,7 @@ function App() {
         notifyDaysBefore: 14,
       });
       pushToast('success', 'ส่งวันครบกำหนดเข้าปฏิทินแจ้งเตือนแล้ว');
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       pushToast('error', errorMessage(error));
     }
@@ -2911,7 +2938,7 @@ function App() {
           }
         },
       });
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       setLibraryError(errorMessage(error));
     } finally {
@@ -2929,7 +2956,7 @@ function App() {
         setLibraryDraft(emptyLibraryDraft);
       }
       pushToast('success', 'ลบรายการออกจากห้องสมุดแล้ว');
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       setLibraryError(errorMessage(error));
     } finally {
@@ -3081,7 +3108,7 @@ function App() {
       activateNote(savedNote);
       setPage(1);
       setNotesBusy(true);
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
       setSaveState('saved');
       if (!relationSaveFailed) {
         const msg = wasEditing ? 'บันทึกการแก้ไขแล้ว' : 'สร้างโน้ตแล้ว';
@@ -3354,7 +3381,7 @@ function App() {
       ]);
       setPage(1);
       setNotesBusy(false);
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
       setNotice(isEditing ? 'บันทึกการแก้ไขบุ๊กมาร์กแล้ว' : 'บันทึกบุ๊กมาร์กแล้ว');
       pushToast('success', isEditing ? 'บันทึกการแก้ไขบุ๊กมาร์กแล้ว' : 'บันทึกบุ๊กมาร์กแล้ว');
     } catch (error) {
@@ -3391,7 +3418,7 @@ function App() {
         setActiveBookmarkCustomCatId(null);
       }
       setBookmarks((current) => current.filter((bookmark) => bookmark.id !== id));
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
       setNotice('ลบบุ๊กมาร์กแล้ว');
       pushToast('success', 'ลบบุ๊กมาร์กเรียบร้อยแล้ว');
     } catch (error) {
@@ -3417,7 +3444,7 @@ function App() {
       if (itemType === 'note') setNoteFavoriteState({ id: itemId, favorited: !currentlyFavorited });
       else setBookmarkFavoriteState({ id: itemId, favorited: !currentlyFavorited });
       setNotice(currentlyFavorited ? 'นำออกจากรายการโปรดแล้ว' : 'เพิ่มในรายการโปรดแล้ว');
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         setUser(null);
@@ -3521,7 +3548,7 @@ function App() {
       setNotice(`อัปโหลด “${stored.displayName}” แล้ว`);
       setPage(1);
       setFilesBusy(true);
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         setUser(null);
@@ -3542,7 +3569,7 @@ function App() {
       await deleteNote(note.id);
       if (activeNote?.id === note.id) activateNote(null);
       if (notes.length === 1 && page > 1) setPage((currentPage) => currentPage - 1);
-      else setRefreshKey((key) => key + 1);
+      else bumpRefresh();
       pushToast('info', 'ย้ายโน้ตไปถังขยะแล้ว');
     } catch (err) {
       pushToast('error', errorMessage(err));
@@ -3562,7 +3589,7 @@ function App() {
       await deleteNote(activeNote.id);
       activateNote(null);
       if (notes.length === 1 && page > 1) setPage((currentPage) => currentPage - 1);
-      else setRefreshKey((key) => key + 1);
+      else bumpRefresh();
       setNotice('ย้ายโน้ตไปถังขยะแล้ว');
     } catch (error) {
       setNotesBusy(false);
@@ -3593,7 +3620,7 @@ function App() {
       setPage(1);
       setNotes([]);
       setTotal(0);
-      setRefreshKey((key) => key + 1);
+      bumpRefresh();
       setNotice('กู้คืนโน้ตแล้ว');
       pushToast('success', 'กู้คืนโน้ตเรียบร้อยแล้ว');
     } catch (error) {
@@ -3625,7 +3652,7 @@ function App() {
       setNotes((currentNotes) => currentNotes.filter((note) => note.id !== deletedId));
       setTotal((currentTotal) => Math.max(0, currentTotal - 1));
       if (notes.length === 1 && page > 1) setPage((currentPage) => currentPage - 1);
-      else setRefreshKey((key) => key + 1);
+      else bumpRefresh();
       setNotice('ลบโน้ตถาวรแล้ว');
       pushToast('success', 'ลบโน้ตถาวรเรียบร้อยแล้ว');
     } catch (error) {
@@ -4122,7 +4149,7 @@ function App() {
             onRemoveVaultItem={(item) => void removeVaultItem(item)}
             onSelectVaultItem={selectVaultItem}
             files={files}
-            onFilesChanged={() => setRefreshKey((k) => k + 1)}
+            onFilesChanged={() => bumpRefresh()}
           />
         ) : viewMode === 'library' ? (
           <LibraryView
@@ -4147,7 +4174,7 @@ function App() {
             onRemoveLibraryItem={(item) => void removeLibraryItem(item)}
             onSelectLibraryItem={selectLibraryItem}
             files={files}
-            onFilesChanged={() => setRefreshKey((k) => k + 1)}
+            onFilesChanged={() => bumpRefresh()}
           />
         ) : viewMode === 'tasks' ? (
           <TasksView
@@ -4170,13 +4197,13 @@ function App() {
               try {
                 await setItemCustomCategory('task', task.id, catId);
                 pushToast('success', 'อัปเดตหมวดหมู่ของงานแล้ว');
-                setRefreshKey((k) => k + 1);
+                bumpRefresh();
               } catch (err) {
                 pushToast('error', errorMessage(err));
               }
             }}
             files={files}
-            onFilesChanged={() => setRefreshKey((k) => k + 1)}
+            onFilesChanged={() => bumpRefresh()}
           />
         ) : viewMode === 'projects' ? (
           <ProjectsView
@@ -4191,7 +4218,7 @@ function App() {
             onFinishProject={finishProject}
             onRemoveProject={removeProject}
             files={files}
-            onFilesChanged={() => setRefreshKey((k) => k + 1)}
+            onFilesChanged={() => bumpRefresh()}
           />
         ) : viewMode === 'goals' ? (
           <GoalsView
@@ -4234,7 +4261,7 @@ function App() {
             }}
             onSwitchView={switchView}
             files={files}
-            onFilesChanged={() => setRefreshKey((k) => k + 1)}
+            onFilesChanged={() => bumpRefresh()}
             tags={tags}
             filterTagId={filterTagIds[0] || null}
             onSelectTagFilter={(id) => setFilterTagIds(id ? [id] : [])}
@@ -4338,7 +4365,7 @@ function App() {
                 await setItemCustomCategory('note', activeNote.id, newCatId);
                 setActiveNoteCustomCatId(newCatId);
                 pushToast('success', 'อัปเดตหมวดหมู่ของโน้ตแล้ว');
-                setRefreshKey((k) => k + 1);
+                bumpRefresh();
               } catch (err) {
                 pushToast('error', errorMessage(err));
               }
@@ -4382,7 +4409,7 @@ function App() {
                 await setItemCustomCategory('bookmark', activeBookmark.id, newCatId);
                 setActiveBookmarkCustomCatId(newCatId);
                 pushToast('success', 'อัปเดตหมวดหมู่ของบุ๊กมาร์กแล้ว');
-                setRefreshKey((k) => k + 1);
+                bumpRefresh();
               } catch (err) {
                 pushToast('error', errorMessage(err));
               }
@@ -4471,7 +4498,7 @@ function App() {
         ) : (
           <TrashView
             viewMode={viewMode === 'all' ? 'all' : 'trash'}
-            onRefreshWorkspace={() => setRefreshKey((k) => k + 1)}
+            onRefreshWorkspace={() => bumpRefresh()}
           />
         )}
         </Suspense>
@@ -4537,7 +4564,7 @@ function App() {
           onClose={() => setFirebaseSetupOpen(false)}
           onSaved={() => {
             pushToast('success', 'บันทึกการตั้งค่า Firebase สำเร็จ');
-            setRefreshKey((k) => k + 1);
+            bumpRefresh();
           }}
         />
       )}

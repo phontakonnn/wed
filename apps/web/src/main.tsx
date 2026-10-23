@@ -2,6 +2,8 @@ import './lib/firebaseEngine';
 import { scheduleAnalyticsWarmup } from './lib/firebase';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { PwaUpdatePrompt } from './components/PwaUpdatePrompt';
+import { queryClient } from './lib/queryClient';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode, lazy, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles/tokens.css';
@@ -28,14 +30,16 @@ const isDesignSystem =
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
-      {isDesignSystem ? (
-        <Suspense fallback={<div style={{ padding: '32px', textAlign: 'center', color: '#64748b' }}>กำลังโหลดระบบดีไซน์...</div>}>
-          <DesignSystemPage />
-        </Suspense>
-      ) : (
-        <App />
-      )}
-      <PwaUpdatePrompt />
+      <QueryClientProvider client={queryClient}>
+        {isDesignSystem ? (
+          <Suspense fallback={<div style={{ padding: '32px', textAlign: 'center', color: '#64748b' }}>กำลังโหลดระบบดีไซน์...</div>}>
+            <DesignSystemPage />
+          </Suspense>
+        ) : (
+          <App />
+        )}
+        <PwaUpdatePrompt />
+      </QueryClientProvider>
     </ErrorBoundary>
   </StrictMode>,
 );
