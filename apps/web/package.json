@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "audit:mobile": "node e2e/mobile-audit.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.5",

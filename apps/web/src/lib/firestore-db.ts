@@ -283,6 +283,7 @@ export async function deleteUserReminder(uid: string, id: string): Promise<void>
 export interface UserThemeConfig {
   theme?: string;
   themeMode?: 'light' | 'dark';
+  uiMode?: 'fast' | 'rich';
   animatedGlow?: boolean;
   glassCard?: boolean;
   hoverLift?: boolean;

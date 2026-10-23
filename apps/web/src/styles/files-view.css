@@ -14,7 +14,7 @@
   background: var(--pkh-bg-subtle);
   padding: 32px 24px;
   text-align: center;
-  transition: all var(--pkh-motion-fast);
+  transition: var(--pkh-transition-colors);
   cursor: pointer;
   position: relative;
   display: flex;
@@ -133,7 +133,7 @@
 /* Bento Grid for Files */
 .files-bento-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr));
   gap: 16px;
 }
 
@@ -144,21 +144,22 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  transition: all var(--pkh-motion-fast);
+  transition: var(--pkh-transition-colors);
   cursor: pointer;
   box-shadow: var(--pkh-shadow-xs);
   position: relative;
 }
 
 .file-bento-card:hover {
-  transform: translateY(-2px);
-  border-color: var(--pkh-border-default);
-  box-shadow: var(--pkh-shadow-md);
+  transform: none;
+  background: var(--pkh-bg-hover);
+  border-color: var(--pkh-border-strong);
+  box-shadow: var(--pkh-shadow-card);
 }
 
 .file-bento-card.is-active {
   border-color: var(--pkh-brand-primary);
-  box-shadow: 0 0 0 2px var(--pkh-brand-subtle);
+  box-shadow: inset 0 0 0 1px var(--pkh-brand-primary);
 }
 
 /* Thumbnail Area */
@@ -199,9 +200,8 @@
   font-weight: 650;
   padding: 2px 7px;
   border-radius: var(--pkh-radius-full);
-  background: rgba(0, 0, 0, 0.65);
+  background: rgba(0, 0, 0, 0.72);
   color: #ffffff;
-  backdrop-filter: blur(4px);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }

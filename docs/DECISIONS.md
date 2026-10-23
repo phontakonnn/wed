@@ -924,3 +924,126 @@ Cloud Functions, the production migration script, full TanStack Query conversion
 listeners, storage uploads, rules emulator tests, the full UX/Lighthouse pass, the command
 palette/share-target/export-import UI, app-server archival and the deploy workflow were **not**
 implemented. `docs/FINAL_REPORT.md` lists each one with its reason.
+
+## Calm Product Minimal UI (2026-10-24)
+
+Scope: `apps/web` visual foundation only. Layout (2-column workspace), routing, data model,
+Firebase calls, feature views and virtualization were not changed.
+
+### Decision: three token layers with legacy aliases, not a rename
+
+`styles/tokens.css` now has three explicit layers:
+
+1. **Primitive** - type scale, spacing, radii, motion, shell sizes.
+2. **Semantic** - `--pkh-color-{bg,surface,border,text,muted,accent,success,warning,danger,focus}`,
+   each with a hex fallback followed by `oklch()`.
+3. **Component/legacy** - `--pkh-bg-*`, `--pkh-text-*`, `--pkh-primary*` and the old effect
+   variables.
+
+The legacy `--pkh-*` names stay because roughly 4k lines of feature CSS read them. Renaming them
+in the same pass would have been a large, unverifiable diff with no visual benefit. `--ink`,
+`--paper`, `--canvas`, `--green` are now aliases of semantic tokens instead of a second palette;
+the duplicate `:root` blocks in `App.css` that used to override them were converted to aliases.
+
+### Decision: `fast` is the default and `rich` only adds effects
+
+`data-ui-mode="fast" | "rich"` on `<html>` is the single switch. `fast` is solid surfaces, no
+backdrop blur, no card shadow, no hover lift, 100-140 ms colour transitions. `rich` restores a
+blur on the top bar, dialog backdrops and command palette, plus a 1 px card shadow. No layout,
+capability or data difference exists between the modes.
+
+Six `backdrop-filter` sites remain in source. Every one is inside `[data-ui-mode="rich"]`, so the
+default mode issues zero blur. The always-on sidebar aurora gradient, white-on-gradient sidebar
+text, wallpaper hooks, neon category borders, gradient pill buttons and the perpetual status pulse
+were removed rather than hidden behind a switch.
+
+### Decision: one theme engine, migrated storage
+
+`lib/theme.ts` remains the only engine. `pkh.ui.v2` is the source of truth;
+`pkh.themeMode` and `pkh.accentColor` are still written for older builds, and legacy
+`pkh.*` effect keys are never deleted. `applyThemeConfig` deletes the old
+`data-bg-effect` / `data-glass-card` / `data-hover-lift` / `data-animated-glow` attributes so a
+stale selector cannot re-enable an effect. Firestore sync compares values before updating state,
+which prevents a snapshot/save echo loop.
+
+### Decision: darken the default emerald for contrast
+
+The previous default `#0f9f6e` measures 3.38:1 against white, which fails WCAG AA for both the
+eyebrow text and white button labels. The default is now `#0b7d59` (5.13:1). Stored legacy
+defaults (`#10b981`, `#0f9f6e`) are migrated on read; other user colours are preserved. In dark
+mode the chosen accent is lifted toward white by 42% before being applied, because a deep accent
+that works on white would otherwise disappear on the dark surface. The stored value is unchanged.
+
+### Decision: no new dependency and no blanket performance tricks
+
+No UI/animation framework was added. `content-visibility`, `contain`, blanket `will-change`, and
+broad `memo`/`useMemo`/`useCallback` were not applied. Card hover is now a border/background
+change instead of a transform plus two stacked shadows. Motion uses colour, transform or opacity
+only; there is no `transition: all` left in the source.
+
+### Remaining work
+
+- Runtime traces for signed-in flows (notes open/scroll, modal, search typing) are still missing;
+  this environment has no test account. Only build size, source counts and the login-route
+  Lighthouse/trace were measured.
+- Dead Theme Studio CSS (`theme-grid`, `theme-swatch`, …) still exists in `App.css`; it is unused
+  and should be deleted in a separate, reviewable patch.
+- ~500 hard-coded hex values and ~211 `!important` declarations remain in feature CSS that this
+  foundation pass did not touch.
+
+## Mobile hardening (2026-10-24)
+
+Follow-up to the Calm Product Minimal pass: the site is also used on phones, so the same tokens
+had to survive a thumb-sized viewport.
+
+### Decision: keep the existing mobile layout, fix its edges
+
+The bottom nav, FAB, sidebar drawer and mobile detail sheet already existed. Rather than redesign
+them, this pass fixed the four things that actually break a phone:
+
+1. **Viewport height.** `100vh` on iOS includes the collapsing browser chrome, so the last row of
+   content sits under it. Every full-height surface now declares `100vh` and then `100dvh`, so old
+   browsers keep the old value and modern ones get the real viewport.
+2. **Safe areas.** `viewport-fit=cover` was already set but nothing used `env(safe-area-inset-*)`
+   except the PWA toast. The bottom nav, FAB, workspace bottom padding, drawer, mobile detail bar,
+   dialogs and toast now respect the notch and home indicator.
+3. **iOS input zoom.** Safari zooms the page when a focused field is under 16px, and several inputs
+   were 12–15px. A single `#root input/select/textarea` rule at `<=768px` raises them to 16px
+   without `!important`; the ID gives it the specificity to win over feature CSS. The two title
+   fields (`.title-input`, `.notes-title-input`) are excluded because they are display type.
+4. **Touch targets.** Login inputs and the primary button were 42px; nav items had 4px padding.
+   Coarse-pointer media queries raise buttons, inputs, icon buttons, nav items, FAB, modal close
+   and toast actions to 44px. `.pkh-button--sm` stays at 36px because it is the deliberately
+   compact variant; WCAG 2.2 AA only requires 24px, so it still passes.
+
+### Decision: `min()` in fixed-min grids, not a breakpoint
+
+Seven `repeat(auto-fill, minmax(300px, 1fr))`-style grids overflowed at 320px, because the minimum
+track plus container padding is wider than the screen. The fix is
+`minmax(min(300px, 100%), 1fr)`: identical above ~300px of container width, self-shrinking below.
+No new breakpoints, no per-view mobile overrides.
+
+### Decision: theme colour follows the canvas, not the brand
+
+`theme-color` was a static `#10b981`. A green status bar above a white page looked like a bug, and
+in dark mode it was a bright strip. `applyThemeConfig()` now writes `#f8fafc` (light) or `#0f1522`
+(dark) to the meta tag, and the manifest uses `#0b7d59` / `#f8fafc` for the install splash. This
+runs before first paint in `main.tsx`, so there is no flash.
+
+### Decision: touch behaviour only on coarse pointers
+
+`touch-action: manipulation` and a transparent tap highlight are applied through
+`@media (hover: none) and (pointer: coarse)`. Desktop hover/focus behaviour is untouched, and the
+44px bumps do not change the desktop density scale.
+
+### Remaining work
+
+- Signed-in flows on a real device: drawer, editor keyboard, virtualized list scroll, search
+  palette. The API server needs `better-sqlite3`, which is not installed here, so no test account
+  could be created.
+- Safe-area values are `0` in Playwright emulation; confirm on hardware with a notch and on
+  Android gesture navigation.
+- `/design-system` is an internal page; its `320px` grid overflow was fixed, but it still has a
+  dense desktop-first layout below 360px.
+
+

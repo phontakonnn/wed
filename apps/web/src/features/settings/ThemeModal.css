@@ -1,0 +1,198 @@
+.theme-panel {
+  width: min(100%, 620px);
+  max-height: min(88vh, 720px);
+  max-height: min(88dvh, 720px);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  border-radius: var(--pkh-radius-lg);
+}
+
+.theme-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--pkh-space-4);
+  padding: var(--pkh-space-6);
+  border-bottom: 1px solid var(--pkh-border-subtle);
+}
+
+.theme-panel__title {
+  margin: 0;
+  font-size: var(--pkh-font-xl);
+  line-height: var(--pkh-lh-xl);
+  font-weight: 600;
+  color: var(--pkh-text-primary);
+}
+
+.theme-panel__subtitle {
+  margin: var(--pkh-space-1) 0 0;
+  font-size: var(--pkh-font-sm);
+  line-height: var(--pkh-lh-sm);
+  color: var(--pkh-text-muted);
+}
+
+.theme-panel__close {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--pkh-text-muted);
+}
+
+.theme-panel__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pkh-space-6);
+  padding: var(--pkh-space-6);
+  overflow-y: auto;
+}
+
+.theme-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pkh-space-3);
+}
+
+.theme-section__title {
+  margin: 0;
+  font-size: var(--pkh-font-sm);
+  line-height: var(--pkh-lh-sm);
+  font-weight: 600;
+  color: var(--pkh-text-secondary);
+}
+
+.theme-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--pkh-space-3);
+}
+
+.theme-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--pkh-space-3);
+  padding: var(--pkh-space-4);
+  text-align: left;
+  border: 1px solid var(--pkh-border-default);
+  border-radius: var(--pkh-radius-md);
+  background: var(--pkh-bg-surface);
+  color: var(--pkh-text-primary);
+  transition:
+    border-color var(--pkh-duration-fast) var(--pkh-ease-default),
+    background-color var(--pkh-duration-fast) var(--pkh-ease-default);
+}
+
+.theme-choice:hover {
+  border-color: var(--pkh-border-strong);
+  background: var(--pkh-bg-hover);
+}
+
+.theme-choice[aria-pressed='true'] {
+  border-color: var(--pkh-primary);
+  background: var(--pkh-primary-light);
+  box-shadow: inset 0 0 0 1px var(--pkh-primary);
+}
+
+.theme-choice__icon {
+  font-size: 18px;
+  line-height: 1.3;
+}
+
+.theme-choice__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.theme-choice__copy strong {
+  font-size: var(--pkh-font-sm);
+  font-weight: 600;
+}
+
+.theme-choice__copy small {
+  font-size: var(--pkh-font-xs);
+  line-height: 1.45;
+  color: var(--pkh-text-muted);
+}
+
+.theme-accent-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pkh-space-2);
+}
+
+.theme-accent {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pkh-space-2);
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--pkh-border-default);
+  border-radius: var(--pkh-radius-sm);
+  background: var(--pkh-bg-surface);
+  color: var(--pkh-text-secondary);
+  font-size: var(--pkh-font-xs);
+  font-weight: 500;
+  transition:
+    border-color var(--pkh-duration-fast) var(--pkh-ease-default),
+    background-color var(--pkh-duration-fast) var(--pkh-ease-default);
+}
+
+.theme-accent:hover {
+  border-color: var(--pkh-border-strong);
+  background: var(--pkh-bg-hover);
+}
+
+.theme-accent[aria-pressed='true'] {
+  border-color: var(--pkh-primary);
+  color: var(--pkh-text-primary);
+  background: var(--pkh-primary-light);
+}
+
+.theme-accent__dot {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--pkh-radius-full);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12);
+}
+
+.theme-accent--custom {
+  padding-left: 6px;
+}
+
+.theme-accent--custom input[type='color'] {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--pkh-border-default);
+  border-radius: var(--pkh-radius-xs);
+  background: transparent;
+  cursor: pointer;
+}
+
+.theme-panel__foot {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--pkh-space-4) var(--pkh-space-6);
+  border-top: 1px solid var(--pkh-border-subtle);
+  background: var(--pkh-bg-subtle);
+}
+
+@media (max-width: 560px) {
+  .theme-choice-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .theme-panel__head,
+  .theme-panel__body,
+  .theme-panel__foot {
+    padding-left: var(--pkh-space-4);
+    padding-right: var(--pkh-space-4);
+  }
+}

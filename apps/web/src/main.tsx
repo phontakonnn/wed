@@ -15,7 +15,11 @@ import './styles/bookmarks-view.css';
 import './styles/command-palette.css';
 import './styles/life-os-views.css';
 import './index.css';
+import { applyThemeConfig, loadThemeConfig } from './lib/theme';
 import App from './App.tsx';
+
+// Apply the saved theme before the first paint so light/dark never flashes.
+applyThemeConfig(loadThemeConfig());
 
 // eslint-disable-next-line react-refresh/only-export-components
 const DesignSystemPage = lazy(() =>

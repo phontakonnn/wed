@@ -3,15 +3,18 @@
 .command-palette-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: var(--pkh-backdrop);
   z-index: 1000;
   display: flex;
   align-items: flex-start;
   justify-content: center;
   padding: 80px 16px 20px;
   animation: fadeIn 0.15s ease-out;
+}
+
+[data-ui-mode='rich'] .command-palette-backdrop {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .command-palette-dialog {
@@ -100,7 +103,7 @@
   background: var(--pkh-bg-surface);
   color: var(--pkh-text-secondary);
   cursor: pointer;
-  transition: all var(--pkh-motion-fast);
+  transition: var(--pkh-transition-colors);
 }
 
 .command-palette-chip.is-active {
@@ -130,7 +133,7 @@
   background: transparent;
   cursor: pointer;
   text-align: left;
-  transition: all var(--pkh-motion-fast);
+  transition: var(--pkh-transition-colors);
   color: var(--pkh-text-primary);
   font-family: inherit;
   width: 100%;

@@ -1,226 +1,191 @@
-import type { ThemeConfig, ThemeMode } from '../types';
+import type { ThemeConfig, ThemeMode, UiMode } from '../types';
 import { db, auth } from './firebase';
 import { doc, setDoc } from 'firebase/firestore';
 
+/**
+ * Single theme engine for the Calm Minimal UI.
+ *
+ * Storage contract:
+ * - `pkh.ui.v2` is the source of truth ({ mode, uiMode, accentColor }).
+ * - Legacy keys (`pkh.theme`, `pkh.themeMode`, `pkh.accentColor`, effect sliders)
+ *   are kept but never deleted, so an older build can still read them.
+ */
+export const THEME_STORAGE_KEY = 'pkh.ui.v2';
+
 export const DEFAULT_THEME_CONFIG: ThemeConfig = {
-  theme: 'aurora',
-  mode: 'dark',
-  sidebarBgUrl: '',
-  mainBgUrl: '',
-  neonGlow: 65,
-  glassBlur: 16,
-  glassOpacity: 85,
-  borderRadius: 18,
-  accentColor: '#10b981',
-  buttonColor: '#059669',
+  mode: 'light',
+  uiMode: 'fast',
+  accentColor: '#0b7d59',
 };
 
-export interface ThemePreset {
-  id: string;
-  name: string;
+/** Old emerald defaults that cannot reach 4.5:1 on white. */
+const LEGACY_DEFAULT_ACCENTS = new Set(['#10b981', '#0f9f6e']);
+
+export interface AccentPreset {
+  color: string;
   label: string;
-  icon: string;
-  accent: string;
-  button: string;
-  mode: ThemeMode;
-  neonGlow: number;
-  glassBlur: number;
-  glassOpacity: number;
-  borderRadius: number;
 }
 
-export const THEME_PRESETS: ThemePreset[] = [
-  {
-    id: 'aurora',
-    name: 'aurora',
-    label: '🌟 Aurora Scenic Ultra',
-    icon: '🌟',
-    accent: '#10b981',
-    button: '#059669',
-    mode: 'dark',
-    neonGlow: 65,
-    glassBlur: 16,
-    glassOpacity: 85,
-    borderRadius: 18,
-  },
-  {
-    id: 'cyberpunk',
-    name: 'cyberpunk',
-    label: '🌌 Midnight Cyberpunk',
-    icon: '🌌',
-    accent: '#06b6d4',
-    button: '#ec4899',
-    mode: 'dark',
-    neonGlow: 95,
-    glassBlur: 14,
-    glassOpacity: 88,
-    borderRadius: 12,
-  },
-  {
-    id: 'emerald',
-    name: 'emerald',
-    label: '🌲 Emerald Forest',
-    icon: '🌲',
-    accent: '#10b981',
-    button: '#047857',
-    mode: 'light',
-    neonGlow: 35,
-    glassBlur: 8,
-    glassOpacity: 95,
-    borderRadius: 14,
-  },
-  {
-    id: 'indigo',
-    name: 'indigo',
-    label: '👑 Royal Indigo',
-    icon: '👑',
-    accent: '#6366f1',
-    button: '#4f46e5',
-    mode: 'dark',
-    neonGlow: 55,
-    glassBlur: 14,
-    glassOpacity: 90,
-    borderRadius: 16,
-  },
-  {
-    id: 'rose',
-    name: 'rose',
-    label: '🌸 Rose Quartz',
-    icon: '🌸',
-    accent: '#f43f5e',
-    button: '#e11d48',
-    mode: 'light',
-    neonGlow: 45,
-    glassBlur: 12,
-    glassOpacity: 92,
-    borderRadius: 20,
-  },
-  {
-    id: 'amber',
-    name: 'amber',
-    label: '🌅 Amber Sunset',
-    icon: '🌅',
-    accent: '#f59e0b',
-    button: '#d97706',
-    mode: 'dark',
-    neonGlow: 50,
-    glassBlur: 10,
-    glassOpacity: 90,
-    borderRadius: 14,
-  },
-  {
-    id: 'dracula',
-    name: 'dracula',
-    label: '🧛 Dracula Dark',
-    icon: '🧛',
-    accent: '#bd93f9',
-    button: '#ff79c6',
-    mode: 'dark',
-    neonGlow: 70,
-    glassBlur: 16,
-    glassOpacity: 85,
-    borderRadius: 16,
-  },
-  {
-    id: 'nord',
-    name: 'nord',
-    label: '❄️ Nord Arctic',
-    icon: '❄️',
-    accent: '#88c0d0',
-    button: '#5e81ac',
-    mode: 'dark',
-    neonGlow: 35,
-    glassBlur: 10,
-    glassOpacity: 92,
-    borderRadius: 12,
-  },
+export const ACCENT_PRESETS: AccentPreset[] = [
+  { color: '#0b7d59', label: 'มรกต' },
+  { color: '#1d4ed8', label: 'ฟ้าคราม' },
+  { color: '#6d28d9', label: 'ม่วง' },
+  { color: '#be185d', label: 'ชมพู' },
+  { color: '#9a3412', label: 'อำพัน' },
+  { color: '#0e7490', label: 'ทีล' },
 ];
 
-function hexToRgb(hex: string): string {
-  let c = hex.replace('#', '');
-  if (c.length === 3) {
-    c = c.split('').map((x) => x + x).join('');
+function normalizeHex(input: string | undefined, fallback = DEFAULT_THEME_CONFIG.accentColor): string {
+  if (!input) return fallback;
+  let value = input.trim().replace('#', '');
+  if (value.length === 3) {
+    value = value.split('').map((char) => char + char).join('');
   }
-  const num = parseInt(c, 16);
-  if (isNaN(num)) return '16, 185, 129';
-  const r = (num >> 16) & 255;
-  const g = (num >> 8) & 255;
-  const b = num & 255;
-  return `${r}, ${g}, ${b}`;
+  if (!/^[0-9a-fA-F]{6}$/.test(value)) return fallback;
+  const hex = `#${value.toLowerCase()}`;
+  // The old emerald failed AA on white; migrate it to the accessible default.
+  return LEGACY_DEFAULT_ACCENTS.has(hex) ? fallback : hex;
 }
 
-export function loadStoredThemeConfig(): ThemeConfig {
+function hexToRgb(hex: string): [number, number, number] {
+  const value = normalizeHex(hex).slice(1);
+  return [
+    parseInt(value.slice(0, 2), 16),
+    parseInt(value.slice(2, 4), 16),
+    parseInt(value.slice(4, 6), 16),
+  ];
+}
+
+function toHex(channel: number): string {
+  return Math.max(0, Math.min(255, Math.round(channel))).toString(16).padStart(2, '0');
+}
+
+/** Mix `hex` toward `target` (#ffffff or #000000); amount 0-1. */
+function mix(hex: string, target: '#ffffff' | '#000000', amount: number): string {
+  const [r, g, b] = hexToRgb(hex);
+  const [tr, tg, tb] = target === '#ffffff' ? [255, 255, 255] : [0, 0, 0];
+  const ratio = Math.max(0, Math.min(1, amount));
+  return `#${toHex(r + (tr - r) * ratio)}${toHex(g + (tg - g) * ratio)}${toHex(b + (tb - b) * ratio)}`;
+}
+
+export function normalizeThemeConfig(input: Partial<ThemeConfig> | null | undefined): ThemeConfig {
+  const mode: ThemeMode = input?.mode === 'dark' ? 'dark' : 'light';
+  const uiMode: UiMode = input?.uiMode === 'rich' ? 'rich' : 'fast';
+  return {
+    mode,
+    uiMode,
+    accentColor: normalizeHex(input?.accentColor),
+  };
+}
+
+export function loadThemeConfig(): ThemeConfig {
+  const fallback = { ...DEFAULT_THEME_CONFIG };
+  if (typeof localStorage === 'undefined') return fallback;
+
   try {
-    const raw = localStorage.getItem('pkh.themeConfig');
-    if (raw) {
-      return { ...DEFAULT_THEME_CONFIG, ...JSON.parse(raw) };
-    }
+    const raw = localStorage.getItem(THEME_STORAGE_KEY);
+    if (raw) return normalizeThemeConfig(JSON.parse(raw) as Partial<ThemeConfig>);
   } catch {
-    // fallback
+    // corrupt value: fall through to legacy migration
   }
-  return { ...DEFAULT_THEME_CONFIG };
+
+  // One-way migration: read old keys, do not delete them.
+  try {
+    const legacyMode = localStorage.getItem('pkh.themeMode');
+    const legacyAccent = localStorage.getItem('pkh.accentColor');
+    return normalizeThemeConfig({
+      mode: legacyMode === 'dark' ? 'dark' : 'light',
+      uiMode: 'fast',
+      accentColor: legacyAccent ?? fallback.accentColor,
+    });
+  } catch {
+    return fallback;
+  }
 }
 
 export function applyThemeConfig(config: ThemeConfig): void {
   if (typeof document === 'undefined') return;
   const root = document.documentElement;
+  const normalized = normalizeThemeConfig(config);
+  const isDark = normalized.mode === 'dark';
+  // In dark mode a deep accent would disappear, so lift it toward white.
+  // The stored value stays exactly what the user picked.
+  const accent = isDark ? mix(normalized.accentColor, '#ffffff', 0.42) : normalized.accentColor;
+  const [r, g, b] = hexToRgb(accent);
 
-  root.dataset.theme = config.theme;
-  root.dataset.mode = config.mode;
+  root.dataset.theme = normalized.mode;
+  root.dataset.mode = normalized.mode;
+  root.dataset.uiMode = normalized.uiMode;
 
-  const rgb = hexToRgb(config.accentColor);
-  const glowAlpha = ((config.neonGlow ?? 65) / 100) * 0.45;
-  const borderAlpha = Math.min(1, glowAlpha * 1.5 + 0.15);
-
-  root.style.setProperty('--pkh-primary', config.accentColor);
-  root.style.setProperty('--pkh-primary-hover', config.accentColor);
-  root.style.setProperty('--pkh-primary-gradient', `linear-gradient(135deg, ${config.accentColor} 0%, ${config.buttonColor} 100%)`);
-  root.style.setProperty('--pkh-btn-primary-bg', config.buttonColor);
-
-  const radius = config.borderRadius ?? 18;
-  root.style.setProperty('--pkh-radius-sm', `${Math.max(4, radius * 0.4)}px`);
-  root.style.setProperty('--pkh-radius-md', `${Math.max(6, radius * 0.7)}px`);
-  root.style.setProperty('--pkh-radius-lg', `${radius}px`);
-  root.style.setProperty('--pkh-radius-xl', `${Math.round(radius * 1.3)}px`);
-  root.style.setProperty('--pkh-radius-2xl', `${Math.round(radius * 1.6)}px`);
-
-  const blur = config.glassBlur ?? 16;
-  root.style.setProperty('--pkh-glass-blur', `${blur}px`);
-  const opacity = (config.glassOpacity ?? 85) / 100;
-  root.style.setProperty('--pkh-glass-opacity', `${opacity}`);
-
-  root.style.setProperty('--pkh-neon-glow', `0 0 20px rgba(${rgb}, ${glowAlpha})`);
-  root.style.setProperty('--pkh-neon-border', `1px solid rgba(${rgb}, ${borderAlpha})`);
-
-  if (config.sidebarBgUrl && config.sidebarBgUrl.trim()) {
-    root.style.setProperty('--pkh-sidebar-bg', `url("${config.sidebarBgUrl.trim()}") center/cover no-repeat`);
-  } else {
-    root.style.removeProperty('--pkh-sidebar-bg');
+  // Keep the mobile browser chrome in sync with the canvas colour so the
+  // status bar does not flash a light strip above a dark app.
+  const themeColorMeta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+  if (themeColorMeta) {
+    themeColorMeta.content = isDark ? '#0f1522' : '#f8fafc';
   }
 
-  if (config.mainBgUrl && config.mainBgUrl.trim()) {
-    root.style.setProperty('--pkh-main-bg', `url("${config.mainBgUrl.trim()}") center/cover fixed no-repeat`);
-  } else {
-    root.style.removeProperty('--pkh-main-bg');
-  }
+  // Remove the legacy effect switches so no old selector can re-enable glass/glow.
+  delete root.dataset.bgEffect;
+  delete root.dataset.animatedGlow;
+  delete root.dataset.glassCard;
+  delete root.dataset.hoverLift;
+
+  root.style.setProperty('--pkh-primary', accent);
+  root.style.setProperty('--pkh-accent', accent);
+  root.style.setProperty('--pkh-accent-color', accent);
+  root.style.setProperty('--pkh-accent-rgb', `${r}, ${g}, ${b}`);
+  // Keep the semantic layer in sync so ring/focus and newer components follow
+  // the user's accent instead of the stylesheet default.
+  root.style.setProperty('--pkh-color-accent', accent);
+  root.style.setProperty('--pkh-color-accent-hover', mix(accent, normalized.mode === 'dark' ? '#ffffff' : '#000000', 0.12));
+  root.style.setProperty('--pkh-color-accent-strong', isDark ? mix(accent, '#ffffff', 0.12) : mix(accent, '#000000', 0.22));
+  root.style.setProperty('--pkh-color-accent-soft', normalized.mode === 'dark' ? mix(accent, '#000000', 0.72) : mix(accent, '#ffffff', 0.9));
+  root.style.setProperty('--pkh-color-accent-border', normalized.mode === 'dark' ? mix(accent, '#000000', 0.45) : mix(accent, '#ffffff', 0.62));
+  root.style.setProperty('--pkh-primary-hover', mix(accent, normalized.mode === 'dark' ? '#ffffff' : '#000000', 0.12));
+  root.style.setProperty('--pkh-primary-dark', isDark ? mix(accent, '#ffffff', 0.12) : mix(accent, '#000000', 0.22));
+  root.style.setProperty('--pkh-primary-light', normalized.mode === 'dark' ? mix(accent, '#000000', 0.72) : mix(accent, '#ffffff', 0.9));
+  root.style.setProperty('--pkh-primary-border', normalized.mode === 'dark' ? mix(accent, '#000000', 0.45) : mix(accent, '#ffffff', 0.62));
+  root.style.setProperty('--pkh-accent-light', normalized.mode === 'dark' ? mix(accent, '#000000', 0.72) : mix(accent, '#ffffff', 0.9));
+  root.style.setProperty('--pkh-accent-text', normalized.mode === 'dark' ? mix(accent, '#ffffff', 0.35) : mix(accent, '#000000', 0.28));
+  root.style.setProperty('--pkh-primary-gradient', `linear-gradient(135deg, ${accent} 0%, ${accent} 100%)`);
+  root.style.setProperty('--pkh-btn-gradient', `linear-gradient(135deg, ${accent} 0%, ${accent} 100%)`);
+
+  // Wallpapers and custom canvases are retired in this UI mode.
+  root.style.removeProperty('--pkh-custom-canvas-bg');
+  root.style.removeProperty('--pkh-canvas-bg');
+  root.style.removeProperty('--pkh-custom-sidebar-bg');
+  root.style.removeProperty('--pkh-sidebar-bg');
+  root.style.removeProperty('--pkh-main-bg');
 }
 
 export async function saveThemeConfig(config: ThemeConfig, userUid?: string | null): Promise<void> {
+  const normalized = normalizeThemeConfig(config);
+
   try {
-    localStorage.setItem('pkh.themeConfig', JSON.stringify(config));
-    localStorage.setItem('pkh.theme', config.theme);
-    localStorage.setItem('pkh.themeMode', config.mode);
+    localStorage.setItem(THEME_STORAGE_KEY, JSON.stringify(normalized));
+    // Keep legacy keys in sync for older builds; never remove them.
+    localStorage.setItem('pkh.themeMode', normalized.mode);
+    localStorage.setItem('pkh.accentColor', normalized.accentColor);
   } catch {
-    // ignore
+    // storage may be unavailable (private mode)
   }
 
   const uid = userUid || auth.currentUser?.uid;
-  if (uid) {
-    try {
-      const themeDocRef = doc(db, 'users', uid, 'settings', 'theme');
-      await setDoc(themeDocRef, { ...config, updatedAt: Date.now() }, { merge: true });
-    } catch (err) {
-      console.warn('Could not save theme to Firestore:', err);
-    }
+  if (!uid) return;
+
+  try {
+    const themeDocRef = doc(db, 'users', uid, 'settings', 'theme');
+    await setDoc(
+      themeDocRef,
+      {
+        themeMode: normalized.mode,
+        uiMode: normalized.uiMode,
+        accentColor: normalized.accentColor,
+        updatedAt: Date.now(),
+      },
+      { merge: true },
+    );
+  } catch (err) {
+    console.warn('Could not save theme to Firestore:', err);
   }
 }

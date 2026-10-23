@@ -6,6 +6,7 @@
 /* 1. Global App Shell & 2-Column Workspace */
 .app-shell {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   background-color: var(--pkh-bg-canvas, #f8fafc);
@@ -46,22 +47,23 @@
 
 /* 2. Modern Topbar (Linear / Notion Style) */
 .topbar {
-  height: 64px !important;
+  height: var(--pkh-topbar-height) !important;
   padding: 0 24px !important;
   display: flex;
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid var(--pkh-border-default, #e2e8f0) !important;
   background: var(--pkh-bg-surface, #ffffff) !important;
-  background-color: rgba(255, 255, 255, 0.9) !important;
-  backdrop-filter: blur(12px) !important;
   position: sticky;
   top: 0;
   z-index: 40;
 }
 
-:root[data-mode='dark'] .topbar {
-  background-color: rgba(17, 24, 39, 0.9) !important;
+/* rich mode is the only place the sticky header gets a blur. */
+[data-ui-mode='rich'] .topbar {
+  background: color-mix(in oklab, var(--pkh-bg-surface) 82%, transparent) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .topbar-left {
@@ -90,7 +92,6 @@
   font-family: var(--pkh-font-sans, sans-serif);
   font-size: 16px;
   font-weight: 700;
-  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
 }
 
 .brand-text strong {
@@ -130,7 +131,10 @@
   font-size: 13px;
   font-family: inherit;
   cursor: pointer;
-  transition: all var(--pkh-duration-fast, 150ms) ease;
+  transition:
+    color var(--pkh-duration-fast) var(--pkh-ease-default),
+    background-color var(--pkh-duration-fast) var(--pkh-ease-default),
+    border-color var(--pkh-duration-fast) var(--pkh-ease-default);
 }
 
 .topbar-search-bar:hover {
@@ -189,7 +193,10 @@
   background: transparent;
   border: 1px solid transparent;
   color: var(--pkh-text-secondary, #475569);
-  transition: all var(--pkh-duration-fast, 150ms) ease;
+  transition:
+    color var(--pkh-duration-fast) var(--pkh-ease-default),
+    background-color var(--pkh-duration-fast) var(--pkh-ease-default),
+    border-color var(--pkh-duration-fast) var(--pkh-ease-default);
 }
 
 .topbar-icon:hover {
@@ -212,7 +219,10 @@
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all var(--pkh-duration-fast, 150ms) ease;
+  transition:
+    color var(--pkh-duration-fast) var(--pkh-ease-default),
+    background-color var(--pkh-duration-fast) var(--pkh-ease-default),
+    border-color var(--pkh-duration-fast) var(--pkh-ease-default);
 }
 
 .topbar-profile-btn:hover {
@@ -255,10 +265,10 @@
 /* 3. Modern Sidebar Styling */
 .app-sidebar {
   position: sticky;
-  top: 64px;
+  top: var(--pkh-topbar-height);
   z-index: 30;
   display: flex;
-  height: calc(100vh - 64px);
+  height: calc(100vh - var(--pkh-topbar-height));
   padding: 16px 12px 32px !important;
   flex-direction: column;
   gap: 14px;
@@ -276,78 +286,16 @@
   border-radius: 4px;
 }
 
-/* Scenic Twilight Mountain Gradient for Sidebar in Aurora Scenic or default */
-[data-bg-effect="aurora-scenic"] .app-sidebar,
-:root:not([data-bg-effect]) .app-sidebar {
-  background: linear-gradient(180deg, #0b0f19 0%, #1e1b4b 35%, #2e1065 70%, #0f172a 100%) !important;
-  border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
-  color: #f8fafc !important;
-}
-
-:root[style*="--pkh-custom-sidebar-bg"] .app-sidebar {
-  background-image: var(--pkh-custom-sidebar-bg) !important;
-  background-size: cover !important;
-  background-position: center !important;
-}
-
-[data-bg-effect="aurora-scenic"] .app-sidebar .profile-card,
-:root:not([data-bg-effect]) .app-sidebar .profile-card {
-  background: rgba(255, 255, 255, 0.06) !important;
-  border-color: rgba(255, 255, 255, 0.12) !important;
-  backdrop-filter: blur(12px) !important;
-  color: #ffffff !important;
-}
-
-[data-bg-effect="aurora-scenic"] .app-sidebar .profile-card:hover,
-:root:not([data-bg-effect]) .app-sidebar .profile-card:hover {
-  background: rgba(255, 255, 255, 0.1) !important;
-  border-color: rgba(56, 189, 248, 0.5) !important;
-}
-
-[data-bg-effect="aurora-scenic"] .app-sidebar .profile-name,
-:root:not([data-bg-effect]) .app-sidebar .profile-name,
-[data-bg-effect="aurora-scenic"] .app-sidebar .profile-status,
-:root:not([data-bg-effect]) .app-sidebar .profile-status {
-  color: #f8fafc !important;
-}
-
-[data-bg-effect="aurora-scenic"] .app-sidebar .nav-item,
-:root:not([data-bg-effect]) .app-sidebar .nav-item {
-  color: rgba(248, 250, 252, 0.88) !important;
-}
-
-[data-bg-effect="aurora-scenic"] .app-sidebar .nav-item:hover,
-:root:not([data-bg-effect]) .app-sidebar .nav-item:hover {
-  background: rgba(255, 255, 255, 0.08) !important;
-  color: #ffffff !important;
-}
-
-[data-bg-effect="aurora-scenic"] .app-sidebar .nav-item.is-active,
-:root:not([data-bg-effect]) .app-sidebar .nav-item.is-active {
-  background: linear-gradient(135deg, #06b6d4 0%, #10b981 100%) !important;
-  box-shadow: 0 0 20px rgba(56, 189, 248, 0.55) !important;
-  color: #ffffff !important;
-  font-weight: 700 !important;
-}
-
-[data-bg-effect="aurora-scenic"] .app-sidebar .nav-item.is-active .nav-count,
-:root:not([data-bg-effect]) .app-sidebar .nav-item.is-active .nav-count {
-  background: rgba(255, 255, 255, 0.25) !important;
-  color: #ffffff !important;
-}
-
-[data-bg-effect="aurora-scenic"] .app-sidebar .nav-group-title,
-:root:not([data-bg-effect]) .app-sidebar .nav-group-title {
-  color: rgba(255, 255, 255, 0.55) !important;
-}
-
 .profile-card {
   padding: 12px !important;
   border-radius: var(--pkh-radius-lg, 14px) !important;
   border: 1px solid var(--pkh-border-default, #e2e8f0) !important;
   background: var(--pkh-bg-subtle, #f1f5f9) !important;
   box-shadow: var(--pkh-shadow-xs, 0 1px 2px rgba(0,0,0,0.04));
-  transition: all var(--pkh-duration-fast, 150ms) ease;
+  transition:
+    color var(--pkh-duration-fast) var(--pkh-ease-default),
+    background-color var(--pkh-duration-fast) var(--pkh-ease-default),
+    border-color var(--pkh-duration-fast) var(--pkh-ease-default);
 }
 
 .profile-card:hover {
@@ -373,7 +321,10 @@
   text-decoration: none;
   cursor: pointer;
   border: 1px solid transparent;
-  transition: all var(--pkh-duration-fast, 150ms) ease;
+  transition:
+    color var(--pkh-duration-fast) var(--pkh-ease-default),
+    background-color var(--pkh-duration-fast) var(--pkh-ease-default),
+    border-color var(--pkh-duration-fast) var(--pkh-ease-default);
 }
 
 .sidebar-quick-btn.button-primary {
@@ -435,7 +386,10 @@
   font-size: 13px;
   color: var(--pkh-text-secondary, #475569);
   cursor: pointer;
-  transition: all var(--pkh-duration-fast, 150ms) ease;
+  transition:
+    color var(--pkh-duration-fast) var(--pkh-ease-default),
+    background-color var(--pkh-duration-fast) var(--pkh-ease-default),
+    border-color var(--pkh-duration-fast) var(--pkh-ease-default);
   position: relative;
 }
 
@@ -539,7 +493,10 @@
   font-weight: 500 !important;
   text-align: left !important;
   cursor: pointer;
-  transition: all var(--pkh-duration-fast, 150ms) ease;
+  transition:
+    color var(--pkh-duration-fast) var(--pkh-ease-default),
+    background-color var(--pkh-duration-fast) var(--pkh-ease-default),
+    border-color var(--pkh-duration-fast) var(--pkh-ease-default);
 }
 
 .nav-item:hover {
@@ -598,7 +555,10 @@
   color: var(--pkh-text-main, #0f172a);
   outline: none;
   box-sizing: border-box;
-  transition: all var(--pkh-duration-fast, 150ms) ease;
+  transition:
+    color var(--pkh-duration-fast) var(--pkh-ease-default),
+    background-color var(--pkh-duration-fast) var(--pkh-ease-default),
+    border-color var(--pkh-duration-fast) var(--pkh-ease-default);
 }
 
 .sidebar-menu-search input:focus {
@@ -704,16 +664,18 @@
 @media (max-width: 768px) {
   .workspace {
     grid-template-columns: 1fr !important;
-    padding-bottom: 68px; /* space for bottom nav */
+    /* space for bottom nav + the iOS home indicator */
+    padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
   }
 
   .detail-panel {
     height: auto !important;
     min-height: calc(100vh - 128px);
+    min-height: calc(100dvh - 128px);
   }
 
   .detail-panel .editor-panel {
-    padding: 16px 14px 72px !important;
+    padding: 16px 14px calc(72px + env(safe-area-inset-bottom, 0px)) !important;
   }
 
   .topbar-center {
@@ -732,20 +694,21 @@
     bottom: 0;
     left: 0;
     right: 0;
-    height: 60px;
+    height: auto;
+    min-height: 64px;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
     z-index: 80;
     background: var(--pkh-bg-surface, #ffffff);
     border-top: 1px solid var(--pkh-border-default, #e2e8f0);
-    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.06);
-    backdrop-filter: blur(12px);
-  }
-
-  :root[data-mode='dark'] .mobile-bottom-nav {
-    background: rgba(17, 24, 39, 0.95);
+    box-shadow: 0 -1px 2px rgb(15 23 42 / 0.06);
   }
 
   .bottom-nav-item {
     display: flex;
+    min-width: 0;
+    min-height: 44px;
     flex-direction: column;
     align-items: center;
     justify-content: center;
@@ -757,13 +720,26 @@
     font-weight: 500;
     font-family: inherit;
     cursor: pointer;
-    padding: 4px 0;
-    transition: all var(--pkh-duration-fast, 150ms) ease;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    padding: 6px 2px 8px;
+    transition:
+    color var(--pkh-duration-fast) var(--pkh-ease-default),
+    background-color var(--pkh-duration-fast) var(--pkh-ease-default),
+    border-color var(--pkh-duration-fast) var(--pkh-ease-default);
   }
 
   .bottom-nav-item.is-active {
     color: var(--pkh-primary, #10b981);
     font-weight: 600;
+  }
+
+  .bottom-nav-label {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.2;
   }
 
   .bottom-nav-icon {
@@ -788,24 +764,26 @@
   .mobile-fab-container {
     display: block !important;
     position: fixed;
-    bottom: 74px;
-    right: 18px;
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+    right: max(18px, env(safe-area-inset-right, 0px));
     z-index: 85;
   }
 
   .mobile-fab-button {
-    width: 50px;
-    height: 50px;
+    width: 52px;
+    height: 52px;
     border-radius: 50%;
     border: none;
-    background: var(--pkh-primary-gradient, linear-gradient(135deg, #10b981 0%, #059669 100%));
+    background: var(--pkh-primary, #0b7d59);
     color: white;
     font-size: 22px;
     font-weight: 600;
     display: grid;
     place-items: center;
-    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.45);
+    box-shadow: var(--pkh-shadow-lg, 0 6px 16px rgb(15 23 42 / 0.18));
     cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
     transition: transform var(--pkh-duration-fast, 150ms) ease;
   }
 
@@ -819,17 +797,17 @@
 
   .mobile-fab-menu {
     position: absolute;
-    bottom: 60px;
+    bottom: 62px;
     right: 0;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 4px;
     background: var(--pkh-bg-surface, #ffffff);
     padding: 8px;
     border-radius: var(--pkh-radius-lg, 14px);
     border: 1px solid var(--pkh-border-default, #e2e8f0);
     box-shadow: var(--pkh-shadow-lg, 0 16px 32px rgba(0,0,0,0.12));
-    min-width: 150px;
+    min-width: 160px;
     animation: fabPop 180ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 
@@ -848,16 +826,19 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    min-height: 44px;
     padding: 8px 12px;
     border-radius: var(--pkh-radius-md, 10px);
     border: none;
     background: transparent;
     color: var(--pkh-text-primary, #0f172a);
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 500;
     font-family: inherit;
     cursor: pointer;
     text-align: left;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
   }
 
   .fab-item:hover,
@@ -945,4 +926,15 @@
 
 @media (prefers-reduced-motion: reduce) {
   .pwa-toast { animation: none; }
+}
+
+/* On phones the toast must clear the fixed bottom navigation. */
+@media (max-width: 768px) {
+  .pwa-toast {
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .pwa-toast-actions button {
+    min-height: 44px;
+  }
 }

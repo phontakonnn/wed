@@ -151,7 +151,7 @@
   background: var(--pkh-surface, #ffffff);
   color: var(--pkh-text-secondary, #636366);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: var(--pkh-transition-colors);
 }
 
 .lifestyle-filter-pill.is-active {
@@ -162,7 +162,7 @@
 
 .lifestyle-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
   gap: 14px;
 }
 

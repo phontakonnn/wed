@@ -138,8 +138,9 @@ import './App.css';
 
 import type {
   AuthState,
-  ThemeName,
+  ThemeConfig,
   ThemeMode,
+  UiMode,
   ProfileState,
   TaxonomyKind,
   AllEntry,
@@ -178,8 +179,13 @@ import {
   subscribeUserLinks,
   subscribeUserDataCards,
   subscribeUserTheme,
-  saveUserTheme,
 } from './lib/firestore-db';
+import {
+  applyThemeConfig,
+  loadThemeConfig,
+  normalizeThemeConfig,
+  saveThemeConfig,
+} from './lib/theme';
 
 // Code-split feature views and heavy modals via React.lazy
 const MediaLightbox = lazy(() => import('./components/MediaLightbox').then((m) => ({ default: m.MediaLightbox })));
@@ -403,36 +409,19 @@ function App() {
     lifeArea: 'health' as LifeArea,
   });
   const [habitDraft, setHabitDraft] = useState({ title: '', dailyTarget: '8', unit: 'ครั้ง' });
-  const [theme, setTheme] = useState<ThemeName>(() => {
-    const saved = localStorage.getItem('pkh.theme') as ThemeName | null;
-    return saved || 'aurora-scenic';
-  });
-  const [themeMode, setThemeMode] = useState<ThemeMode>(() => (localStorage.getItem('pkh.themeMode') as ThemeMode) || 'light');
-  const [animatedGlow, setAnimatedGlow] = useState<boolean>(() => localStorage.getItem('pkh.animatedGlow') !== 'false');
-  const [glassCard, setGlassCard] = useState<boolean>(() => localStorage.getItem('pkh.glassCard') !== 'false');
-  const [hoverLift, setHoverLift] = useState<boolean>(() => localStorage.getItem('pkh.hoverLift') !== 'false');
-  const [accentColor, setAccentColor] = useState<string>(() => localStorage.getItem('pkh.accentColor') || '#10b981');
-  const [neonGlowOpacity, setNeonGlowOpacity] = useState<number>(() => {
-    const saved = localStorage.getItem('pkh.neonGlowOpacity');
-    return saved !== null ? Number(saved) : 70;
-  });
-  const [glassBlur, setGlassBlur] = useState<number>(() => {
-    const saved = localStorage.getItem('pkh.glassBlur');
-    return saved !== null ? Number(saved) : 16;
-  });
-  const [glassOpacity, setGlassOpacity] = useState<number>(() => {
-    const saved = localStorage.getItem('pkh.glassOpacity');
-    return saved !== null ? Number(saved) : 75;
-  });
-  const [cardRadius, setCardRadius] = useState<number>(() => {
-    const saved = localStorage.getItem('pkh.cardRadius');
-    return saved !== null ? Number(saved) : 20;
-  });
-  const [btnGradient, setBtnGradient] = useState<string>(() => {
-    return localStorage.getItem('pkh.btnGradient') || 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
-  });
-  const [customCanvasBg, setCustomCanvasBg] = useState<string>(() => localStorage.getItem('pkh.customCanvasBg') || '');
-  const [customSidebarBg, setCustomSidebarBg] = useState<string>(() => localStorage.getItem('pkh.customSidebarBg') || '');
+  // One config object replaces the old theme/effect state soup.
+  const [themeConfig, setThemeConfig] = useState<ThemeConfig>(() => loadThemeConfig());
+  const themeRef = useRef<ThemeConfig>(themeConfig);
+  themeRef.current = themeConfig;
+  const themeMode: ThemeMode = themeConfig.mode;
+  const uiMode: UiMode = themeConfig.uiMode;
+  const accentColor = themeConfig.accentColor;
+  const updateTheme = useCallback((patch: Partial<ThemeConfig>) => {
+    const next = normalizeThemeConfig({ ...themeRef.current, ...patch });
+    themeRef.current = next;
+    setThemeConfig(next);
+    void saveThemeConfig(next, firebaseUser?.uid);
+  }, [firebaseUser?.uid]);
   const [publicSettings, setPublicSettings] = useState<PublicSettings>({
     app_title: 'PKH / Life OS',
     app_subtitle: 'ศูนย์รวมข้อมูล บันทึก และการจัดการชีวิตส่วนบุคคล',
@@ -945,102 +934,30 @@ function App() {
   }, [authState, filterCategoryIds, filterTagIds, notes, viewMode]);
 
   useEffect(() => {
-    // Helper to compute RGB from accentColor for neon glowing shadow
-    const cleanHex = accentColor.replace('#', '');
-    let accentRgb = '16, 185, 129';
-    if (cleanHex.length === 6) {
-      accentRgb = `${parseInt(cleanHex.substring(0, 2), 16)}, ${parseInt(cleanHex.substring(2, 4), 16)}, ${parseInt(cleanHex.substring(4, 6), 16)}`;
-    } else if (cleanHex.length === 3) {
-      accentRgb = `${parseInt(cleanHex[0] + cleanHex[0], 16)}, ${parseInt(cleanHex[1] + cleanHex[1], 16)}, ${parseInt(cleanHex[2] + cleanHex[2], 16)}`;
-    }
+    applyThemeConfig(themeConfig);
+  }, [themeConfig]);
 
-    document.documentElement.dataset.theme = theme;
-    document.documentElement.dataset.bgEffect = theme;
-    document.documentElement.dataset.mode = themeMode;
-    document.documentElement.dataset.animatedGlow = String(animatedGlow);
-    document.documentElement.dataset.glassCard = String(glassCard);
-    document.documentElement.dataset.hoverLift = String(hoverLift);
-    document.documentElement.style.setProperty('--pkh-primary', accentColor);
-    document.documentElement.style.setProperty('--pkh-accent', accentColor);
-    document.documentElement.style.setProperty('--pkh-accent-color', accentColor);
-    document.documentElement.style.setProperty('--pkh-accent-rgb', accentRgb);
-    document.documentElement.style.setProperty('--pkh-neon-glow-opacity', `${neonGlowOpacity / 100}`);
-    document.documentElement.style.setProperty('--pkh-glow-intensity', `${neonGlowOpacity}%`);
-    document.documentElement.style.setProperty('--pkh-glass-blur', `${glassBlur}px`);
-    document.documentElement.style.setProperty('--pkh-glass-opacity', `${glassOpacity / 100}`);
-    document.documentElement.style.setProperty('--pkh-card-radius', `${cardRadius}px`);
-    document.documentElement.style.setProperty('--pkh-btn-gradient', btnGradient);
-
-    if (customCanvasBg) {
-      document.documentElement.style.setProperty('--pkh-custom-canvas-bg', `url("${customCanvasBg}")`);
-      document.documentElement.style.setProperty('--pkh-canvas-bg', `url("${customCanvasBg}")`);
-    } else {
-      document.documentElement.style.removeProperty('--pkh-custom-canvas-bg');
-      document.documentElement.style.removeProperty('--pkh-canvas-bg');
-    }
-
-    if (customSidebarBg) {
-      document.documentElement.style.setProperty('--pkh-custom-sidebar-bg', `url("${customSidebarBg}")`);
-      document.documentElement.style.setProperty('--pkh-sidebar-bg', `url("${customSidebarBg}")`);
-    } else {
-      document.documentElement.style.removeProperty('--pkh-custom-sidebar-bg');
-      document.documentElement.style.removeProperty('--pkh-sidebar-bg');
-    }
-
-    localStorage.setItem('pkh.theme', theme);
-    localStorage.setItem('pkh.bgEffect', theme);
-    localStorage.setItem('pkh.themeMode', themeMode);
-    localStorage.setItem('pkh.animatedGlow', String(animatedGlow));
-    localStorage.setItem('pkh.glassCard', String(glassCard));
-    localStorage.setItem('pkh.hoverLift', String(hoverLift));
-    localStorage.setItem('pkh.accentColor', accentColor);
-    localStorage.setItem('pkh.neonGlowOpacity', String(neonGlowOpacity));
-    localStorage.setItem('pkh.glassBlur', String(glassBlur));
-    localStorage.setItem('pkh.glassOpacity', String(glassOpacity));
-    localStorage.setItem('pkh.cardRadius', String(cardRadius));
-    localStorage.setItem('pkh.btnGradient', btnGradient);
-    localStorage.setItem('pkh.customCanvasBg', customCanvasBg);
-    localStorage.setItem('pkh.customSidebarBg', customSidebarBg);
-
-    // Sync theme to Firestore if Firebase user is logged in
-    if (firebaseUser?.uid) {
-      void saveUserTheme(firebaseUser.uid, {
-        theme,
-        themeMode,
-        animatedGlow,
-        glassCard,
-        hoverLift,
-        accentColor,
-        neonGlowOpacity,
-        glassBlur,
-        glassOpacity,
-        cardRadius,
-        btnGradient,
-        customCanvasBg,
-        customSidebarBg,
-      });
-    }
-  }, [theme, themeMode, animatedGlow, glassCard, hoverLift, accentColor, neonGlowOpacity, glassBlur, glassOpacity, cardRadius, btnGradient, customCanvasBg, customSidebarBg, firebaseUser?.uid]);
-
-  // Sync theme from Firestore on initial login / cross-device change
+  // Sync theme from Firestore on initial login / cross-device change.
+  // Only accept values that differ, so a snapshot cannot echo back into a save loop.
   useEffect(() => {
     if (!firebaseUser?.uid) return;
     const unsubTheme = subscribeUserTheme(firebaseUser.uid, (remoteTheme) => {
-      if (remoteTheme) {
-        if (remoteTheme.theme) setTheme(remoteTheme.theme as ThemeName);
-        if (remoteTheme.themeMode) setThemeMode(remoteTheme.themeMode);
-        if (typeof remoteTheme.animatedGlow === 'boolean') setAnimatedGlow(remoteTheme.animatedGlow);
-        if (typeof remoteTheme.glassCard === 'boolean') setGlassCard(remoteTheme.glassCard);
-        if (typeof remoteTheme.hoverLift === 'boolean') setHoverLift(remoteTheme.hoverLift);
-        if (remoteTheme.accentColor) setAccentColor(remoteTheme.accentColor);
-        if (typeof remoteTheme.neonGlowOpacity === 'number') setNeonGlowOpacity(remoteTheme.neonGlowOpacity);
-        if (typeof remoteTheme.glassBlur === 'number') setGlassBlur(remoteTheme.glassBlur);
-        if (typeof remoteTheme.glassOpacity === 'number') setGlassOpacity(remoteTheme.glassOpacity);
-        if (typeof remoteTheme.cardRadius === 'number') setCardRadius(remoteTheme.cardRadius);
-        if (remoteTheme.btnGradient) setBtnGradient(remoteTheme.btnGradient);
-        if (typeof remoteTheme.customCanvasBg === 'string') setCustomCanvasBg(remoteTheme.customCanvasBg);
-        if (typeof remoteTheme.customSidebarBg === 'string') setCustomSidebarBg(remoteTheme.customSidebarBg);
+      if (!remoteTheme) return;
+      const current = themeRef.current;
+      const next = normalizeThemeConfig({
+        mode: (remoteTheme.themeMode as ThemeMode | undefined) ?? current.mode,
+        uiMode: (remoteTheme.uiMode as UiMode | undefined) ?? current.uiMode,
+        accentColor: remoteTheme.accentColor ?? current.accentColor,
+      });
+      if (
+        next.mode === current.mode
+        && next.uiMode === current.uiMode
+        && next.accentColor === current.accentColor
+      ) {
+        return;
       }
+      themeRef.current = next;
+      setThemeConfig(next);
     });
     return () => unsubTheme();
   }, [firebaseUser?.uid]);
@@ -3951,7 +3868,7 @@ function App() {
         onLogout={handleLogout}
         authBusy={authBusy}
         themeMode={themeMode}
-        onToggleThemeMode={() => setThemeMode((m) => (m === 'light' ? 'dark' : 'light'))}
+        onToggleThemeMode={() => updateTheme({ mode: themeMode === 'light' ? 'dark' : 'light' })}
         onOpenProfile={() => setProfileOpen(true)}
         onOpenAdmin={() => {
           setViewMode('admin');
@@ -4511,32 +4428,12 @@ function App() {
       <ThemeModal
         isOpen={themeOpen}
         onClose={() => setThemeOpen(false)}
-        theme={theme}
-        onSelectTheme={setTheme}
-        themeMode={themeMode}
-        onSelectThemeMode={setThemeMode}
-        animatedGlow={animatedGlow}
-        onToggleAnimatedGlow={setAnimatedGlow}
-        glassCard={glassCard}
-        onToggleGlassCard={setGlassCard}
-        hoverLift={hoverLift}
-        onToggleHoverLift={setHoverLift}
+        mode={themeMode}
+        onSelectMode={(mode) => updateTheme({ mode })}
+        uiMode={uiMode}
+        onSelectUiMode={(uiMode) => updateTheme({ uiMode })}
         accentColor={accentColor}
-        onSelectAccentColor={setAccentColor}
-        neonGlowOpacity={neonGlowOpacity}
-        onChangeNeonGlowOpacity={setNeonGlowOpacity}
-        glassBlur={glassBlur}
-        onChangeGlassBlur={setGlassBlur}
-        glassOpacity={glassOpacity}
-        onChangeGlassOpacity={setGlassOpacity}
-        cardRadius={cardRadius}
-        onChangeCardRadius={setCardRadius}
-        btnGradient={btnGradient}
-        onChangeBtnGradient={setBtnGradient}
-        customCanvasBg={customCanvasBg}
-        onChangeCustomCanvasBg={setCustomCanvasBg}
-        customSidebarBg={customSidebarBg}
-        onChangeCustomSidebarBg={setCustomSidebarBg}
+        onSelectAccentColor={(accentColor) => updateTheme({ accentColor })}
       />
 
       {/* Profile Modal */}

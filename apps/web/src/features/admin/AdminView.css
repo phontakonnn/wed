@@ -59,7 +59,7 @@
   font-size: var(--font-size-sm, 0.875rem);
   font-weight: var(--font-weight-medium, 500);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: var(--pkh-transition-colors);
   white-space: nowrap;
 }
 
@@ -78,7 +78,7 @@
 /* Grid & Bento Cards */
 .admin-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(350px, 100%), 1fr));
   gap: var(--space-6, 24px);
 }
 

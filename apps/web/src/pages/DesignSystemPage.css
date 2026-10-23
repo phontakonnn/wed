@@ -170,13 +170,15 @@
 
 .ds-grid-2 {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  /* `min(320px, 100%)` keeps the grid inside a 320px phone instead of forcing
+     a 320px column plus the container padding. */
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
   gap: var(--pkh-space-6);
 }
 
 .ds-bento-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
   gap: var(--pkh-space-5);
 }
 

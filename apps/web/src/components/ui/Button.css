@@ -11,7 +11,12 @@
   white-space: nowrap;
   user-select: none;
   text-decoration: none;
-  transition: all var(--pkh-duration-normal) var(--pkh-ease-default);
+  transition:
+    background-color var(--pkh-duration-normal) var(--pkh-ease-default),
+    border-color var(--pkh-duration-normal) var(--pkh-ease-default),
+    color var(--pkh-duration-normal) var(--pkh-ease-default),
+    box-shadow var(--pkh-duration-normal) var(--pkh-ease-default),
+    transform var(--pkh-duration-normal) var(--pkh-ease-default);
   outline: none;
   position: relative;
   overflow: hidden;
@@ -22,7 +27,8 @@
 }
 
 .pkh-button:focus-visible {
-  box-shadow: 0 0 0 3px var(--pkh-ring);
+  outline: 2px solid var(--pkh-ring);
+  outline-offset: 2px;
 }
 
 .pkh-button:disabled {
@@ -72,15 +78,17 @@
 
 /* Variants */
 .pkh-button--primary {
-  background: var(--pkh-primary-gradient);
+  background: var(--pkh-primary);
   color: var(--pkh-primary-text);
-  box-shadow: var(--pkh-shadow-xs), 0 2px 8px rgba(16, 185, 129, 0.25);
+  border-color: var(--pkh-primary);
+  box-shadow: none;
 }
 
 .pkh-button--primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, var(--pkh-primary-hover) 0%, var(--pkh-primary-dark) 100%);
-  box-shadow: var(--pkh-shadow-sm), 0 4px 14px rgba(16, 185, 129, 0.35);
-  transform: translateY(-1px);
+  background: var(--pkh-primary-hover);
+  border-color: var(--pkh-primary-hover);
+  box-shadow: none;
+  transform: none;
 }
 
 .pkh-button--secondary {
@@ -119,13 +127,15 @@
 .pkh-button--danger {
   background: var(--pkh-danger);
   color: #ffffff;
-  box-shadow: var(--pkh-shadow-xs), 0 2px 8px rgba(239, 68, 68, 0.25);
+  border-color: var(--pkh-danger);
+  box-shadow: none;
 }
 
 .pkh-button--danger:hover:not(:disabled) {
   background: var(--pkh-danger-hover);
-  box-shadow: var(--pkh-shadow-sm), 0 4px 14px rgba(239, 68, 68, 0.35);
-  transform: translateY(-1px);
+  border-color: var(--pkh-danger-hover);
+  box-shadow: none;
+  transform: none;
 }
 
 .pkh-button--danger-quiet {
@@ -154,5 +164,21 @@
   }
   to {
     transform: rotate(360deg);
+  }
+}
+
+/* Touch devices get a 44px comfortable target without changing the density scale
+   used on pointer devices. */
+@media (hover: none) and (pointer: coarse) {
+  .pkh-button--sm {
+    height: 36px;
+  }
+
+  .pkh-button--md {
+    height: 44px;
+  }
+
+  .pkh-button--icon-only.pkh-button--md {
+    width: 44px;
   }
 }

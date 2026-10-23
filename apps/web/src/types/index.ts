@@ -32,25 +32,31 @@ export type ThemeName =
   | 'violet';
 export type ThemeMode = 'light' | 'dark';
 
+/** fast = solid surfaces, no blur; rich = opt-in blur/shadow at a few points. */
+export type UiMode = 'fast' | 'rich';
+
 export interface ThemeConfig {
-  theme: ThemeName;
   mode: ThemeMode;
+  uiMode: UiMode;
+  accentColor: string;
+  /** Legacy fields are read-only during migration; new code ignores them. */
+  theme?: ThemeName;
   sidebarBgUrl?: string;
   mainBgUrl?: string;
   neonGlow?: number;
   glassBlur?: number;
   glassOpacity?: number;
   borderRadius?: number;
-  accentColor?: string;
   buttonColor?: string;
 }
 
 export interface ThemeEffectsConfig {
-  bgEffect: ThemeName;
-  animatedGlow: boolean;
-  glassCard: boolean;
-  hoverLift: boolean;
-  accentColor: string;
+  /** Legacy shape kept so old Firestore documents still type-check. */
+  bgEffect?: ThemeName;
+  animatedGlow?: boolean;
+  glassCard?: boolean;
+  hoverLift?: boolean;
+  accentColor?: string;
   neonGlowOpacity?: number;
   glassBlur?: number;
   glassOpacity?: number;

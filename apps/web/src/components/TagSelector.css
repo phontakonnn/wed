@@ -37,7 +37,7 @@
   border: 1px solid var(--pkh-primary, #2f7d5a);
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.15s ease;
+  transition: var(--pkh-transition-colors);
 }
 
 .tag-selector-add-btn:hover:not(:disabled) {
@@ -70,7 +70,7 @@
   font-size: 12px;
   font-weight: 500;
   border-radius: 9999px;
-  transition: all 0.15s ease;
+  transition: var(--pkh-transition-colors);
 }
 
 .tag-chip-selected {

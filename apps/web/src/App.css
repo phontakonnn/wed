@@ -1,9 +1,11 @@
 #root {
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .app-shell {
   min-height: 100vh;
+  min-height: 100dvh;
   background: var(--canvas);
 }
 
@@ -78,7 +80,7 @@
   padding: 32px 20px 20px;
   flex-direction: column;
   border-right: 1px solid var(--line);
-  background: #fbfcf9;
+  background: var(--pkh-bg-subtle);
 }
 
 .sidebar-heading {
@@ -152,7 +154,7 @@
 }
 
 .button-quiet:not(:disabled):hover {
-  border-color: #cbd8cd;
+  border-color: var(--pkh-border-strong);
   background: #f8fbf8;
 }
 
@@ -389,11 +391,17 @@
   z-index: 9999;
   display: grid;
   padding: 20px;
+  padding-top: max(20px, env(safe-area-inset-top, 0px));
+  padding-bottom: max(20px, env(safe-area-inset-bottom, 0px));
   place-items: center;
-  background: rgba(15, 23, 42, 0.65);
+  background: var(--pkh-backdrop);
+  overflow-y: auto;
+}
+
+/* Only rich mode pays for a blurred backdrop. */
+[data-ui-mode='rich'] .dialog-backdrop {
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
-  overflow-y: auto;
 }
 
 .dialog {
@@ -402,13 +410,14 @@
   width: min(100%, 680px);
   max-width: 100%;
   max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
   padding: 24px;
   gap: 16px;
   border: 1px solid var(--pkh-border-default, var(--line));
   border-radius: var(--pkh-radius-2xl, 16px);
   background: var(--pkh-bg-surface, var(--paper, #ffffff));
   color: var(--pkh-text-primary, var(--ink, #0f172a));
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--pkh-shadow-xl);
   overflow-y: auto;
   overflow-x: hidden !important;
   box-sizing: border-box;
@@ -516,7 +525,8 @@
 
 .title-input:focus-visible,
 .note-editor textarea:focus-visible {
-  outline: 0;
+  outline: 2px solid var(--pkh-ring);
+  outline-offset: 2px;
 }
 
 .note-editor textarea {
@@ -552,7 +562,7 @@
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: #fbfcf9;
+  background: var(--pkh-bg-subtle);
 }
 
 .taxonomy-manager-heading,
@@ -756,11 +766,12 @@
   display: grid;
   gap: 12px;
   min-height: 100vh;
+  min-height: 100dvh;
   padding: 24px;
   place-items: center;
   color: var(--muted);
   background:
-    radial-gradient(ellipse at 50% 0%, rgba(221, 236, 222, 0.75), transparent 55%),
+    radial-gradient(ellipse at 50% 0%, var(--pkh-bg-subtle), transparent 55%),
     var(--canvas);
   font-size: 14px;
 }
@@ -874,15 +885,14 @@
   width: 100%;
   height: 42px;
   padding: 0 12px;
-  border: 1px solid #dfe3dc;
+  border: 1px solid var(--pkh-border-default);
   border-radius: 8px;
-  color: var(--ink);
-  background: #fff;
+  color: var(--pkh-text-primary);
+  background: var(--pkh-bg-surface);
 }
 
 .login-form input:focus {
-  border-color: #8baa94;
-  outline: 3px solid rgba(63, 118, 88, 0.12);
+  border-color: var(--pkh-primary);
 }
 
 .button-wide {
@@ -909,6 +919,7 @@
 
   .workspace {
     min-height: calc(100vh - 66px);
+    min-height: calc(100dvh - 66px);
     grid-template-columns: 1fr;
   }
 
@@ -1092,31 +1103,39 @@ a.button {
   position: sticky;
   top: 0;
   z-index: 50;
+  height: var(--pkh-topbar-height);
   padding: 0 24px;
+  background: var(--pkh-bg-surface);
+  border-bottom: 1px solid var(--pkh-border-default);
+}
+
+[data-ui-mode='rich'] .topbar {
   backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  background: color-mix(in oklab, var(--pkh-bg-surface) 84%, transparent);
 }
 
 .workspace {
   display: grid;
   width: 100%;
   max-width: none;
-  min-height: calc(100vh - 76px);
+  min-height: calc(100vh - var(--pkh-topbar-height));
   margin: 0;
   grid-template-columns: 240px 340px minmax(0, 1fr);
 }
 
 .app-sidebar {
   position: sticky;
-  top: 76px;
+  top: var(--pkh-topbar-height);
   z-index: 30;
   display: flex;
-  height: calc(100vh - 76px);
+  height: calc(100vh - var(--pkh-topbar-height));
   padding: 22px 16px;
   flex-direction: column;
   gap: 18px;
   overflow-y: auto;
-  border-right: 1px solid var(--line);
-  background: #fbfcf9;
+  border-right: 1px solid var(--pkh-border-default);
+  background: var(--pkh-bg-surface);
 }
 
 .app-sidebar .sidebar-heading {
@@ -1402,14 +1421,15 @@ a.button {
   place-items: center;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: #fff;
+  background: var(--pkh-bg-surface);
   color: var(--ink);
   font-size: 18px;
   line-height: 1;
+  touch-action: manipulation;
 }
 
 .icon-button:hover {
-  background: #f7f9f5;
+  background: var(--pkh-bg-hover, var(--pkh-bg-subtle));
 }
 
 .star-button {
@@ -1673,6 +1693,7 @@ a.button {
 
   .workspace {
     min-height: calc(100vh - 66px);
+    min-height: calc(100dvh - 66px);
     grid-template-columns: 1fr;
   }
 
@@ -1684,6 +1705,9 @@ a.button {
     z-index: 80;
     width: min(86vw, 320px);
     height: 100vh;
+    height: 100dvh;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
     transform: translateX(-100%);
     transition: transform 180ms ease;
     box-shadow: 0 0 40px rgba(20, 30, 21, 0.18);
@@ -1708,6 +1732,7 @@ a.button {
   .list-panel {
     height: auto;
     min-height: calc(100vh - 66px);
+    min-height: calc(100dvh - 66px);
     border-right: 0;
   }
 
@@ -1730,6 +1755,7 @@ a.button {
     z-index: 90;
     display: block;
     height: 100vh;
+    height: 100dvh;
     overflow-y: auto;
     background: var(--paper);
     inset: 0;
@@ -1740,14 +1766,14 @@ a.button {
     top: 0;
     z-index: 5;
     display: flex;
-    padding: 10px 14px;
+    padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 10px;
     border-bottom: 1px solid var(--line);
-    background: rgba(255, 255, 255, 0.96);
+    background: var(--pkh-bg-surface);
   }
 
   .detail-panel .editor-panel {
     min-height: calc(100vh - 61px);
-    padding: 18px 16px 40px;
+    padding: 18px 16px calc(40px + env(safe-area-inset-bottom, 0px));
   }
 
   .file-grid {
@@ -1785,6 +1811,41 @@ a.button {
 .chip-remove {
   min-width: 40px;
   min-height: 40px;
+}
+
+/* --------------------------------------------------------------------------
+   Mobile form ergonomics
+   iOS Safari zooms the whole page when a focused field is below 16px.
+   `#root` gives this rule enough specificity to win without !important,
+   while the title fields keep their display size.
+   -------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+  #root input:not([type='checkbox']):not([type='radio']):not([type='range']):not(.title-input):not(.notes-title-input),
+  #root select,
+  #root textarea:not(.notes-title-input) {
+    font-size: 16px;
+  }
+
+  /* Keep long Thai values from forcing horizontal scroll inside dialogs. */
+  #root input,
+  #root textarea,
+  #root select {
+    max-width: 100%;
+  }
+}
+
+/* Comfortable touch targets (>= 44px). Pointer devices keep the denser scale. */
+@media (hover: none) and (pointer: coarse) {
+  #root .button,
+  #root input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  #root select {
+    min-height: 44px;
+  }
+
+  #root .icon-button {
+    width: 44px;
+    min-height: 44px;
+  }
 }
 
 .chip {
@@ -1883,15 +1944,16 @@ a.button {
   --accent-glow: rgba(138, 99, 210, 0.16);
 }
 
+/* Bridge only: the dark palette itself lives in tokens.css. */
 :root[data-mode='dark'] {
-  --ink: #e7ece6;
-  --muted: #a2aba0;
-  --line: #2b342d;
-  --paper: #151b16;
-  --canvas: #0f1410;
-  --green-soft: #1f2c23;
-  --danger-soft: #3a2320;
-  --shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+  --ink: var(--pkh-text-primary);
+  --muted: var(--pkh-text-muted);
+  --line: var(--pkh-border-default);
+  --paper: var(--pkh-bg-surface);
+  --canvas: var(--pkh-bg-canvas);
+  --green-soft: var(--pkh-primary-light);
+  --danger-soft: var(--pkh-danger-light);
+  --shadow: var(--pkh-shadow-sm);
 }
 
 :root[data-mode='dark'] body {
@@ -1924,14 +1986,14 @@ a.button {
 :root[data-mode='dark'] select {
   color: var(--ink);
   border-color: var(--line);
-  background: #1b221c;
+  background: var(--pkh-bg-subtle);
 }
 
 :root[data-mode='dark'] .nav-item:hover,
 :root[data-mode='dark'] .note-list-item:hover,
 :root[data-mode='dark'] .command-item:hover,
 :root[data-mode='dark'] .notification-item:hover {
-  background: #1d261f;
+  background: var(--pkh-bg-hover);
 }
 
 .profile-card {
@@ -1949,7 +2011,7 @@ a.button {
 }
 
 .profile-card:hover {
-  border-color: #cbd8cd;
+  border-color: var(--pkh-border-strong);
 }
 
 .avatar {
@@ -2069,7 +2131,7 @@ a.button {
 }
 
 .person-card:hover {
-  border-color: #cbd8cd;
+  border-color: var(--pkh-border-strong);
 }
 
 .person-card.is-active {
@@ -2422,7 +2484,7 @@ a.button {
   border: 1px solid var(--line);
   border-radius: var(--pkh-card-radius, 20px) !important;
   background: var(--paper);
-  box-shadow: 0 24px 80px rgba(20, 30, 21, 0.22);
+  box-shadow: var(--pkh-shadow-xl);
   overflow-x: hidden !important;
 }
 
@@ -2819,7 +2881,7 @@ a.button {
 
 .dash-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(268px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(268px, 100%), 1fr));
   gap: 14px;
   align-items: start;
 }
@@ -3305,9 +3367,9 @@ a.button {
 }
 
 .profile-card:hover {
-  border-color: var(--accent-3);
-  box-shadow: 0 10px 26px var(--accent-glow);
-  transform: translateY(-1px);
+  border-color: var(--pkh-border-strong);
+  box-shadow: none;
+  transform: none;
 }
 
 .editor-toolbar .panel-title {
@@ -3389,16 +3451,16 @@ a.button {
 
 .vault-card:hover,
 .library-card:hover {
-  border-color: var(--accent-3);
-  box-shadow: 0 8px 20px var(--accent-glow);
-  transform: translateY(-1px);
+  border-color: var(--pkh-border-strong);
+  box-shadow: var(--pkh-shadow-card);
+  transform: none;
 }
 
 .vault-card.is-active,
 .library-card.is-active {
-  border-color: var(--accent-2);
-  background: linear-gradient(135deg, var(--green-soft), var(--paper) 78%);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  border-color: var(--pkh-primary);
+  background: var(--pkh-primary-light);
+  box-shadow: inset 0 0 0 1px var(--pkh-primary);
 }
 
 .vault-card-head,
@@ -3521,9 +3583,18 @@ a.button {
 .library-form input:focus,
 .library-form select:focus,
 .library-form textarea:focus {
-  border-color: var(--accent-2);
-  box-shadow: 0 0 0 3px var(--accent-glow);
-  outline: none;
+  border-color: var(--pkh-primary);
+}
+
+.vault-form input:focus-visible,
+.vault-form select:focus-visible,
+.vault-form textarea:focus-visible,
+.library-form input:focus-visible,
+.library-form select:focus-visible,
+.library-form textarea:focus-visible {
+  outline: 2px solid var(--pkh-ring);
+  outline-offset: 2px;
+  box-shadow: none;
 }
 
 .vault-form textarea,
@@ -3549,11 +3620,10 @@ a.button {
   min-width: 0;
   padding: 16px;
   gap: 10px;
-  border: 1px solid var(--accent-3);
+  border: 1px solid var(--pkh-primary-border);
   border-radius: 16px;
-  background:
-    linear-gradient(135deg, var(--green-soft) 0%, #fff8e6 58%, var(--paper) 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 10px 24px var(--accent-glow);
+  background: var(--pkh-primary-light);
+  box-shadow: var(--pkh-shadow-card);
 }
 
 .takeaway-head {
@@ -3692,9 +3762,9 @@ a.button {
 }
 
 .dash-stat-tile:hover {
-  border-color: var(--accent-3);
-  box-shadow: 0 8px 18px var(--accent-glow);
-  transform: translateY(-1px);
+  border-color: var(--pkh-border-strong);
+  box-shadow: var(--pkh-shadow-card);
+  transform: none;
 }
 
 .dash-stat-tile:focus-visible {
@@ -3776,7 +3846,10 @@ a.button {
   gap: 6px;
   cursor: pointer;
   background: transparent;
-  transition: all 120ms ease;
+  transition:
+    color var(--pkh-duration-fast) var(--pkh-ease-default),
+    background-color var(--pkh-duration-fast) var(--pkh-ease-default),
+    border-color var(--pkh-duration-fast) var(--pkh-ease-default);
 }
 
 .nav-customize-btn:hover {
@@ -3960,7 +4033,10 @@ a.button {
   color: var(--text-muted);
   cursor: pointer;
   white-space: nowrap;
-  transition: all 120ms ease;
+  transition:
+    color var(--pkh-duration-fast) var(--pkh-ease-default),
+    background-color var(--pkh-duration-fast) var(--pkh-ease-default),
+    border-color var(--pkh-duration-fast) var(--pkh-ease-default);
 }
 
 .category-filter-tab:hover {
@@ -3977,7 +4053,7 @@ a.button {
 
 .category-grid-container {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
   gap: 12px;
   margin-bottom: 24px;
 }
@@ -4050,7 +4126,9 @@ a.button {
   align-items: center;
   gap: 10px;
   cursor: pointer;
-  transition: all 120ms ease;
+  transition:
+    background-color var(--pkh-duration-fast) var(--pkh-ease-default),
+    border-color var(--pkh-duration-fast) var(--pkh-ease-default);
 }
 
 .category-subcard:hover {
@@ -4176,13 +4254,16 @@ a.button {
   inset: 0;
   z-index: 1200;
   background-color: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 16px;
   animation: fadeIn 0.2s ease-out;
+}
+
+[data-ui-mode='rich'] .media-lightbox-backdrop {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .media-lightbox-content {
@@ -4439,27 +4520,23 @@ a.button {
    PKH Modern SaaS & Bento UI 2-Column Redesign
    ========================================================================== */
 
+/* Legacy variable bridge. Values come from the token layer so this block
+   can no longer override the active light/dark palette. */
 :root {
-  --canvas: #f4f6f9;
-  --paper: #ffffff;
-  --line: #e2e8f0;
-  --ink: #0f172a;
-  --muted: #64748b;
-  --green: #2f7d5a;
-  --green-dark: #245e43;
-  --green-soft: rgba(47, 125, 90, 0.1);
-  --sidebar-w: 280px;
+  --canvas: var(--pkh-bg-canvas);
+  --paper: var(--pkh-bg-surface);
+  --line: var(--pkh-border-default);
+  --ink: var(--pkh-text-primary);
+  --muted: var(--pkh-text-muted);
+  --green: var(--pkh-primary);
+  --green-dark: var(--pkh-primary-dark);
+  --green-soft: var(--pkh-primary-light);
+  --sidebar-w: var(--pkh-sidebar-width);
 }
 
+/* Dark mode needs no second palette here; tokens.css owns it. */
 :root[data-mode='dark'] {
-  --canvas: #0f172a;
-  --paper: #1e293b;
-  --line: #334155;
-  --ink: #f8fafc;
-  --muted: #94a3b8;
-  --green: #38a169;
-  --green-dark: #2f855a;
-  --green-soft: rgba(56, 161, 105, 0.15);
+  --green-soft: var(--pkh-primary-light);
 }
 
 body {
@@ -4528,12 +4605,14 @@ body {
   gap: 12px;
   text-align: left;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition:
+    background-color var(--pkh-duration-fast) var(--pkh-ease-default),
+    border-color var(--pkh-duration-fast) var(--pkh-ease-default);
 }
 
 .profile-card:hover {
   background: var(--paper) !important;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+  box-shadow: none;
   border-color: var(--green) !important;
 }
 
@@ -4555,7 +4634,9 @@ body {
   gap: 12px;
   border: none !important;
   background: transparent !important;
-  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  transition:
+    color var(--pkh-duration-fast) var(--pkh-ease-default),
+    background-color var(--pkh-duration-fast) var(--pkh-ease-default) !important;
 }
 
 .nav-item .nav-icon {
@@ -4570,7 +4651,10 @@ body {
   border: 1px solid var(--pkh-border-subtle, rgba(0, 0, 0, 0.05));
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   flex-shrink: 0;
-  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  transition:
+    background-color var(--pkh-duration-fast) var(--pkh-ease-default),
+    border-color var(--pkh-duration-fast) var(--pkh-ease-default),
+    transform var(--pkh-duration-fast) var(--pkh-ease-default);
 }
 
 .nav-item:hover .nav-icon {
@@ -4639,11 +4723,14 @@ body {
   font-size: 12px;
   font-weight: 500;
   color: var(--muted);
-  background: rgba(0, 0, 0, 0.02);
+  background: var(--pkh-bg-subtle);
   border: 1px dashed var(--line);
   border-radius: 10px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition:
+    color var(--pkh-duration-fast) var(--pkh-ease-default),
+    background-color var(--pkh-duration-fast) var(--pkh-ease-default),
+    border-color var(--pkh-duration-fast) var(--pkh-ease-default);
 }
 
 .nav-customize-btn:hover {
@@ -4732,13 +4819,16 @@ body {
 .capture-form,
 .inline-form,
 .life-card {
-  background: var(--paper, #fff) !important;
-  border-radius: 16px !important;
-  border: 1px solid var(--line, #e2e8f0) !important;
-  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.03) !important;
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.2s ease !important;
+  background: var(--pkh-bg-surface) !important;
+  border-radius: var(--pkh-card-radius) !important;
+  border: 1px solid var(--pkh-border-default) !important;
+  box-shadow: var(--pkh-shadow-card) !important;
+  transition:
+    background-color var(--pkh-duration-fast) var(--pkh-ease-default),
+    border-color var(--pkh-duration-fast) var(--pkh-ease-default);
 }
 
+/* No lift, no stacked shadows: hover is a border/background change only. */
 .dash-card:hover,
 .note-bento-card:hover,
 .file-card:hover,
@@ -4750,9 +4840,10 @@ body {
 .person-card:hover,
 .favorite-card:hover,
 .category-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 28px -4px rgba(15, 23, 42, 0.09), 0 4px 10px -2px rgba(15, 23, 42, 0.03) !important;
-  border-color: rgba(47, 125, 90, 0.3) !important;
+  transform: none;
+  background: var(--pkh-bg-hover) !important;
+  box-shadow: var(--pkh-shadow-card) !important;
+  border-color: var(--pkh-border-strong) !important;
 }
 
 /* Module Header Banner */
@@ -4838,9 +4929,15 @@ input, select, textarea {
 }
 
 input:focus, select:focus, textarea:focus {
-  border-color: var(--green, #2f7d5a) !important;
-  box-shadow: 0 0 0 3px rgba(47, 125, 90, 0.18) !important;
-  outline: none;
+  border-color: var(--pkh-primary);
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--pkh-ring);
+  outline-offset: 2px;
+  box-shadow: none !important;
 }
 
 .button {
@@ -4853,18 +4950,23 @@ input:focus, select:focus, textarea:focus {
   justify-content: center;
   gap: 6px;
   cursor: pointer;
-  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  transition:
+    background-color var(--pkh-duration-fast) var(--pkh-ease-default),
+    border-color var(--pkh-duration-fast) var(--pkh-ease-default),
+    color var(--pkh-duration-fast) var(--pkh-ease-default),
+    transform var(--pkh-duration-fast) var(--pkh-ease-default);
 }
 
 .button-primary {
-  background: linear-gradient(135deg, var(--green, #2f7d5a) 0%, var(--green-dark, #245e43) 100%) !important;
-  color: #fff !important;
-  border: none !important;
-  box-shadow: 0 2px 8px rgba(47, 125, 90, 0.25) !important;
+  background: var(--pkh-primary) !important;
+  color: var(--pkh-primary-text) !important;
+  border: 1px solid transparent !important;
+  box-shadow: none !important;
 }
 
 .button-primary:hover:not(:disabled) {
-  box-shadow: 0 4px 16px rgba(47, 125, 90, 0.38) !important;
+  background: var(--pkh-primary-hover) !important;
+  box-shadow: none !important;
   transform: translateY(-1px);
 }
 
@@ -4938,7 +5040,7 @@ input:focus, select:focus, textarea:focus {
     display: flex !important;
   }
   .detail-panel {
-    padding: 16px 14px 40px !important;
+    padding: 16px 14px calc(40px + env(safe-area-inset-bottom, 0px)) !important;
   }
   .module-header-banner {
     flex-direction: column;

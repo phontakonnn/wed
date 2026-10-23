@@ -39,8 +39,11 @@
   border-radius: var(--pkh-radius-md);
   padding: 8px 12px;
   outline: none;
-  transition: all var(--pkh-duration-normal) var(--pkh-ease-default);
-  box-shadow: var(--pkh-shadow-xs);
+  transition:
+    border-color var(--pkh-duration-normal) var(--pkh-ease-default),
+    box-shadow var(--pkh-duration-normal) var(--pkh-ease-default),
+    background-color var(--pkh-duration-normal) var(--pkh-ease-default);
+  box-shadow: none;
 }
 
 .pkh-input {
@@ -65,7 +68,9 @@
 .pkh-input:focus,
 .pkh-textarea:focus {
   border-color: var(--pkh-primary);
-  box-shadow: 0 0 0 3px var(--pkh-ring);
+  box-shadow: none;
+  outline: 2px solid var(--pkh-ring);
+  outline-offset: 1px;
 }
 
 .pkh-input:disabled,
@@ -84,7 +89,8 @@
 
 .pkh-input--error:focus,
 .pkh-textarea--error:focus {
-  box-shadow: 0 0 0 3px var(--pkh-ring-danger) !important;
+  outline-color: var(--pkh-ring-danger);
+  box-shadow: none !important;
 }
 
 /* Prefix & Suffix icons */

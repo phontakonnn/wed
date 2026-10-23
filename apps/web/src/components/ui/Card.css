@@ -2,13 +2,16 @@
   background-color: var(--pkh-bg-surface);
   border: 1px solid var(--pkh-border-default);
   border-radius: var(--pkh-radius-xl);
-  box-shadow: var(--pkh-shadow-sm);
+  box-shadow: var(--pkh-shadow-card);
   color: var(--pkh-text-primary);
   display: flex;
   flex-direction: column;
   position: relative;
   overflow: hidden;
-  transition: all var(--pkh-duration-normal) var(--pkh-ease-default);
+  transition:
+    background-color var(--pkh-duration-normal) var(--pkh-ease-default),
+    border-color var(--pkh-duration-normal) var(--pkh-ease-default),
+    box-shadow var(--pkh-duration-normal) var(--pkh-ease-default);
 }
 
 /* Bento Variants */
@@ -17,9 +20,9 @@
 }
 
 .pkh-card--interactive:hover {
-  transform: translateY(-2px);
+  transform: none;
   border-color: var(--pkh-border-strong);
-  box-shadow: var(--pkh-shadow-md);
+  box-shadow: var(--pkh-shadow-card);
 }
 
 .pkh-card--flat {
