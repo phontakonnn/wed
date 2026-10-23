@@ -5,6 +5,7 @@ import { Button } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { TagSelector } from '../../components/TagSelector';
+import { WebsiteLogo } from '../../components/ui/WebsiteLogo';
 
 const BOOKMARK_CATEGORY_PRESETS = [
   '🤖 แชท AI',
@@ -482,9 +483,10 @@ export const BookmarksView: React.FC<BookmarksViewProps> = ({
                   style={{ cursor: 'pointer' }}
                 >
                   <div>
-                    {/* Top row: Category Badge & Domain */}
+                    {/* Top row: Category Badge & Logo */}
                     <div className="bookmark-card-top" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <WebsiteLogo url={bm.url} size={28} title={bm.title} />
                         <span style={{
                           fontSize: '11px',
                           fontWeight: 600,
@@ -495,9 +497,6 @@ export const BookmarksView: React.FC<BookmarksViewProps> = ({
                           color: 'var(--pkh-text-primary)',
                         }}>
                           {categoryBadge}
-                        </span>
-                        <span className="bookmark-domain-pill" style={{ fontSize: '11px' }}>
-                          🌐 {domain}
                         </span>
                       </div>
 
@@ -540,24 +539,6 @@ export const BookmarksView: React.FC<BookmarksViewProps> = ({
                     <h4 className="bookmark-card-title" style={{ fontSize: '14px', fontWeight: 600, margin: '4px 0 2px', color: 'var(--pkh-text-primary)' }}>
                       {bm.title}
                     </h4>
-
-                    {/* Clean Subdued URL for E2E and subtle reference */}
-                    <span
-                      className="bookmark-card-url"
-                      style={{
-                        display: 'block',
-                        fontSize: '11px',
-                        color: 'var(--pkh-text-muted, #94a3b8)',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        maxWidth: '100%',
-                        marginBottom: '6px',
-                        opacity: 0.7,
-                      }}
-                    >
-                      {bm.url}
-                    </span>
 
                     {/* Description if present */}
                     {bm.description && (

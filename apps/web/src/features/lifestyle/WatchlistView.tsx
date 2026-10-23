@@ -8,6 +8,7 @@ import {
 } from '../../api';
 import { Button } from '../../components/ui/Button';
 import { TagSelector } from '../../components/TagSelector';
+import { WebsiteLogo } from '../../components/ui/WebsiteLogo';
 import './lifestyle.css';
 
 export const WatchlistView: React.FC = () => {
@@ -360,16 +361,13 @@ export const WatchlistView: React.FC = () => {
               <div key={item.id} className="lifestyle-item-card">
                 <div>
                   <div className="lifestyle-item-header">
-                    <h4 className="lifestyle-item-title">{item.title}</h4>
-                    {item.url && (
-                      <a
-                        href={item.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ fontSize: '12px', textDecoration: 'none', color: 'var(--pkh-primary)' }}
-                      >
-                        ↗ เปิดดู
+                    {item.url ? (
+                      <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <WebsiteLogo url={item.url} size={28} title={item.title} />
+                        <h4 className="lifestyle-item-title" style={{ margin: 0 }}>{item.title}</h4>
                       </a>
+                    ) : (
+                      <h4 className="lifestyle-item-title">{item.title}</h4>
                     )}
                   </div>
 

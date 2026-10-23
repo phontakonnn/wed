@@ -856,9 +856,6 @@ export async function handleFirebaseRequest<T>(path: string, options: RequestIni
       return { ok: true } as T;
     }
   }
-      return { ok: true } as T;
-    }
-  }
 
   if (pathname.startsWith('/api/custom-records')) {
     const id = pathname.replace('/api/custom-records', '').replace(/^\//, '');

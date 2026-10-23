@@ -17,7 +17,7 @@ export type NotesView =
   | 'vault'
   | 'library'
   | 'custom-category'
-  | 'help-support'
+
   | 'custom-type'
   | 'admin';
 
@@ -46,7 +46,6 @@ export const DEFAULT_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'shopping', view: 'shopping', label: 'ของใช้ที่ต้องซื้อ', defaultLabel: 'ของใช้ที่ต้องซื้อ', icon: '🛒', enabled: true },
   { id: 'travel', view: 'travel', label: 'สถานที่เที่ยวที่อยากไป', defaultLabel: 'สถานที่เที่ยวที่อยากไป', icon: '✈️', enabled: true },
   { id: 'favorites', view: 'favorites', label: 'รายการโปรด', defaultLabel: 'รายการโปรด', icon: '⭐', enabled: true },
-  { id: 'help-support', view: 'help-support', label: 'ศูนย์ช่วยเหลือ & ติดต่อผู้ดูแล', defaultLabel: 'ศูนย์ช่วยเหลือ & ติดต่อผู้ดูแล', icon: '💬', enabled: true },
   { id: 'trash', view: 'trash', label: 'ถังขยะ', defaultLabel: 'ถังขยะ', icon: '🗑️', enabled: true },
 ];
 

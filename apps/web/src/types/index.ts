@@ -11,7 +11,7 @@ import type {
 export type { NotesView, SidebarNavItem } from '../sidebarNav';
 export type { User };
 
-export type AuthState = 'checking' | 'signed-out' | 'signed-in' | 'unavailable';
+export type AuthState = 'checking' | 'signed-out' | 'signed-in';
 
 export type ThemeName =
   | 'aurora-scenic'

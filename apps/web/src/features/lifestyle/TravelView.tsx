@@ -8,6 +8,7 @@ import {
 } from '../../api';
 import { Button } from '../../components/ui/Button';
 import { TagSelector } from '../../components/TagSelector';
+import { WebsiteLogo } from '../../components/ui/WebsiteLogo';
 import './lifestyle.css';
 
 export const TravelView: React.FC = () => {
@@ -367,7 +368,14 @@ export const TravelView: React.FC = () => {
                 <div>
                   <div className="lifestyle-item-header">
                     <div>
-                      <h4 className="lifestyle-item-title">{place.name}</h4>
+                      {place.mapUrl ? (
+                        <a href={place.mapUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <WebsiteLogo url={place.mapUrl} size={24} title={place.name} />
+                          <h4 className="lifestyle-item-title" style={{ margin: 0 }}>{place.name}</h4>
+                        </a>
+                      ) : (
+                        <h4 className="lifestyle-item-title">{place.name}</h4>
+                      )}
                       {place.location && (
                         <span style={{ fontSize: '12px', color: 'var(--pkh-text-secondary)' }}>
                           📍 {place.location}

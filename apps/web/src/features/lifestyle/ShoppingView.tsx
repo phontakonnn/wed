@@ -8,6 +8,7 @@ import {
   clearBoughtShoppingItems,
 } from '../../api';
 import { Button } from '../../components/ui/Button';
+import { WebsiteLogo } from '../../components/ui/WebsiteLogo';
 import './lifestyle.css';
 
 export const ShoppingView: React.FC = () => {
@@ -395,6 +396,9 @@ export const ShoppingView: React.FC = () => {
                         onChange={() => void handleToggleBought(item)}
                         style={{ width: '18px', height: '18px', cursor: 'pointer' }}
                       />
+                      {item.url ? (
+                        <WebsiteLogo url={item.url} size={24} title={item.name} />
+                      ) : null}
                       <h4 className="lifestyle-item-title">{item.name}</h4>
                     </label>
 

@@ -211,7 +211,6 @@ const ShoppingView = lazy(() => import('./features/lifestyle/ShoppingView').then
 const TravelView = lazy(() => import('./features/lifestyle/TravelView').then((m) => ({ default: m.TravelView })));
 const CustomRecordsView = lazy(() => import('./features/custom-types/CustomRecordsView').then((m) => ({ default: m.CustomRecordsView })));
 const CustomTypeBuilderModal = lazy(() => import('./features/custom-types/CustomTypeBuilderModal').then((m) => ({ default: m.CustomTypeBuilderModal })));
-const HelpSupportView = lazy(() => import('./features/support/HelpSupportView').then((m) => ({ default: m.HelpSupportView })));
 
 const ViewFallback = () => (
   <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }} aria-busy="true">
@@ -4428,8 +4427,6 @@ function App() {
           <ShoppingView />
         ) : viewMode === 'travel' ? (
           <TravelView />
-        ) : viewMode === 'help-support' ? (
-          <HelpSupportView onBackToHome={() => setViewMode('home')} />
         ) : viewMode === 'custom-type' ? (
           (customDataTypes.find((t) => t.id === selectedCustomTypeId) || customDataTypes[0]) ? (
             <CustomRecordsView

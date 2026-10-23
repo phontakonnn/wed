@@ -67,7 +67,7 @@ const NAV_GROUPS: Array<{
   { id: 'life-work', title: 'งาน & ตารางชีวิต', views: ['tasks', 'projects', 'goals', 'schedule', 'people'] },
   { id: 'knowledge', title: 'การ์ดข้อมูล & ลิงก์', views: ['notes', 'vault', 'library', 'bookmarks'] },
   { id: 'lifestyle', title: 'ไลฟ์สไตล์', views: ['watchlist', 'shopping', 'travel'] },
-  { id: 'system', title: 'ระบบ & ช่วยเหลือ', views: ['favorites', 'help-support', 'trash'] },
+  { id: 'system', title: 'ระบบ', views: ['favorites', 'trash'] },
 ];
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -254,17 +254,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <p className="sidebar-hint">ยังไม่มีหมวดหมู่ — กด + เพิ่ม เพื่อจัดระเบียบข้อมูล</p>
           ) : (
             <div className="custom-category-tree" aria-label="รายการหมวดหมู่ของฉัน">
-              {customCategories.filter((c) => !c.parentId).map((cat) => {
+              {customCategories.filter((c) => !c.parentId && Boolean(c.name && c.name.trim())).map((cat) => {
                 const isSelected = viewMode === 'custom-category' && selectedCustomCategoryId === cat.id;
-                const children = customCategories.filter((sub) => sub.parentId === cat.id);
+                const children = customCategories.filter((sub) => sub.parentId === cat.id && Boolean(sub.name && sub.name.trim()));
+                const catIcon = cat.icon || '📁';
+                const catColor = cat.color || '#3f7658';
                 return (
                   <div key={cat.id} className="category-tree-item">
                     <div
                       className={`custom-cat-row${isSelected ? ' is-active' : ''}`}
                       onClick={() => onSelectCustomCategory(cat.id)}
                     >
-                      <span className="cat-color-dot" style={{ backgroundColor: cat.color }} />
-                      <span className="cat-icon">{cat.icon}</span>
+                      <span className="cat-color-dot" style={{ backgroundColor: catColor, minWidth: '7px' }} />
+                      <span className="cat-icon">{catIcon}</span>
                       <span className="cat-name">{cat.name}</span>
                       {cat.itemCount !== undefined && cat.itemCount > 0 && (
                         <span className="cat-badge">{cat.itemCount}</span>
@@ -302,14 +304,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       <div className="custom-cat-sublist">
                         {children.map((sub) => {
                           const isSubSelected = viewMode === 'custom-category' && selectedCustomCategoryId === sub.id;
+                          const subIcon = sub.icon || '📁';
+                          const subColor = sub.color || '#3f7658';
                           return (
                             <div
                               key={sub.id}
                               className={`custom-cat-row is-sub${isSubSelected ? ' is-active' : ''}`}
                               onClick={() => onSelectCustomCategory(sub.id)}
                             >
-                              <span className="cat-color-dot sub-dot" style={{ backgroundColor: sub.color }} />
-                              <span className="cat-icon">{sub.icon}</span>
+                              <span className="cat-color-dot sub-dot" style={{ backgroundColor: subColor, minWidth: '7px' }} />
+                              <span className="cat-icon">{subIcon}</span>
                               <span className="cat-name">{sub.name}</span>
                               {sub.itemCount !== undefined && sub.itemCount > 0 && (
                                 <span className="cat-badge">{sub.itemCount}</span>
