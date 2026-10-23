@@ -102,6 +102,10 @@ export default defineConfig(({ mode }) => ({
           if (!id.includes('node_modules')) return undefined;
           if (id.includes('firebase') || id.includes('@firebase')) return 'firebase-vendor';
           if (id.includes('react')) return 'react-vendor';
+          // Validation is only imported by lazy modals (import a backup, apply a
+          // saved filter), so it gets its own chunk instead of riding along in
+          // the `vendor` chunk that the entry preloads.
+          if (id.includes('zod')) return 'validation-vendor';
           return 'vendor';
         },
       },

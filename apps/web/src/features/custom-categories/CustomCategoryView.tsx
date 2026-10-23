@@ -2,6 +2,7 @@ import React from 'react';
 import type { CustomCategory, CustomCategoryItemsResult, StoredFile } from '../../api';
 import type { NotesView } from '../../types';
 import { fileIcon, formatBytes, formatDate } from '../../lib/formatters';
+import { sanitizeHref } from '../../lib/safeUrl';
 import { Button } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Skeleton } from '../../components/ui/Skeleton';
@@ -300,7 +301,7 @@ export const CustomCategoryView: React.FC<CustomCategoryViewProps> = ({
                             <div className="bookmark-card-top">
                               <span className="bookmark-domain-pill">🌐 Link</span>
                               <a
-                                href={bm.url}
+                                href={sanitizeHref(bm.url)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="bookmark-external-link"

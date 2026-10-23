@@ -1,16 +1,9 @@
 import React, { useMemo, useState } from 'react';
+import { sanitizeHref } from '../lib/safeUrl';
 
 interface MarkdownViewerProps {
   content: string;
   className?: string;
-}
-
-function sanitizeHref(url: string): string {
-  const trimmed = url.trim();
-  if (/^(https?:|mailto:|#|\/)/i.test(trimmed)) {
-    return trimmed;
-  }
-  return '#unsafe-link';
 }
 
 function renderInline(text: string): React.ReactNode[] {

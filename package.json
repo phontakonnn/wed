@@ -26,7 +26,8 @@
     "backup:staging": "npm --prefix apps/server run backup:staging --",
     "test:e2e": "npm --prefix apps/web run test:e2e",
     "prepare": "git config core.hooksPath .githooks",
-    "hooks:setup": "git config core.hooksPath .githooks"
+    "hooks:setup": "git config core.hooksPath .githooks",
+    "test:rules": "npm --prefix apps/web run test:rules"
   },
   "license": "MIT",
   "type": "module"

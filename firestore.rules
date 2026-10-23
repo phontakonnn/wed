@@ -33,10 +33,13 @@ service cloud.firestore {
     }
 
     // Everything else lives under users/{uid}/... and is private to that uid.
+    // Document ids are client-generated in places, so bound their length as well.
     match /users/{uid}/{collectionName}/{documentId} {
       allow get, list: if isOwner(uid);
-      allow create, update: if isOwner(uid) && validPayload();
-      allow delete: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && validPayload()
+        && documentId.size() <= 200;
+      allow delete: if isOwner(uid) && documentId.size() <= 200;
     }
 
     // Deny anything that does not match the user-scoped paths above.

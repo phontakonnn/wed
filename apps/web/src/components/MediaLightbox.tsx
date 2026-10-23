@@ -1,3 +1,4 @@
+import { sanitizeHref } from '../lib/safeUrl';
 import React from 'react';
 import type { StoredFile } from '../api';
 import { fileIcon, formatBytes } from '../lib/formatters';
@@ -22,7 +23,7 @@ export const MediaLightbox: React.FC<MediaLightboxProps> = ({ file, onClose }) =
           <div className="media-lightbox-actions">
             <a
               className="button button-quiet"
-              href={file.downloadUrl}
+              href={sanitizeHref(file.downloadUrl)}
               download={file.displayName}
             >
               ⬇️ ดาวน์โหลด
@@ -78,7 +79,7 @@ export const MediaLightbox: React.FC<MediaLightboxProps> = ({ file, onClose }) =
             <div className="lightbox-fallback">
               <span style={{ fontSize: '48px' }}>📄</span>
               <p>ไฟล์นี้ไม่รองรับการเล่นสดบนเว็บ ({file.mediaType})</p>
-              <a className="button button-primary" href={file.downloadUrl} download={file.displayName}>
+              <a className="button button-primary" href={sanitizeHref(file.downloadUrl)} download={file.displayName}>
                 ดาวน์โหลดไฟล์ลงเครื่อง
               </a>
             </div>

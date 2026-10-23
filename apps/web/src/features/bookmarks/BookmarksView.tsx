@@ -1,5 +1,6 @@
 import React, { useState, useMemo, type FormEvent } from 'react';
 import type { Bookmark, CustomCategory } from '../../api';
+import { sanitizeHref } from '../../lib/safeUrl';
 import { formatDate } from '../../lib/formatters';
 import { Button } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
@@ -510,7 +511,7 @@ export const BookmarksView: React.FC<BookmarksViewProps> = ({
                           {isCopied ? '✓ คัดลอกแล้ว!' : '📋 คัดลอก'}
                         </button>
                         <a
-                          href={bm.url}
+                          href={sanitizeHref(bm.url)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="bookmark-external-link"

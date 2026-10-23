@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { sanitizeHref } from '../../lib/safeUrl';
 import {
   type CustomDataType,
   type CustomDataRecord,
@@ -391,7 +392,7 @@ export const CustomRecordsView: React.FC<CustomRecordsViewProps> = ({
                           {field.type === 'checkbox' ? (
                             val ? '✓ ใช่' : '✕ ไม่ใช่'
                           ) : field.type === 'url' ? (
-                            <a href={String(val)} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--pkh-primary)' }}>
+                            <a href={sanitizeHref(String(val))} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--pkh-primary)' }}>
                               {String(val)}
                             </a>
                           ) : (
@@ -489,7 +490,7 @@ export const CustomRecordsView: React.FC<CustomRecordsViewProps> = ({
                         ) : field.type === 'checkbox' ? (
                           val ? '✓' : '✕'
                         ) : field.type === 'url' ? (
-                          <a href={String(val)} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--pkh-primary)' }}>
+                          <a href={sanitizeHref(String(val))} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--pkh-primary)' }}>
                             ลิงก์ ↗
                           </a>
                         ) : (

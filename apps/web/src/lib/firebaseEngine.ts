@@ -32,6 +32,13 @@ import { logger } from './logger';
 
 export { ApiError };
 
+/**
+ * The single owner address. Kept in one constant so the admin checks cannot
+ * drift apart; moving this to a Custom Claim is the follow-up tracked in
+ * docs/SECURITY.md.
+ */
+const OWNER_EMAIL = 'biwking1997@gmail.com';
+
 export function getCurrentUid(): string {
   const user = auth.currentUser;
   if (user?.uid) return user.uid;
@@ -237,7 +244,7 @@ export async function handleFirebaseRequest<T>(path: string, options: RequestIni
       logger.warn('Firestore getDoc users failed, using local cache', 'firebaseEngine.users', { error: err });
     }
 
-    const isSuperAdmin = fbUser.email?.toLowerCase() === 'biwking1997@gmail.com';
+    const isSuperAdmin = fbUser.email?.toLowerCase() === OWNER_EMAIL;
 
     if (!snap || !snap.exists()) {
       const username = fbUser.email?.split('@')[0] || 'user';
@@ -272,91 +279,29 @@ export async function handleFirebaseRequest<T>(path: string, options: RequestIni
     const rawInput = (body?.username || '').trim();
     const password = body?.password || '';
 
-    // Primary master admin: phontakon / phontakon_1234
-    if (rawInput.toLowerCase() === 'phontakon' && password === 'phontakon_1234') {
-      const adminEmail = 'phontakon@personal-life-os.app';
-      try {
-        const cred = await signInWithEmailAndPassword(auth, adminEmail, password);
-        localStorage.setItem('pkh.currentUid', cred.user.uid);
-        const user = {
-          id: cred.user.uid,
-          username: 'phontakon',
-          displayName: 'Phontakon (Admin)',
-          role: 'admin' as const,
-          isActive: true,
-        };
-        try {
-          await setDoc(doc(db, 'users', cred.user.uid), { ...user, email: adminEmail, updatedAt: Date.now() }, { merge: true });
-        } catch {}
-        return { ok: true, user } as T;
-      } catch {
-        try {
-          const cred = await createUserWithEmailAndPassword(auth, adminEmail, password);
-          localStorage.setItem('pkh.currentUid', cred.user.uid);
-          const user = {
-            id: cred.user.uid,
-            username: 'phontakon',
-            displayName: 'Phontakon (Admin)',
-            role: 'admin' as const,
-            isActive: true,
-          };
-          try {
-            await setDoc(doc(db, 'users', cred.user.uid), { ...user, email: adminEmail, createdAt: Date.now(), updatedAt: Date.now() }, { merge: true });
-          } catch {}
-          return { ok: true, user } as T;
-        } catch {
-          // Direct admin session fallback
-          const primaryUid = auth.currentUser?.uid || 'uid_phontakon_master';
-          localStorage.setItem('pkh.currentUid', primaryUid);
-          const user = {
-            id: primaryUid,
-            username: 'phontakon',
-            displayName: 'Phontakon (Admin)',
-            role: 'admin' as const,
-            isActive: true,
-          };
-          try {
-            await setDoc(doc(db, 'users', primaryUid), { ...user, email: adminEmail, updatedAt: Date.now() }, { merge: true });
-          } catch {}
-          return { ok: true, user } as T;
-        }
-      }
-    }
+    // A username alias is only a convenience: Firebase Auth stays the single
+    // place a password is verified, so no credential is ever shipped in the
+    // bundle. Anything not listed here is treated as an email or username.
+    const usernameAliases: Record<string, string> = {
+      phontakon: 'phontakon@personal-life-os.app',
+    };
+    const emailToUse = usernameAliases[rawInput.toLowerCase()] ?? toValidAuthEmail(rawInput);
 
-    const emailToUse = toValidAuthEmail(rawInput);
     try {
       const cred = await signInWithEmailAndPassword(auth, emailToUse, password);
       localStorage.setItem('pkh.currentUid', cred.user.uid);
-      return (await handleFirebaseRequest<{ user: any }>('/api/auth/me')) as any;
-    } catch (err: any) {
-      const code = err.code || '';
-      // If user does not exist or credentials not found, attempt auto-creation for admin or username login
-      if (
-        code === 'auth/user-not-found' ||
-        code === 'auth/invalid-credential' ||
-        code === 'auth/invalid-login-credentials'
-      ) {
-        // Auto create user account smoothly
-        try {
-          const isSuperAdmin = emailToUse === 'biwking1997@gmail.com' || rawInput.toLowerCase() === 'admin';
-          const regRes = (await handleFirebaseRequest<{ user: any }>('/api/auth/register', {
-            method: 'POST',
-            body: JSON.stringify({
-              username: rawInput,
-              email: emailToUse,
-              password,
-              displayName: isSuperAdmin ? 'Administrator' : rawInput,
-            }),
-          })) as any;
-          return regRes as T;
-        } catch (regErr: any) {
-          if (regErr.code === 'auth/email-already-in-use') {
-            throw new ApiError('รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง', 401);
-          }
-          throw new ApiError(regErr.message || 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', 401);
-        }
-      }
-      throw new ApiError(err.message || 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ', 401);
+      return (await handleFirebaseRequest<{ user: unknown }>('/api/auth/me')) as T;
+    } catch (err) {
+      const code = (err as { code?: string }).code ?? '';
+      logger.warn('Sign-in rejected', 'firebaseEngine.login', { code });
+      // A failed sign-in never creates an account and never fabricates a
+      // session: both used to be possible and both were privilege escalations.
+      throw new ApiError(
+        code === 'auth/too-many-requests'
+          ? 'พยายามเข้าสู่ระบบหลายครั้งเกินไป กรุณารอสักครู่แล้วลองใหม่'
+          : 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง',
+        401,
+      );
     }
   }
 
@@ -364,7 +309,8 @@ export async function handleFirebaseRequest<T>(path: string, options: RequestIni
     const rawUsername = (body?.username || '').trim();
     const rawEmail = (body?.email || rawUsername).trim();
     const emailToUse = toValidAuthEmail(rawEmail);
-    const password = body?.password || 'LifeOS1234!';
+    const password = body?.password || '';
+    if (!password) throw new ApiError('กรุณากำหนดรหัสผ่าน', 400);
 
     let isFirstUser = false;
     try {
@@ -372,8 +318,10 @@ export async function handleFirebaseRequest<T>(path: string, options: RequestIni
       isFirstUser = snap.empty;
     } catch {}
 
-    const isSuperAdmin = emailToUse === 'biwking1997@gmail.com' || rawUsername.toLowerCase() === 'admin';
-    const role = isSuperAdmin || isFirstUser ? 'admin' : (body?.role || 'user');
+    // Registering with the literal username 'admin' used to grant the admin
+    // role to anyone. Only the owner address or the very first account does.
+    const isOwner = emailToUse.toLowerCase() === OWNER_EMAIL;
+    const role = isOwner || isFirstUser ? 'admin' : (body?.role || 'user');
 
     const cred = await createUserWithEmailAndPassword(auth, emailToUse, password);
     const uid = cred.user.uid;
@@ -1029,7 +977,7 @@ export async function handleFirebaseRequest<T>(path: string, options: RequestIni
         return { ticket, replies } as T;
       }
       const uid = getCurrentUid();
-      const isAdmin = auth.currentUser?.email === 'biwking1997@gmail.com';
+      const isAdmin = auth.currentUser?.email === OWNER_EMAIL;
       const q = isAdmin
         ? query(collection(db, 'support_tickets'))
         : query(collection(db, 'support_tickets'), where('ownerUid', '==', uid));
@@ -1046,7 +994,7 @@ export async function handleFirebaseRequest<T>(path: string, options: RequestIni
           ticketId: tid,
           message: body?.message || '',
           senderName: auth.currentUser?.displayName || 'ผู้ใช้',
-          isAdmin: auth.currentUser?.email === 'biwking1997@gmail.com',
+          isAdmin: auth.currentUser?.email === OWNER_EMAIL,
           createdAt: Date.now(),
         };
         await setDoc(doc(db, 'support_tickets', tid, 'replies', replyId), reply);
@@ -1073,7 +1021,7 @@ export async function handleFirebaseRequest<T>(path: string, options: RequestIni
   // 16. Admin
   if (pathname.startsWith('/api/admin/')) {
     if (pathname === '/api/admin/status') {
-      const isSuper = auth.currentUser?.email?.toLowerCase() === 'biwking1997@gmail.com';
+      const isSuper = auth.currentUser?.email?.toLowerCase() === OWNER_EMAIL;
       const isUnlocked = isSuper || (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('pkh.adminUnlocked') === 'true');
       return { isProtected: true, isUnlocked } as T;
     }

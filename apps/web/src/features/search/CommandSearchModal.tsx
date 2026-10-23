@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SearchBucketType, SearchResults, CustomCategory, SavedFilterItem } from '../../api';
 import { getSavedFilters, saveFilter, deleteSavedFilter } from '../../api';
 import { SEARCH_TYPE_LABELS } from '../../lib/constants';
+import { parseSavedFilterCriteria } from '../../lib/validation';
 import { formatBytes } from '../../lib/formatters';
 import { Skeleton } from '../../components/ui/Skeleton';
 
@@ -88,7 +89,8 @@ export const CommandSearchModal: React.FC<CommandSearchModalProps> = ({
 
   const handleApplySavedFilter = (item: SavedFilterItem) => {
     try {
-      const criteria = JSON.parse(item.queryCriteria);
+      const criteria = parseSavedFilterCriteria(item.queryCriteria);
+      if (!criteria) return;
       if (criteria.query !== undefined) onQueryChange(criteria.query);
       if (criteria.from !== undefined) onFromChange(criteria.from);
       if (criteria.to !== undefined) onToChange(criteria.to);

@@ -1,3 +1,4 @@
+import { parseImportPayload } from '../../lib/validation';
 import React, { useState, useEffect, useRef, useCallback, type ChangeEvent, type FormEvent } from 'react';
 import {
   type User,
@@ -258,7 +259,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
     setImportResult(null);
     try {
       const text = await file.text();
-      const parsed = JSON.parse(text);
+      const parsed = parseImportPayload(text);
       const res = await importUserData(parsed);
       setImportResult(res.result);
       showNotice('นำเข้าและกู้คืนข้อมูลสำเร็จแล้ว!');
