@@ -220,10 +220,10 @@ export const HabitsView: React.FC<HabitsViewProps> = ({
       }
 
       if (match) {
-        let icon = '🔵';
-        let type: CalendarEventItem['type'] = 'event';
-        let badgeColor = '#2563eb';
-        let badgeBg = '#dbeafe';
+        let icon: string;
+        let type: CalendarEventItem['type'];
+        let badgeColor: string;
+        let badgeBg: string;
 
         if (r.category === 'birthday') {
           icon = '🎂';

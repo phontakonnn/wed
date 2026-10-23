@@ -470,7 +470,6 @@ export const BookmarksView: React.FC<BookmarksViewProps> = ({
         ) : (
           <div className="bookmarks-grid">
             {filteredBookmarks.map((bm) => {
-              const domain = extractDomain(bm.url);
               const isActive = activeBookmark?.id === bm.id;
               const isCopied = copiedId === bm.id;
               const categoryBadge = bm.category || '📦 อื่นๆ';

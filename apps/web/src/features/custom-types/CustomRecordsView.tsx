@@ -389,7 +389,7 @@ export const CustomRecordsView: React.FC<CustomRecordsViewProps> = ({
                         </strong>
                         <span style={{ color: 'var(--pkh-text-secondary)', flex: 1, wordBreak: 'break-word' }}>
                           {field.type === 'checkbox' ? (
-                            Boolean(val) ? '✓ ใช่' : '✕ ไม่ใช่'
+                            val ? '✓ ใช่' : '✕ ไม่ใช่'
                           ) : field.type === 'url' ? (
                             <a href={String(val)} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--pkh-primary)' }}>
                               {String(val)}
@@ -487,7 +487,7 @@ export const CustomRecordsView: React.FC<CustomRecordsViewProps> = ({
                         {val === undefined || val === null || val === '' ? (
                           <span style={{ color: 'var(--pkh-text-muted)' }}>-</span>
                         ) : field.type === 'checkbox' ? (
-                          Boolean(val) ? '✓' : '✕'
+                          val ? '✓' : '✕'
                         ) : field.type === 'url' ? (
                           <a href={String(val)} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--pkh-primary)' }}>
                             ลิงก์ ↗
