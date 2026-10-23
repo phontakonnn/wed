@@ -16,6 +16,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  getCountFromServer,
   setDoc,
   updateDoc,
   deleteDoc,
@@ -32,11 +33,10 @@ export { ApiError };
 export function getCurrentUid(): string {
   const user = auth.currentUser;
   if (user?.uid) return user.uid;
-  if (typeof window !== 'undefined') {
-    const cached = localStorage.getItem('pkh.currentUid');
-    if (cached) return cached;
-  }
-  return 'uid_phontakon_master';
+  throw new ApiError('กรุณาเข้าสู่ระบบก่อนใช้งานข้อมูล', 401, {
+    code: 'unauthenticated',
+    retryable: false,
+  });
 }
 
 function userCol(name: string) {
@@ -64,33 +64,36 @@ interface TaxonomyNoteDoc {
 
 
 /* ==========================================================================
-   LocalStorage Fallback Engine (prevents app crashes if Firestore rules pending)
+   Firestore data access
+   Firestore's persistent cache is the only offline layer. There is deliberately
+   no localStorage copy of collections: it hid permission/network errors and
+   could grow past the 5 MB quota.
    ========================================================================== */
 
-function getLocalFallback<T>(colName: string): T[] {
-  try {
-    const raw = localStorage.getItem(`pkh.fallback.${colName}`);
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return [];
+function dataError(action: string, err: unknown): ApiError {
+  if (err instanceof ApiError) return err;
+  const message = err instanceof Error ? err.message : String(err);
+  const permissionDenied = /permission|insufficient/i.test(message);
+  return new ApiError(
+    permissionDenied
+      ? 'ไม่มีสิทธิ์เข้าถึงข้อมูลนี้ กรุณาเข้าสู่ระบบใหม่'
+      : `โหลดหรือบันทึกข้อมูลไม่สำเร็จ (${action})`,
+    permissionDenied ? 403 : 500,
+    {
+      code: permissionDenied ? 'permission-denied' : 'unknown',
+      cause: err,
+      retryable: !permissionDenied,
+    },
+  );
 }
 
-function setLocalFallback<T>(colName: string, items: T[]): void {
+async function listDocs<T>(colName: string, maxDocs?: number): Promise<T[]> {
   try {
-    localStorage.setItem(`pkh.fallback.${colName}`, JSON.stringify(items));
-  } catch {}
-}
-
-async function listDocs<T>(colName: string): Promise<T[]> {
-  try {
-    const q = query(userCol(colName));
-    const snap = await getDocs(q);
-    const items = snap.docs.map((d) => ({ id: d.id, ...d.data() } as T));
-    setLocalFallback(colName, items);
-    return items;
-  } catch (err: any) {
-    console.warn(`Firestore listDocs ${colName} (using local fallback):`, err?.message || err);
-    return getLocalFallback<T>(colName);
+    const constraints = maxDocs ? [limit(maxDocs)] : [];
+    const snap = await getDocs(query(userCol(colName), ...constraints));
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as T));
+  } catch (err) {
+    throw dataError(`list ${colName}`, err);
   }
 }
 
@@ -98,54 +101,49 @@ async function getSingleDoc<T>(colName: string, id: string): Promise<T | null> {
   try {
     const d = await getDoc(userDoc(colName, id));
     if (d.exists()) return { id: d.id, ...d.data() } as T;
-  } catch (err: any) {
-    console.warn(`Firestore getDoc ${colName}/${id} (checking local fallback):`, err?.message || err);
+    return null;
+  } catch (err) {
+    throw dataError(`get ${colName}/${id}`, err);
   }
-  const fallbackList = getLocalFallback<any>(colName);
-  return fallbackList.find((item) => item.id === id) || null;
 }
 
 async function upsertDoc<T>(colName: string, id: string | undefined, data: any): Promise<T> {
-  const uid = getCurrentUid();
-  const docId = id || doc(collection(db, 'users', uid, colName)).id;
-  const now = Date.now();
-  const payload = {
-    ...data,
-    id: docId,
-    updatedAt: now,
-    ...(!id ? { createdAt: data.createdAt || now } : {}),
-  };
-
-  // Sync to local fallback immediately
   try {
-    const current = getLocalFallback<any>(colName);
-    const idx = current.findIndex((item) => item.id === docId);
-    if (idx >= 0) current[idx] = { ...current[idx], ...payload };
-    else current.unshift(payload);
-    setLocalFallback(colName, current);
-  } catch {}
-
-  // Attempt Firestore write
-  try {
-    const targetDoc = doc(db, 'users', uid, colName, docId);
-    await setDoc(targetDoc, payload, { merge: true });
-  } catch (err: any) {
-    console.warn(`Firestore setDoc ${colName}/${docId} warning (saved safely in local storage):`, err?.message || err);
+    const uid = getCurrentUid();
+    const docId = id || doc(collection(db, 'users', uid, colName)).id;
+    const now = Date.now();
+    const payload = {
+      ...data,
+      id: docId,
+      updatedAt: now,
+      ...(!id ? { createdAt: data.createdAt || now } : {}),
+    };
+    await setDoc(doc(db, 'users', uid, colName, docId), payload, { merge: true });
+    return payload as T;
+  } catch (err) {
+    throw dataError(`write ${colName}/${id ?? 'new'}`, err);
   }
-
-  return payload as T;
 }
 
 async function removeDoc(colName: string, id: string): Promise<void> {
   try {
-    const current = getLocalFallback<any>(colName);
-    setLocalFallback(colName, current.filter((item) => item.id !== id));
-  } catch {}
-
-  try {
     await deleteDoc(userDoc(colName, id));
-  } catch (err: any) {
-    console.warn(`Firestore deleteDoc ${colName}/${id} warning:`, err?.message || err);
+  } catch (err) {
+    throw dataError(`delete ${colName}/${id}`, err);
+  }
+}
+
+/**
+ * Aggregation query: one result for any number of documents. Returns null when
+ * the backend/emulator does not support count queries so callers can fall back
+ * to the size of the bounded page they already loaded.
+ */
+async function countActive(colName: string): Promise<number | null> {
+  try {
+    const snap = await getCountFromServer(query(userCol(colName), where('isDeleted', '==', false)));
+    return snap.data().count;
+  } catch {
+    return null;
   }
 }
 
@@ -450,15 +448,43 @@ export async function handleFirebaseRequest<T>(path: string, options: RequestIni
         if (!n) throw new ApiError('ไม่พบโน้ตนี้', 404);
         return { note: n } as T;
       }
-      const page = Number(params.get('page') || '1');
-      const pageSize = Number(params.get('pageSize') || '20');
-      const all = await listDocs<any>('notes');
+      const page = Math.max(1, Number(params.get('page') || '1'));
+      const pageSize = Math.min(100, Math.max(1, Number(params.get('pageSize') || '20')));
+      const q = params.get('q') || '';
+
+      if (noteId === 'search') {
+        if (!q.trim()) return { notes: [], page, pageSize, total: 0 } as T;
+        // Full-text search runs on the client-side index, never on Firestore.
+        // Bound the scan so a search cannot read an unbounded collection.
+        const scanned = await listDocs<any>('notes', 300);
+        const active = scanned.filter((n) => !n.isDeleted);
+        const { createNoteSearchIndex, searchNotes: searchIndex } = await import('./thaiSearch');
+        const index = createNoteSearchIndex(active.map((note) => ({
+          id: String(note.id),
+          title: String(note.title || ''),
+          content: String(note.content || ''),
+          updatedAt: Number(note.updatedAt || note.createdAt || 0),
+        })));
+        const hits = searchIndex(index, q, page * pageSize);
+        const byId = new Map(active.map((note) => [String(note.id), note]));
+        const pageHits = hits.slice((page - 1) * pageSize, page * pageSize);
+        return {
+          notes: pageHits.map((hit) => byId.get(hit.id)).filter(Boolean),
+          page,
+          pageSize,
+          total: hits.length,
+        } as T;
+      }
+
+      const scanLimit = Math.min(500, page * pageSize + 20);
+      const all = await listDocs<any>('notes', scanLimit);
       const active = all.filter((n) => !n.isDeleted).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      const counted = await countActive('notes');
       return {
         notes: active.slice((page - 1) * pageSize, page * pageSize),
         page,
         pageSize,
-        total: active.length,
+        total: counted ?? active.length,
       } as T;
     }
     if (method === 'POST') {
@@ -479,15 +505,17 @@ export async function handleFirebaseRequest<T>(path: string, options: RequestIni
   if (pathname === '/api/bookmarks' || pathname.startsWith('/api/bookmarks/')) {
     const bookmarkId = pathname.replace('/api/bookmarks', '').replace(/^\//, '');
     if (method === 'GET') {
-      const page = Number(params.get('page') || '1');
-      const pageSize = Number(params.get('pageSize') || '50');
-      const all = await listDocs<any>('bookmarks');
+      const page = Math.max(1, Number(params.get('page') || '1'));
+      const pageSize = Math.min(100, Math.max(1, Number(params.get('pageSize') || '50')));
+      const scanLimit = Math.min(500, page * pageSize + 20);
+      const all = await listDocs<any>('bookmarks', scanLimit);
       const active = all.filter((b) => !b.isDeleted).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      const counted = await countActive('bookmarks');
       return {
         bookmarks: active.slice((page - 1) * pageSize, page * pageSize),
         page,
         pageSize,
-        total: active.length,
+        total: counted ?? active.length,
       } as T;
     }
     if (method === 'POST') {
@@ -1217,18 +1245,34 @@ export async function handleFirebaseRequest<T>(path: string, options: RequestIni
 
   // 17. Dashboard
   if (pathname === '/api/dashboard') {
-    const [notes, bookmarks, tasks, reminders, habits, vault, library, people, projects, goals, timeblocks] = await Promise.all([
-      listDocs<any>('notes'),
-      listDocs<any>('bookmarks'),
-      listDocs<any>('tasks'),
-      listDocs<any>('reminders'),
-      listDocs<any>('habits'),
-      listDocs<any>('vault'),
-      listDocs<any>('library'),
-      listDocs<any>('people'),
-      listDocs<any>('projects'),
-      listDocs<any>('goals'),
-      listDocs<any>('timeblocks'),
+    // Counts use aggregation queries (no document reads); only the small lists
+    // that the dashboard actually renders are fetched.
+    const [
+      notes, bookmarks, tasks, reminders, habits, vault, library, people, projects, goals, timeblocks,
+      noteCount, bookmarkCount, taskCount, reminderCount, habitCount, vaultCount, libraryCount,
+      peopleCount, projectCount, goalCount,
+    ] = await Promise.all([
+      listDocs<any>('notes', 20),
+      listDocs<any>('bookmarks', 10),
+      listDocs<any>('tasks', 100),
+      listDocs<any>('reminders', 20),
+      listDocs<any>('habits', 20),
+      listDocs<any>('vault', 10),
+      listDocs<any>('library', 10),
+      listDocs<any>('people', 10),
+      listDocs<any>('projects', 10),
+      listDocs<any>('goals', 10),
+      listDocs<any>('timeblocks', 50),
+      countActive('notes'),
+      countActive('bookmarks'),
+      countActive('tasks'),
+      countActive('reminders'),
+      countActive('habits'),
+      countActive('vault'),
+      countActive('library'),
+      countActive('people'),
+      countActive('projects'),
+      countActive('goals'),
     ]);
 
     const activeNotes = notes.filter((n) => !n.isDeleted);
@@ -1254,26 +1298,26 @@ export async function handleFirebaseRequest<T>(path: string, options: RequestIni
     return {
       today: todayStr,
       counts: {
-        notes: activeNotes.length,
-        bookmarks: activeBookmarks.length,
+        notes: noteCount ?? activeNotes.length,
+        bookmarks: bookmarkCount ?? activeBookmarks.length,
         files: 0,
         tasksTodo: activeTasks.filter((t) => t.status !== 'done').length,
         tasksDone: activeTasks.filter((t) => t.status === 'done').length,
-        projectsActive: activeProjects.length,
-        goalsActive: activeGoals.length,
-        remindersUpcoming: activeReminders.length,
+        projectsActive: projectCount ?? activeProjects.length,
+        goalsActive: goalCount ?? activeGoals.length,
+        remindersUpcoming: reminderCount ?? activeReminders.length,
         inboxUnprocessed: 0,
-        habitsActive: activeHabits.length,
-        peopleCount: people.filter((p) => !p.isDeleted).length,
+        habitsActive: habitCount ?? activeHabits.length,
+        peopleCount: peopleCount ?? people.filter((p) => !p.isDeleted).length,
       },
       totals: {
-        notes: activeNotes.length,
-        tasks: activeTasks.filter((t) => t.status !== 'done').length,
-        vault: activeVault.length,
-        library: activeLibrary.length,
-        bookmarks: activeBookmarks.length,
+        notes: noteCount ?? activeNotes.length,
+        tasks: taskCount ?? activeTasks.filter((t) => t.status !== 'done').length,
+        vault: vaultCount ?? activeVault.length,
+        library: libraryCount ?? activeLibrary.length,
+        bookmarks: bookmarkCount ?? activeBookmarks.length,
         files: 0,
-        people: people.filter((p) => !p.isDeleted).length,
+        people: peopleCount ?? people.filter((p) => !p.isDeleted).length,
       },
       tasks: {
         dueToday,
