@@ -1,0 +1,5 @@
+{
+  "firstLoadGzipKb": 330,
+  "targetGzipKb": 150,
+  "note": "Interim regression budget after Phase B chunking. Tighten toward targetGzipKb once Firebase/API leave the critical path."
+}

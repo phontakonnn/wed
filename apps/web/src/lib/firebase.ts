@@ -23,14 +23,18 @@ import {
 import type { Messaging } from 'firebase/messaging';
 import type { Analytics } from 'firebase/analytics';
 
+// Values come from .env (VITE_FIREBASE_*). The fallback keeps the existing
+// personal project working locally; production should always provide env vars.
+const env = import.meta.env;
+
 export const firebaseConfig = {
-  apiKey: "AIzaSyCHm6muuT7KPQ5G4_gY6Zeg5hX9JgK2it8",
-  authDomain: "personal-life-os-68631.firebaseapp.com",
-  projectId: "personal-life-os-68631",
-  storageBucket: "personal-life-os-68631.firebasestorage.app",
-  messagingSenderId: "311035303046",
-  appId: "1:311035303046:web:79d34adee66c41b232ed07",
-  measurementId: "G-LL97E8BWRJ"
+  apiKey: env.VITE_FIREBASE_API_KEY || 'AIzaSyCHm6muuT7KPQ5G4_gY6Zeg5hX9JgK2it8',
+  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || 'personal-life-os-68631.firebaseapp.com',
+  projectId: env.VITE_FIREBASE_PROJECT_ID || 'personal-life-os-68631',
+  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || 'personal-life-os-68631.firebasestorage.app',
+  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || '311035303046',
+  appId: env.VITE_FIREBASE_APP_ID || '1:311035303046:web:79d34adee66c41b232ed07',
+  measurementId: env.VITE_FIREBASE_MEASUREMENT_ID || 'G-LL97E8BWRJ',
 };
 
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);

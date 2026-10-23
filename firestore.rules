@@ -1,8 +1,47 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // Shared write guard for every user-owned document. The app writes plain
+    // JS objects (numbers for timestamps), so validation stays type-tolerant
+    // but still blocks oversized payloads and unbounded taxonomy arrays.
+    function validPayload() {
+      let data = request.resource.data;
+      return data.keys().size() <= 60
+        && (!('title' in data) || (data.title is string && data.title.size() <= 300))
+        && (!('name' in data) || (data.name is string && data.name.size() <= 120))
+        && (!('content' in data) || (data.content is string && data.content.size() <= 500000))
+        && (!('body' in data) || (data.body is string && data.body.size() <= 500000))
+        && (!('tagIds' in data) || (data.tagIds is list && data.tagIds.size() <= 50))
+        && (!('categoryIds' in data) || (data.categoryIds is list && data.categoryIds.size() <= 50))
+        && (!('personIds' in data) || (data.personIds is list && data.personIds.size() <= 50));
+    }
+
+    // Root profile document.
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid) && validPayload();
+      allow delete: if false;
+    }
+
+    // Everything else lives under users/{uid}/... and is private to that uid.
+    match /users/{uid}/{collectionName}/{documentId} {
+      allow get, list: if isOwner(uid);
+      allow create, update: if isOwner(uid) && validPayload();
+      allow delete: if isOwner(uid);
+    }
+
+    // Deny anything that does not match the user-scoped paths above.
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }
