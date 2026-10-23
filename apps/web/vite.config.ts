@@ -32,7 +32,8 @@ export default defineConfig(({ mode }) => ({
           'assets/vendor-*.js',
           'assets/rolldown-runtime-*.js',
         ],
-        // FCM owns its own scope and must never be precached by Workbox.
+        // A future FCM worker owns its own scope and must never be precached by
+        // Workbox; the pattern stays so phase D cannot regress this by accident.
         globIgnores: ['**/firebase-messaging-sw.js'],
         // Analytics/messaging are optional and not needed for an offline boot.
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,

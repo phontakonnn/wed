@@ -28,6 +28,7 @@ import { auth } from './firebaseAuth';
 import { db } from './firebaseDb';
 import { ApiError } from './errors';
 import { normalizeTaxonomyName, sanitizeIds } from './taxonomy';
+import { logger } from './logger';
 
 export { ApiError };
 
@@ -233,7 +234,7 @@ export async function handleFirebaseRequest<T>(path: string, options: RequestIni
     try {
       snap = await getDoc(userDocRef);
     } catch (err: any) {
-      console.warn('Firestore getDoc users (using local cache):', err?.message || err);
+      logger.warn('Firestore getDoc users failed, using local cache', 'firebaseEngine.users', { error: err });
     }
 
     const isSuperAdmin = fbUser.email?.toLowerCase() === 'biwking1997@gmail.com';

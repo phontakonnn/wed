@@ -1,4 +1,5 @@
 import type { ThemeConfig, ThemeMode, UiMode } from '../types';
+import { logger } from './logger';
 
 /**
  * Single theme engine for the Calm Minimal UI.
@@ -191,6 +192,6 @@ export async function saveThemeConfig(config: ThemeConfig, userUid?: string | nu
       { merge: true },
     );
   } catch (err) {
-    console.warn('Could not save theme to Firestore:', err);
+    logger.warn('Could not save theme to Firestore', 'theme.save', { error: err });
   }
 }

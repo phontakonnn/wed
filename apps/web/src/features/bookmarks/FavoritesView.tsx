@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   type Favorite,
   type FavoriteItemType,
@@ -59,6 +60,9 @@ const ITEM_TYPE_BADGES: Record<string, { label: string; icon: string }> = {
   custom_record: { label: 'ข้อมูลกำหนดเอง', icon: '🧩' },
 };
 
+const EMPTY_COLLECTIONS: FavoriteCollection[] = [];
+const EMPTY_FAVORITES: Favorite[] = [];
+
 const PRESET_COLLECTION_ICONS = ['📁', '🇯🇵', '💼', '🏡', '🎒', '💡', '💰', '🎯', '🚀', '⭐'];
 const PRESET_COLLECTION_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
 
@@ -69,9 +73,7 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
   const [activeTab, setActiveTab] = useState('all');
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [collections, setCollections] = useState<FavoriteCollection[]>([]);
-  const [favoritesList, setFavoritesList] = useState<Favorite[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [noticeMsg, setNoticeMsg] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Collection modal state
@@ -89,42 +91,22 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
   const [targetCollectionId, setTargetCollectionId] = useState<string>('');
   const [assignBusy, setAssignBusy] = useState(false);
 
-  // Load collections
-  const loadCollections = useCallback(async () => {
-    try {
-      const cols = await fetchFavoriteCollections();
-      setCollections(cols);
-    } catch {
-      // ignore
-    }
-  }, []);
+  // Collections and favorites are server state owned by TanStack Query.
+  const collectionsQuery = useQuery({
+    queryKey: ['favoriteCollections'],
+    queryFn: fetchFavoriteCollections,
+  });
+  const collections: FavoriteCollection[] = collectionsQuery.data ?? EMPTY_COLLECTIONS;
 
-  // Load favorites
-  const loadFavorites = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await listFavorites(1, 300, selectedCollectionId || undefined);
-      setFavoritesList(res.favorites || []);
-    } catch (err: unknown) {
-      setNoticeMsg({
-        type: 'error',
-        message: err instanceof Error ? err.message : 'ไม่สามารถโหลดรายการโปรดได้',
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedCollectionId]);
+  const favoritesQuery = useQuery({
+    queryKey: ['favorites', selectedCollectionId ?? 'all'],
+    queryFn: async () => (await listFavorites(1, 300, selectedCollectionId || undefined)).favorites ?? [],
+  });
+  const favoritesList: Favorite[] = favoritesQuery.data ?? EMPTY_FAVORITES;
+  const loading = favoritesQuery.isPending;
 
-  useEffect(() => {
-    void loadCollections();
-  }, [loadCollections]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      void loadFavorites();
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [loadFavorites]);
+  const reloadCollections = () => queryClient.invalidateQueries({ queryKey: ['favoriteCollections'] });
+  const reloadFavorites = () => queryClient.invalidateQueries({ queryKey: ['favorites'] });
 
   // Filtered favorites by category tab and search query
   const filteredFavorites = useMemo(() => {
@@ -155,7 +137,13 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
   const handleRemoveFavorite = async (fav: Favorite) => {
     try {
       await removeFavorite(fav.itemType, fav.itemId);
-      setFavoritesList((prev) => prev.filter((item) => !(item.itemType === fav.itemType && item.itemId === fav.itemId)));
+      queryClient.setQueryData<Favorite[]>(
+        ['favorites', selectedCollectionId ?? 'all'],
+        (prev) =>
+          (prev ?? []).filter(
+            (item) => !(item.itemType === fav.itemType && item.itemId === fav.itemId),
+          ),
+      );
       setNoticeMsg({ type: 'success', message: `นำ "${fav.title}" ออกจากรายการโปรดแล้ว` });
       onRefreshWorkspace?.();
     } catch (err: unknown) {
@@ -213,8 +201,8 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
         setNoticeMsg({ type: 'success', message: 'สร้างคอลเลกชันใหม่เรียบร้อยแล้ว' });
       }
       setCollectionModalOpen(false);
-      await loadCollections();
-      await loadFavorites();
+      await reloadCollections();
+      await reloadFavorites();
     } catch (err: unknown) {
       setColError(err instanceof Error ? err.message : 'ไม่สามารถบันทึกคอลเลกชันได้');
     } finally {
@@ -232,8 +220,8 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
         setSelectedCollectionId(null);
       }
       setNoticeMsg({ type: 'success', message: `ลบคอลเลกชัน "${col.name}" เรียบร้อยแล้ว` });
-      await loadCollections();
-      await loadFavorites();
+      await reloadCollections();
+      await reloadFavorites();
     } catch (err: unknown) {
       setNoticeMsg({
         type: 'error',
@@ -262,7 +250,7 @@ export const FavoritesView: React.FC<FavoritesViewProps> = ({
       setNoticeMsg({ type: 'success', message: 'จัดเก็บเข้าคอลเลกชันเรียบร้อยแล้ว' });
       setAssignModalOpen(false);
       setItemToAssign(null);
-      await loadFavorites();
+      await reloadFavorites();
     } catch (err: unknown) {
       setNoticeMsg({
         type: 'error',

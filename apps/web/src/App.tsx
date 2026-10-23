@@ -134,6 +134,7 @@ import {
   saveSidebarNav,
   resetSidebarNav,
 } from './sidebarNav';
+import { logger } from './lib/logger';
 import './App.css';
 
 import type {
@@ -555,7 +556,7 @@ function App() {
     }).catch((error: unknown) => {
       if (!active) return;
       if (!(error instanceof ApiError && error.status === 401)) {
-        console.warn('Initial session check:', error);
+        logger.warn('Initial session check failed', 'app.session', { error });
       }
       setAuthState('signed-out');
     });
@@ -573,7 +574,7 @@ function App() {
         if (active) setCustomCategories(cats);
       })
       .catch((err) => {
-        if (active) console.error('Error loading custom categories:', err);
+        if (active) logger.error('Error loading custom categories', err, 'app.categories');
       })
       .finally(() => {
         if (active) setCustomCategoriesBusy(false);
@@ -584,7 +585,7 @@ function App() {
         if (active) setCustomDataTypes(types);
       })
       .catch((err) => {
-        if (active) console.error('Error loading custom types:', err);
+        if (active) logger.error('Error loading custom types', err, 'app.customTypes');
       });
     return () => {
       active = false;
@@ -649,15 +650,15 @@ function App() {
     if (vaultItems.length === 0) listVaultItems().then((r) => setVaultItems(r.items)).catch(() => {});
     if (libraryItems.length === 0) listLibraryItems().then((r) => setLibraryItems(r.items)).catch(() => {});
     if (bookmarks.length === 0) listBookmarks(1, 100).then((r) => setBookmarks(r.bookmarks)).catch(() => {});
-  }, [quickAddCatOpen, authState]);
+  }, [quickAddCatOpen, authState, files.length, vaultItems.length, libraryItems.length, bookmarks.length]);
 
   useEffect(() => {
-    if (!activeNote) {
+    if (!activeNoteId) {
       setActiveNoteCustomCatId(null);
       return;
     }
     let active = true;
-    getItemCustomCategory('note', activeNote.id)
+    getItemCustomCategory('note', activeNoteId)
       .then((catId) => {
         if (active) setActiveNoteCustomCatId(catId);
       })
@@ -667,15 +668,15 @@ function App() {
     return () => {
       active = false;
     };
-  }, [activeNote?.id]);
+  }, [activeNoteId]);
 
   useEffect(() => {
-    if (!activeBookmark) {
+    if (!activeBookmarkId) {
       setActiveBookmarkCustomCatId(null);
       return;
     }
     let active = true;
-    getItemCustomCategory('bookmark', activeBookmark.id)
+    getItemCustomCategory('bookmark', activeBookmarkId)
       .then((catId) => {
         if (active) setActiveBookmarkCustomCatId(catId);
       })
@@ -685,15 +686,16 @@ function App() {
     return () => {
       active = false;
     };
-  }, [activeBookmark?.id]);
+  }, [activeBookmarkId]);
 
+  const activeVaultId = activeVault?.id ?? null;
   useEffect(() => {
-    if (!activeVault) {
+    if (!activeVaultId) {
       setVaultCustomCatId('');
       return;
     }
     let active = true;
-    getItemCustomCategory('vault', activeVault.id)
+    getItemCustomCategory('vault', activeVaultId)
       .then((catId) => {
         if (active) setVaultCustomCatId(catId || '');
       })
@@ -703,15 +705,16 @@ function App() {
     return () => {
       active = false;
     };
-  }, [activeVault?.id]);
+  }, [activeVaultId]);
 
+  const activeLibraryId = activeLibrary?.id ?? null;
   useEffect(() => {
-    if (!activeLibrary) {
+    if (!activeLibraryId) {
       setLibraryCustomCatId('');
       return;
     }
     let active = true;
-    getItemCustomCategory('library', activeLibrary.id)
+    getItemCustomCategory('library', activeLibraryId)
       .then((catId) => {
         if (active) setLibraryCustomCatId(catId || '');
       })
@@ -721,15 +724,16 @@ function App() {
     return () => {
       active = false;
     };
-  }, [activeLibrary?.id]);
+  }, [activeLibraryId]);
 
+  const activeFileId = activeFile?.id ?? null;
   useEffect(() => {
-    if (!activeFile) {
+    if (!activeFileId) {
       setFileCustomCatId(null);
       return;
     }
     let active = true;
-    getItemCustomCategory('file', activeFile.id)
+    getItemCustomCategory('file', activeFileId)
       .then((catId) => {
         if (active) setFileCustomCatId(catId);
       })
@@ -739,7 +743,7 @@ function App() {
     return () => {
       active = false;
     };
-  }, [activeFile?.id]);
+  }, [activeFileId]);
 
   useEffect(() => {
     if (authState !== 'signed-in') return;
@@ -1408,7 +1412,7 @@ function App() {
                 pushToast('success', 'เข้าสู่ระบบด้วยลิงก์อีเมลสำเร็จ');
               })
               .catch((err) => {
-                console.error('Email link sign in error:', err);
+                logger.error('Email link sign in failed', err, 'app.auth');
               });
           }
         }

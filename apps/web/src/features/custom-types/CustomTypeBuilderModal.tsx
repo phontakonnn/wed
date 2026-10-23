@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   type CustomDataType,
   type CustomFieldSchema,
@@ -38,42 +38,21 @@ export const CustomTypeBuilderModal: React.FC<CustomTypeBuilderModalProps> = ({
   typeToEdit,
   onSaved,
 }) => {
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [icon, setIcon] = useState('🧩');
-  const [color, setColor] = useState('#3b82f6');
-  const [category, setCategory] = useState('ข้อมูลที่กำหนดเอง');
-  const [isShared, setIsShared] = useState(false);
-  const [fields, setFields] = useState<CustomFieldSchema[]>([
-    { id: 'f-1', name: 'ชื่อรายการ', type: 'text', required: true },
-  ]);
+  // The parent mounts this modal per edit target, so props are read once as
+  // initial state instead of being mirrored in an effect.
+  const [name, setName] = useState(typeToEdit?.name ?? '');
+  const [description, setDescription] = useState(typeToEdit?.description ?? '');
+  const [icon, setIcon] = useState(typeToEdit?.icon ?? '🧩');
+  const [color, setColor] = useState(typeToEdit?.color ?? '#3b82f6');
+  const [category, setCategory] = useState(typeToEdit?.category ?? 'ข้อมูลที่กำหนดเอง');
+  const [isShared] = useState(typeToEdit?.isShared ?? false);
+  const [fields, setFields] = useState<CustomFieldSchema[]>(() =>
+    Array.isArray(typeToEdit?.fields) && typeToEdit.fields.length > 0
+      ? typeToEdit.fields
+      : [{ id: 'f-1', name: 'ชื่อรายการ', type: 'text', required: true }],
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (typeToEdit) {
-      setName(typeToEdit.name || '');
-      setDescription(typeToEdit.description || '');
-      setIcon(typeToEdit.icon || '🧩');
-      setColor(typeToEdit.color || '#3b82f6');
-      setCategory(typeToEdit.category || 'ข้อมูลที่กำหนดเอง');
-      setIsShared(typeToEdit.isShared || false);
-      setFields(
-        Array.isArray(typeToEdit.fields) && typeToEdit.fields.length > 0
-          ? typeToEdit.fields
-          : [{ id: 'f-1', name: 'ชื่อรายการ', type: 'text', required: true }]
-      );
-    } else {
-      setName('');
-      setDescription('');
-      setIcon('🧩');
-      setColor('#3b82f6');
-      setCategory('ข้อมูลที่กำหนดเอง');
-      setIsShared(false);
-      setFields([{ id: 'f-1', name: 'ชื่อรายการ', type: 'text', required: true }]);
-    }
-    setError(null);
-  }, [typeToEdit, isOpen]);
 
   const addField = () => {
     const newId = `f-${Date.now()}`;

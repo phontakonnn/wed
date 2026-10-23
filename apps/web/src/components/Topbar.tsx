@@ -73,26 +73,20 @@ export const Topbar: React.FC<TopbarProps> = ({
   const [currentClock, setCurrentClock] = useState<Date>(() => new Date());
   const [notifTab, setNotifTab] = useState<'list' | 'settings'>('list');
 
-  const [localDndEnabled, setLocalDndEnabled] = useState(notificationPreferences?.dndEnabled ?? false);
-  const [localDndStart, setLocalDndStart] = useState(notificationPreferences?.dndStart ?? '22:00');
-  const [localDndEnd, setLocalDndEnd] = useState(notificationPreferences?.dndEnd ?? '08:00');
-  const [localNotifyBirthdays, setLocalNotifyBirthdays] = useState(notificationPreferences?.notifyBirthdays ?? true);
-  const [localNotifyTasks, setLocalNotifyTasks] = useState(notificationPreferences?.notifyTasks ?? true);
-  const [localNotifyReminders, setLocalNotifyReminders] = useState(notificationPreferences?.notifyReminders ?? true);
-  const [localNotifyShopping, setLocalNotifyShopping] = useState(notificationPreferences?.notifyShopping ?? true);
+  // Only user edits live in local state; everything else is derived from the
+  // server preferences during render, so no effect has to mirror props.
+  const [prefsDraft, setPrefsDraft] = useState<Partial<NotificationPreferences>>({});
   const [savingPrefs, setSavingPrefs] = useState(false);
+  const patchPrefs = (patch: Partial<NotificationPreferences>) =>
+    setPrefsDraft((draft) => ({ ...draft, ...patch }));
 
-  useEffect(() => {
-    if (notificationPreferences) {
-      setLocalDndEnabled(notificationPreferences.dndEnabled);
-      setLocalDndStart(notificationPreferences.dndStart);
-      setLocalDndEnd(notificationPreferences.dndEnd);
-      setLocalNotifyBirthdays(notificationPreferences.notifyBirthdays);
-      setLocalNotifyTasks(notificationPreferences.notifyTasks);
-      setLocalNotifyReminders(notificationPreferences.notifyReminders);
-      setLocalNotifyShopping(notificationPreferences.notifyShopping);
-    }
-  }, [notificationPreferences]);
+  const localDndEnabled = prefsDraft.dndEnabled ?? notificationPreferences?.dndEnabled ?? false;
+  const localDndStart = prefsDraft.dndStart ?? notificationPreferences?.dndStart ?? '22:00';
+  const localDndEnd = prefsDraft.dndEnd ?? notificationPreferences?.dndEnd ?? '08:00';
+  const localNotifyBirthdays = prefsDraft.notifyBirthdays ?? notificationPreferences?.notifyBirthdays ?? true;
+  const localNotifyTasks = prefsDraft.notifyTasks ?? notificationPreferences?.notifyTasks ?? true;
+  const localNotifyReminders = prefsDraft.notifyReminders ?? notificationPreferences?.notifyReminders ?? true;
+  const localNotifyShopping = prefsDraft.notifyShopping ?? notificationPreferences?.notifyShopping ?? true;
 
   const handleSavePreferences = async () => {
     if (!onUpdateNotificationPreferences) return;
@@ -107,6 +101,7 @@ export const Topbar: React.FC<TopbarProps> = ({
         notifyReminders: localNotifyReminders,
         notifyShopping: localNotifyShopping,
       });
+      setPrefsDraft({});
       setNotifTab('list');
     } finally {
       setSavingPrefs(false);
@@ -431,7 +426,7 @@ export const Topbar: React.FC<TopbarProps> = ({
                       <input
                         type="checkbox"
                         checked={localDndEnabled}
-                        onChange={(e) => setLocalDndEnabled(e.target.checked)}
+                        onChange={(e) => patchPrefs({ dndEnabled: e.target.checked })}
                       />
                       <span>เปิดใช้งานโหมดห้ามรบกวนตามช่วงเวลา</span>
                     </label>
@@ -442,14 +437,14 @@ export const Topbar: React.FC<TopbarProps> = ({
                         <input
                           type="time"
                           value={localDndStart}
-                          onChange={(e) => setLocalDndStart(e.target.value)}
+                          onChange={(e) => patchPrefs({ dndStart: e.target.value })}
                           style={{ padding: '2px 6px', fontSize: '11px', borderRadius: '4px', border: '1px solid var(--pkh-border-subtle)' }}
                         />
                         <span style={{ fontSize: '11px', color: 'var(--pkh-text-secondary)' }}>ถึง:</span>
                         <input
                           type="time"
                           value={localDndEnd}
-                          onChange={(e) => setLocalDndEnd(e.target.value)}
+                          onChange={(e) => patchPrefs({ dndEnd: e.target.value })}
                           style={{ padding: '2px 6px', fontSize: '11px', borderRadius: '4px', border: '1px solid var(--pkh-border-subtle)' }}
                         />
                       </div>
@@ -463,7 +458,7 @@ export const Topbar: React.FC<TopbarProps> = ({
                         <input
                           type="checkbox"
                           checked={localNotifyBirthdays}
-                          onChange={(e) => setLocalNotifyBirthdays(e.target.checked)}
+                          onChange={(e) => patchPrefs({ notifyBirthdays: e.target.checked })}
                         />
                         <span>🎂 วันเกิดของบุคคลสำคัญประจำเดือน</span>
                       </label>
@@ -471,7 +466,7 @@ export const Topbar: React.FC<TopbarProps> = ({
                         <input
                           type="checkbox"
                           checked={localNotifyTasks}
-                          onChange={(e) => setLocalNotifyTasks(e.target.checked)}
+                          onChange={(e) => patchPrefs({ notifyTasks: e.target.checked })}
                         />
                         <span>📋 งานที่ใกล้ครบกำหนด / เกินกำหนด</span>
                       </label>
@@ -479,7 +474,7 @@ export const Topbar: React.FC<TopbarProps> = ({
                         <input
                           type="checkbox"
                           checked={localNotifyReminders}
-                          onChange={(e) => setLocalNotifyReminders(e.target.checked)}
+                          onChange={(e) => patchPrefs({ notifyReminders: e.target.checked })}
                         />
                         <span>⏰ การแจ้งเตือน / วันครบรอบ / กำหนดการประจำปี</span>
                       </label>
@@ -487,7 +482,7 @@ export const Topbar: React.FC<TopbarProps> = ({
                         <input
                           type="checkbox"
                           checked={localNotifyShopping}
-                          onChange={(e) => setLocalNotifyShopping(e.target.checked)}
+                          onChange={(e) => patchPrefs({ notifyShopping: e.target.checked })}
                         />
                         <span>🛒 รายการซื้อของใช้ประจำเดือนที่ยังไม่ได้ซื้อ</span>
                       </label>

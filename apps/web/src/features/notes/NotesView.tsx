@@ -8,6 +8,7 @@ import { TagManagerModal } from '../../components/TagManagerModal';
 import { Button } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Skeleton } from '../../components/ui/Skeleton';
+import { logger } from '../../lib/logger';
 
 interface NotesViewProps {
   noteViewMode: 'grid' | 'editor';
@@ -183,7 +184,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
         setNewCategoryInput('');
       }
     } catch (err) {
-      console.error('Failed to create category', err);
+      logger.error('Failed to create category', err, 'notes.category');
     } finally {
       setCreatingCategory(false);
     }
@@ -201,7 +202,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
         setNewTagInput('');
       }
     } catch (err) {
-      console.error('Failed to create tag', err);
+      logger.error('Failed to create tag', err, 'notes.tag');
     } finally {
       setCreatingTag(false);
     }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, type FormEvent } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, type FormEvent } from 'react';
 import type {
   Task,
   Reminder,
@@ -198,7 +198,7 @@ export const HabitsView: React.FC<HabitsViewProps> = ({
   const [quickEventDaysBefore, setQuickEventDaysBefore] = useState('0');
 
   // Multi-Source Events Engine with Dynamic Recurrence Calculation
-  const getEventsForDate = (dateStr: string): CalendarEventItem[] => {
+  const getEventsForDate = useCallback((dateStr: string): CalendarEventItem[] => {
     const items: CalendarEventItem[] = [];
 
     // 1. Reminders with Recurrence (Dynamic Expansion)
@@ -304,7 +304,7 @@ export const HabitsView: React.FC<HabitsViewProps> = ({
     }
 
     return items;
-  };
+  }, [reminders, people, tasks]);
 
   // 3-tier Reminders navigation: 'today' | 'month' | 'yearly'
   const [reminderTier, setReminderTier] = useState<'today' | 'month' | 'yearly'>('today');
@@ -367,12 +367,12 @@ export const HabitsView: React.FC<HabitsViewProps> = ({
     const monthLabel = `${THAI_MONTHS[calendarMonth]} ${eraText} ${displayYear}`;
 
     return { calendarDays: days, monthLabel };
-  }, [calendarYear, calendarMonth, reminders, people, tasks, scheduleDate, era]);
+  }, [calendarYear, calendarMonth, getEventsForDate, scheduleDate, era]);
 
   // Selected date events
   const selectedDateEvents = useMemo(() => {
     return getEventsForDate(selectedCalendarDate);
-  }, [selectedCalendarDate, reminders, people, tasks]);
+  }, [selectedCalendarDate, getEventsForDate]);
 
   // Week days for Week View
   const weekDays = useMemo(() => {
@@ -398,7 +398,7 @@ export const HabitsView: React.FC<HabitsViewProps> = ({
       });
     }
     return days;
-  }, [selectedCalendarDate, reminders, people, tasks, scheduleDate]);
+  }, [selectedCalendarDate, getEventsForDate, scheduleDate]);
 
   // Jump to today helper
   const handleJumpToday = () => {

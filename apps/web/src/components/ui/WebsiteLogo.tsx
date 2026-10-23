@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { extractHostname } from '../../lib/hostname';
 
 interface WebsiteLogoProps {
   url?: string;
@@ -9,21 +10,6 @@ interface WebsiteLogoProps {
   style?: React.CSSProperties;
 }
 
-export function extractHostname(urlStr?: string): string {
-  if (!urlStr || typeof urlStr !== 'string') return '';
-  const trimmed = urlStr.trim();
-  if (!trimmed) return '';
-  try {
-    const withProto = trimmed.startsWith('http://') || trimmed.startsWith('https://')
-      ? trimmed
-      : `https://${trimmed}`;
-    const parsed = new URL(withProto);
-    return parsed.hostname.replace(/^www\./, '');
-  } catch {
-    return '';
-  }
-}
-
 export const WebsiteLogo: React.FC<WebsiteLogoProps> = ({
   url,
   size = 36,
@@ -32,13 +18,11 @@ export const WebsiteLogo: React.FC<WebsiteLogoProps> = ({
   className = '',
   style = {},
 }) => {
-  const [loadFailed, setLoadFailed] = useState(false);
+  // Track which URL failed instead of resetting in an effect: a new URL is
+  // automatically 'not failed' because the stored value no longer matches.
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const hostname = extractHostname(url);
-
-  // Reset failed state if URL changes
-  useEffect(() => {
-    setLoadFailed(false);
-  }, [url]);
+  const loadFailed = failedUrl === url;
 
   const domainInitial = hostname ? hostname.charAt(0).toUpperCase() : '?';
   const logoUrl = hostname
@@ -94,7 +78,7 @@ export const WebsiteLogo: React.FC<WebsiteLogoProps> = ({
         width={size}
         height={size}
         loading="lazy"
-        onError={() => setLoadFailed(true)}
+        onError={() => setFailedUrl(url ?? null)}
         style={{
           width: '100%',
           height: '100%',

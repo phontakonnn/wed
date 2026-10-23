@@ -1,6 +1,7 @@
 import type { Messaging } from 'firebase/messaging';
 import type { Analytics } from 'firebase/analytics';
 import { app } from './firebaseApp';
+import { logger } from './logger';
 
 /**
  * Optional Firebase telemetry. Every SDK entry point here is a dynamic import,
@@ -20,7 +21,7 @@ export async function getFirebaseMessaging(): Promise<Messaging | null> {
         messagingInstance = getMessaging(app);
       }
     } catch (err) {
-      console.warn('Firebase Messaging is not supported:', err);
+      logger.warn('Firebase Messaging is not supported', 'firebase.telemetry', { error: err });
     }
   }
   return messagingInstance;
@@ -38,7 +39,7 @@ export async function getFirebaseAnalytics(): Promise<Analytics | null> {
         analyticsInstance = getAnalytics(app);
       }
     } catch (err) {
-      console.warn('Firebase Analytics is not supported:', err);
+      logger.warn('Firebase Analytics is not supported', 'firebase.telemetry', { error: err });
     }
   }
   return analyticsInstance;

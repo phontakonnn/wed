@@ -1086,3 +1086,59 @@ precache, which would break offline reloads. Lazy chunks move to a
 so a chunk that silently becomes static is caught. It also enforces a 260 KB
 gzip ceiling on any single lazy chunk. `bundle-budget.json` is tightened from
 330 KB to 150 KB.
+
+---
+
+## SLICE 3 — cleanup
+
+### Decision: keep `apps/server` in the repository (not `git rm`)
+
+**Context.** The brief allows `git rm apps/server` once nothing in web/CI/hosting
+references it. `firebase.json` has no `functions` block, hosting serves
+`apps/web/dist`, and `.github/workflows/ci.yml` only touches `apps/web`.
+
+**But** the root `package.json` still wires `dev`, `test`, `backup:create|list|verify|restore|preflight|staging`,
+`bootstrap:admin` and `storage:check|quarantine` to that workspace, and
+`docs/FINAL_REPORT.md` item 6 records a deliberate earlier decision to keep it
+until the user decides how to migrate the SQLite data. Deleting it would remove
+the only backup/restore tooling for that data.
+
+**Decision.** Keep it. The "unreferenced" precondition is false (root scripts use
+it), and removal is user-visible. Recorded as an open item for the user instead.
+Reversible in one command (`git rm -r apps/server` + pruning the root scripts).
+
+### Decision: one lockfile at the workspace root
+
+`apps/web/package-lock.json` and `apps/server/package-lock.json` were stale
+duplicates of an npm-workspaces install. Two lockfiles can resolve different
+trees for the same package, which is exactly the kind of drift the audit could
+not see. Both removed; root `package-lock.json` is the single source.
+
+### Decision: delete `public/firebase-messaging-sw.js`
+
+Nothing registered it (`grep` for the filename found only its own body), FCM is
+phase D work, and the file hardcoded the Firebase project config in a *publicly
+served* file. Phase D must generate it from `VITE_FIREBASE_*` at build time.
+
+### Decision: fix React Compiler lint warnings by widening dependency lists
+
+`react-hooks/preserve-manual-memoization` fires when a manual `useCallback`
+omits values the compiler infers (state setters). Adding them is a no-op at
+runtime (setters are stable) and lets the compiler stop skipping the component.
+No rule was disabled and no `any`/`@ts-ignore` was introduced.
+
+### Decision: `set-state-in-effect` fixed by moving state to its real owner
+
+Three patterns replaced the nine warnings: server data -> TanStack Query
+(`useQuery`), tab-triggered fetches -> the click handler, and props mirrored
+into local state -> a draft object merged over props during render. This is the
+same direction SLICE 4 takes, so the work is not thrown away.
+
+### Note: hardcoded Firebase web config remains in `firebaseConfig.ts`
+
+`AIza…` values are *public identifiers*, not credentials — they are shipped in
+the client bundle regardless of source. The literal fallback is still removed
+from the service worker (above) but kept in `firebaseConfig.ts` because no
+`.env.local` exists in this checkout and there is no CI env yet: removing it
+would brick the current deployment. Flagged in `SECURITY.md` with the exact
+steps to finish the move.

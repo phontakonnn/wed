@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { getItemShares, shareItem, unshareItem, type SharedItemInfo } from '../api';
+import React, { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { getItemShares, shareItem, unshareItem } from '../api';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -20,33 +21,23 @@ export const ShareItemModal: React.FC<ShareItemModalProps> = ({
   itemId,
   itemTitle,
 }) => {
-  const [shares, setShares] = useState<SharedItemInfo[]>([]);
-  const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
+  const sharesKey = ['itemShares', itemType, itemId] as const;
   const [targetUsername, setTargetUsername] = useState('');
   const [permission, setPermission] = useState<'viewer' | 'editor'>('viewer');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
-  const loadShares = useCallback(async () => {
-    if (!itemId) return;
-    setLoading(true);
-    try {
-      const res = await getItemShares(itemType, itemId);
-      setShares(res.shares);
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  }, [itemType, itemId]);
+  // Shares are server state: TanStack Query owns loading/error/caching so the
+  // component never has to mirror them in an effect.
+  const sharesQuery = useQuery({
+    queryKey: sharesKey,
+    queryFn: async () => (await getItemShares(itemType, itemId)).shares,
+    enabled: isOpen && Boolean(itemId),
+  });
 
-  useEffect(() => {
-    if (isOpen) {
-      setMsg(null);
-      setTargetUsername('');
-      void loadShares();
-    }
-  }, [isOpen, loadShares]);
+  const shares = sharesQuery.data ?? [];
+  const loading = sharesQuery.isPending && sharesQuery.fetchStatus !== 'idle';
 
   const handleShare = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,7 +53,7 @@ export const ShareItemModal: React.FC<ShareItemModalProps> = ({
       });
       setMsg({ text: `แชร์ให้กับ ${targetUsername.trim()} สำเร็จแล้ว!`, type: 'success' });
       setTargetUsername('');
-      void loadShares();
+      await queryClient.invalidateQueries({ queryKey: sharesKey });
     } catch (err) {
       setMsg({ text: errorMessage(err) || 'แชร์รายการไม่สำเร็จ', type: 'error' });
     } finally {
@@ -73,7 +64,9 @@ export const ShareItemModal: React.FC<ShareItemModalProps> = ({
   const handleUnshare = async (shareId: string) => {
     try {
       await unshareItem(shareId);
-      setShares((prev) => prev.filter((s) => s.id !== shareId));
+      queryClient.setQueryData(sharesKey, (prev: typeof shares | undefined) =>
+        (prev ?? []).filter((s) => s.id !== shareId),
+      );
       setMsg({ text: 'ยกเลิกการแชร์เรียบร้อยแล้ว', type: 'success' });
     } catch (err) {
       setMsg({ text: errorMessage(err) || 'ไม่สามารถยกเลิกการแชร์ได้', type: 'error' });

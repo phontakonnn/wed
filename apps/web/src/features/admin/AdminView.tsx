@@ -157,6 +157,9 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
   // Workspace Invites State
   const [invites, setInvites] = useState<WorkspaceInviteItem[]>([]);
+  // Snapshot taken when invites are fetched so expiry is computed without
+  // calling Date.now() during render.
+  const [invitesFetchedAt, setInvitesFetchedAt] = useState(0);
   const [invitesLoading, setInvitesLoading] = useState(false);
   const [isAddInviteOpen, setIsAddInviteOpen] = useState(false);
   const [newInviteRole, setNewInviteRole] = useState<'admin' | 'member' | 'editor' | 'viewer' | 'user'>('member');
@@ -166,7 +169,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const showNotification = useCallback((text: string, type: 'success' | 'error' = 'success') => {
     setMessage({ text, type });
     setTimeout(() => setMessage(null), 5000);
-  }, []);
+  }, [setMessage]);
 
   const loadStudioTables = useCallback(async () => {
     try {
@@ -178,7 +181,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
     } catch (err) {
       showNotification(errorMessage(err), 'error');
     }
-  }, [selectedStudioTable, showNotification]);
+  }, [selectedStudioTable, showNotification, setStudioTables, setSelectedStudioTable]);
 
   const loadStudioRows = useCallback(async (table: string, page: number, search: string) => {
     setStudioLoading(true);
@@ -190,7 +193,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
     } finally {
       setStudioLoading(false);
     }
-  }, [showNotification]);
+  }, [showNotification, setStudioLoading, setStudioRowsData]);
 
   const handleUpdateAdminPin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -340,19 +343,20 @@ export const AdminView: React.FC<AdminViewProps> = ({
     } finally {
       setAuditLoading(false);
     }
-  }, [auditFilterAction]);
+  }, [auditFilterAction, setAuditLoading, setAuditLogs, setAuditTotal]);
 
   const loadInvites = useCallback(async () => {
     setInvitesLoading(true);
     try {
       const res = await getWorkspaceInvites();
       setInvites(res.invites);
+      setInvitesFetchedAt(Date.now());
     } catch {
       // ignore
     } finally {
       setInvitesLoading(false);
     }
-  }, []);
+  }, [setInvitesLoading, setInvites, setInvitesFetchedAt]);
 
   // Support Tickets State
   const [adminTickets, setAdminTickets] = useState<SupportTicket[]>([]);
@@ -426,15 +430,14 @@ export const AdminView: React.FC<AdminViewProps> = ({
     }
   };
 
-  useEffect(() => {
-    if (activeTab === 'audit-logs' && isUnlocked) {
-      void loadAuditLogs();
-    } else if (activeTab === 'invites' && isUnlocked) {
-      void loadInvites();
-    } else if (activeTab === 'support-tickets' && isUnlocked) {
-      void loadAdminTickets();
-    }
-  }, [activeTab, isUnlocked, loadAuditLogs, loadInvites, loadAdminTickets]);
+  // Lazy tabs fetch on selection instead of reacting to state in an effect.
+  const selectTab = (tab: TabType) => {
+    setActiveTab(tab);
+    if (!isUnlocked) return;
+    if (tab === 'audit-logs') void loadAuditLogs();
+    else if (tab === 'invites') void loadInvites();
+    else if (tab === 'support-tickets') void loadAdminTickets();
+  };
 
   const handleCreateInvite = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -474,7 +477,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
     } catch {
       // ignore
     }
-  }, []);
+  }, [setUsers, setSessions]);
 
   const loadDatabaseData = useCallback(async () => {
     try {
@@ -490,7 +493,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
     } finally {
       setDbLoading(false);
     }
-  }, []);
+  }, [showNotification, setDbLoading, setDbStats, setBackups]);
 
   const loadSettingsData = useCallback(async () => {
     try {
@@ -522,7 +525,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
     } finally {
       setSettingsLoading(false);
     }
-  }, []);
+  }, [showNotification, setSettingsLoading, setSettings, setModuleConfigs]);
 
   useEffect(() => {
     if (!isUnlocked) return;
@@ -870,7 +873,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
         </button>
         <button
           className={`admin-tab-btn ${activeTab === 'invites' ? 'active' : ''}`}
-          onClick={() => setActiveTab('invites')}
+          onClick={() => selectTab('invites')}
           role="tab"
           aria-selected={activeTab === 'invites'}
         >
@@ -878,7 +881,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
         </button>
         <button
           className={`admin-tab-btn ${activeTab === 'audit-logs' ? 'active' : ''}`}
-          onClick={() => setActiveTab('audit-logs')}
+          onClick={() => selectTab('audit-logs')}
           role="tab"
           aria-selected={activeTab === 'audit-logs'}
         >
@@ -886,7 +889,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
         </button>
         <button
           className={`admin-tab-btn ${activeTab === 'support-tickets' ? 'active' : ''}`}
-          onClick={() => setActiveTab('support-tickets')}
+          onClick={() => selectTab('support-tickets')}
           role="tab"
           aria-selected={activeTab === 'support-tickets'}
         >
@@ -1792,7 +1795,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                     </thead>
                     <tbody>
                       {invites.map((inv) => {
-                        const isExpired = inv.expiresAt ? Date.now() > inv.expiresAt : false;
+                        const isExpired = inv.expiresAt ? invitesFetchedAt > inv.expiresAt : false;
                         const isMaxed = inv.maxUses > 0 && inv.usedCount >= inv.maxUses;
                         const isRevoked = Boolean(inv.isRevoked);
                         return (
@@ -2392,7 +2395,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
               <select
                 className="admin-select"
                 value={addUserRole}
-                onChange={(e) => setAddUserRole(e.target.value as any)}
+                onChange={(e) => setAddUserRole(e.target.value as 'admin' | 'member' | 'editor' | 'viewer' | 'user')}
               >
                 <option value="member">👤 Member (สมาชิกทั่วไป)</option>
                 <option value="editor">✏️ Editor (ผู้แก้ไขข้อมูล)</option>
@@ -2448,7 +2451,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
               <select
                 className="admin-select"
                 value={newInviteRole}
-                onChange={(e) => setNewInviteRole(e.target.value as any)}
+                onChange={(e) => setNewInviteRole(e.target.value as 'admin' | 'member' | 'editor' | 'viewer' | 'user')}
               >
                 <option value="member">👤 Member (สมาชิกทั่วไป)</option>
                 <option value="editor">✏️ Editor (ผู้แก้ไขข้อมูล)</option>

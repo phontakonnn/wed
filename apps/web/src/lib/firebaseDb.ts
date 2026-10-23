@@ -11,6 +11,7 @@ import {
   type AppCheck,
 } from 'firebase/app-check';
 import { app } from './firebaseApp';
+import { logger } from './logger';
 
 const env = import.meta.env;
 
@@ -35,7 +36,7 @@ function createAppCheck(): AppCheck | null {
       isTokenAutoRefreshEnabled: true,
     });
   } catch (error) {
-    console.warn('[firebase] App Check initialization failed:', error);
+    logger.warn('App Check initialization failed', 'firebase.appCheck', { error });
     return null;
   }
 }

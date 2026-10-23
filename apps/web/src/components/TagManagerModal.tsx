@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import type { TaxonomyItem } from '../api';
 import { listTags, saveTaxonomyItem, deleteTaxonomyItem } from '../api';
 import { Button } from './ui/Button';
@@ -56,19 +56,19 @@ export const TagManagerModal: React.FC<TagManagerModalProps> = ({
     }
   };
 
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setEditingTag(null);
     setTagName('');
     setTagColor('#3b82f6');
     setError('');
     setNotice('');
     setTagToDelete(null);
-  };
+  }, []);
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     resetForm();
     onClose();
-  };
+  }, [resetForm, onClose]);
 
   useEffect(() => {
     let ignore = false;
@@ -99,7 +99,7 @@ export const TagManagerModal: React.FC<TagManagerModalProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, editingTag, tagToDelete, onClose]);
+  }, [isOpen, editingTag, tagToDelete, onClose, handleClose]);
 
   if (!isOpen) return null;
 

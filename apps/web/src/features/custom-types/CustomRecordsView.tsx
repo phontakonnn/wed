@@ -664,7 +664,9 @@ export const CustomRecordsView: React.FC<CustomRecordsViewProps> = ({
         </div>
       </Modal>
 
-      {/* Custom Type Builder / Editor Modal */}
+      {/* Custom Type Builder / Editor Modal. Mounted on demand so its form
+          state is initialised from typeToEdit on every open. */}
+      {schemaModalOpen && (
       <CustomTypeBuilderModal
         isOpen={schemaModalOpen}
         onClose={() => setSchemaModalOpen(false)}
@@ -674,6 +676,7 @@ export const CustomRecordsView: React.FC<CustomRecordsViewProps> = ({
           setNotice({ type: 'success', message: 'แก้ไขโครงสร้างประเภทข้อมูลเรียบร้อยแล้ว' });
         }}
       />
+      )}
     </section>
   );
 };

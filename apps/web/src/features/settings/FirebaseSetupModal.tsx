@@ -52,12 +52,11 @@ export const FirebaseSetupModal: React.FC<FirebaseSetupModalProps> = ({
         .replace(/;\s*$/, '')
         .trim();
       // Allow relaxed JSON parsing for unquoted keys
-      let parsed: any;
+      let parsed: Record<string, string>;
       try {
         parsed = JSON.parse(cleaned);
       } catch {
         // Fallback eval in safe scope
-        // eslint-disable-next-line no-new-func
         parsed = Function(`"use strict"; return (${cleaned});`)();
       }
 
@@ -76,8 +75,9 @@ export const FirebaseSetupModal: React.FC<FirebaseSetupModalProps> = ({
       });
       setMode('form');
       setNotice('นำเข้าการตั้งค่าจาก JSON สำเร็จ! กรุณาตรวจสอบแล้วกดบันทึก');
-    } catch (err: any) {
-      setError('รูปแบบ JSON ไม่ถูกต้อง: ' + (err.message || ''));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '';
+      setError('รูปแบบ JSON ไม่ถูกต้อง: ' + message);
     }
   };
 

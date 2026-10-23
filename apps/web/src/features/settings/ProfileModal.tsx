@@ -157,7 +157,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
     try {
       const saved = localStorage.getItem('pkh.notification_settings');
       if (saved) return JSON.parse(saved);
-    } catch {}
+    } catch {
+      // Corrupt or unavailable storage: fall back to defaults below.
+    }
     return {
       soundEnabled: true,
       soundType: 'chime' as 'chime' | 'bell' | 'pop' | 'beep',
@@ -232,11 +234,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
     }
   }, []);
 
-  useEffect(() => {
-    if (activeTab === 'sessions') {
-      void loadSessionsAndHistory();
-    }
-  }, [activeTab, loadSessionsAndHistory]);
+  // Tab switches trigger the fetch directly; no effect mirrors derived state.
+  const selectTab = (tab: typeof activeTab) => {
+    setActiveTab(tab);
+    if (tab === 'sessions') void loadSessionsAndHistory();
+  };
 
   const handleRevokeAllSessions = async () => {
     if (!window.confirm('คุณต้องการออกจากระบบทุกอุปกรณ์อื่นทั้งหมดใช่หรือไม่?')) return;
@@ -691,7 +693,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             type="button"
             className={`button ${activeTab === 'sessions' ? 'button-primary' : 'button-quiet'}`}
             style={{ fontSize: '12px', padding: '4px 12px', borderRadius: '8px' }}
-            onClick={() => setActiveTab('sessions')}
+            onClick={() => selectTab('sessions')}
           >
             💻 อุปกรณ์ & เซสชัน
           </button>
@@ -1179,7 +1181,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                     <select
                       value={notificationConfig.soundType}
                       disabled={!notificationConfig.soundEnabled}
-                      onChange={(e) => saveNotificationConfig({ ...notificationConfig, soundType: e.target.value as any })}
+                      onChange={(e) => saveNotificationConfig({ ...notificationConfig, soundType: e.target.value as 'chime' | 'bell' | 'pop' | 'beep' })}
                       style={{ flex: 1, padding: '4px 8px', borderRadius: '6px', fontSize: '12px' }}
                     >
                       <option value="chime">🔔 เสียงกระดิ่งใส (Chime)</option>

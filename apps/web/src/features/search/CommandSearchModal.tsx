@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SearchBucketType, SearchResults, CustomCategory, SavedFilterItem } from '../../api';
 import { getSavedFilters, saveFilter, deleteSavedFilter } from '../../api';
 import { SEARCH_TYPE_LABELS } from '../../lib/constants';
@@ -55,23 +56,18 @@ export const CommandSearchModal: React.FC<CommandSearchModalProps> = ({
   customCategories = [],
 }) => {
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'az'>('newest');
-  const [savedFiltersList, setSavedFiltersList] = useState<SavedFilterItem[]>([]);
+  const queryClient = useQueryClient();
   const [filterSavedNotice, setFilterSavedNotice] = useState('');
 
-  const loadSavedFilters = async () => {
-    try {
-      const res = await getSavedFilters('command_search');
-      setSavedFiltersList(res.filters);
-    } catch {
-      // ignore
-    }
-  };
-
-  useEffect(() => {
-    if (isOpen) {
-      void loadSavedFilters();
-    }
-  }, [isOpen]);
+  // Saved filters are server state: cached per session, refetched on open.
+  const savedFiltersQuery = useQuery({
+    queryKey: ['savedFilters', 'command_search'],
+    queryFn: async () => (await getSavedFilters('command_search')).filters,
+    enabled: isOpen,
+  });
+  const savedFiltersList: SavedFilterItem[] = savedFiltersQuery.data ?? [];
+  const reloadSavedFilters = () =>
+    queryClient.invalidateQueries({ queryKey: ['savedFilters', 'command_search'] });
 
   const handleSaveCurrentFilter = async () => {
     const name = window.prompt('ตั้งชื่อสำหรับชุดตัวกรองนี้:', query || 'ตัวกรองที่กำหนดเอง');
@@ -84,7 +80,7 @@ export const CommandSearchModal: React.FC<CommandSearchModalProps> = ({
       });
       setFilterSavedNotice('บันทึกตัวกรองเรียบร้อยแล้ว!');
       setTimeout(() => setFilterSavedNotice(''), 3000);
-      void loadSavedFilters();
+      void reloadSavedFilters();
     } catch {
       // ignore
     }
@@ -110,7 +106,7 @@ export const CommandSearchModal: React.FC<CommandSearchModalProps> = ({
     e.stopPropagation();
     try {
       await deleteSavedFilter(id);
-      void loadSavedFilters();
+      void reloadSavedFilters();
     } catch {
       // ignore
     }
