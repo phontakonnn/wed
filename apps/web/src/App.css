@@ -754,6 +754,7 @@
 
 .center-state {
   display: grid;
+  gap: 12px;
   min-height: 100vh;
   padding: 24px;
   place-items: center;
@@ -762,6 +763,54 @@
     radial-gradient(ellipse at 50% 0%, rgba(221, 236, 222, 0.75), transparent 55%),
     var(--canvas);
   font-size: 14px;
+}
+
+.error-boundary {
+  display: grid;
+  place-items: center;
+  padding: 40px 16px;
+}
+
+.error-boundary-card {
+  width: min(100%, 600px);
+  padding: 32px 24px;
+  text-align: center;
+}
+
+.error-boundary-card h2 {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+
+.error-boundary-card p {
+  margin: 0 0 20px;
+  color: var(--pkh-text-secondary, #64748b);
+  line-height: 1.5;
+}
+
+.error-boundary-icon {
+  margin-bottom: 16px;
+  font-size: 48px;
+}
+
+.error-boundary-detail {
+  max-height: 120px;
+  margin: 0 0 24px;
+  padding: 12px;
+  overflow-x: auto;
+  border: 1px solid var(--pkh-border-subtle, #e2e8f0);
+  border-radius: 8px;
+  background: var(--pkh-bg-subtle, #f8fafc);
+  color: var(--pkh-text-danger, #ef4444);
+  font-size: 12px;
+  text-align: left;
+}
+
+.error-boundary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
 }
 
 .message-card,

@@ -920,25 +920,17 @@ function App() {
   useEffect(() => {
     const hasFilters = filterCategoryIds.length > 0 || filterTagIds.length > 0;
     if (authState !== 'signed-in' || viewMode !== 'notes' || !hasFilters || notes.length === 0) return;
-    let active = true;
-    Promise.all(notes.map(async (note) => {
-      try {
-        const taxonomy = await getNoteTaxonomy(note.id);
-        return [note.id, {
-          categoryIds: taxonomy.categories.map((item) => item.id),
-          tagIds: taxonomy.tags.map((item) => item.id),
-        }] as const;
-      } catch {
-        return [note.id, { categoryIds: [], tagIds: [] }] as const;
-      }
-    })).then((entries) => {
-      if (active) setNoteTaxonomyMap(Object.fromEntries(entries));
-    }).finally(() => {
-      if (active) setFilterBusy(false);
-    });
-    return () => {
-      active = false;
-    };
+    // Taxonomy ids are denormalised on each note document, so filtering no longer
+    // issues one request per note (the old N+1 path).
+    const entries = notes.map((note) => [
+      note.id,
+      {
+        categoryIds: note.categoryIds ?? [],
+        tagIds: note.tagIds ?? [],
+      },
+    ] as const);
+    setNoteTaxonomyMap(Object.fromEntries(entries));
+    setFilterBusy(false);
   }, [authState, filterCategoryIds, filterTagIds, notes, viewMode]);
 
   useEffect(() => {

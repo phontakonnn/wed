@@ -17,6 +17,7 @@ import {
   getDoc,
   getDocs,
   setDoc,
+  updateDoc,
   deleteDoc,
   query,
   where,
@@ -24,6 +25,7 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { ApiError } from './errors';
+import { normalizeTaxonomyName, sanitizeIds } from './taxonomy';
 
 export { ApiError };
 
@@ -44,6 +46,22 @@ function userCol(name: string) {
 function userDoc(col: string, id: string) {
   return doc(db, 'users', getCurrentUid(), col, id);
 }
+
+interface TaxonomyDoc {
+  id: string;
+  name: string;
+  color?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+interface TaxonomyNoteDoc {
+  categoryIds?: string[];
+  tagIds?: string[];
+  personIds?: string[];
+}
+
+
 
 /* ==========================================================================
    LocalStorage Fallback Engine (prevents app crashes if Firestore rules pending)
@@ -1102,6 +1120,101 @@ export async function handleFirebaseRequest<T>(path: string, options: RequestIni
     }
   }
 
+  // 16b. Taxonomy collections (categories / tags)
+  const taxonomyMatch = pathname.match(/^\/api\/(categories|tags)(?:\/([^/]+))?$/);
+  if (taxonomyMatch) {
+    const kind = taxonomyMatch[1] as 'categories' | 'tags';
+    const itemId = taxonomyMatch[2] ? decodeURIComponent(taxonomyMatch[2]) : null;
+    const key = kind;
+
+    if (method === 'GET' && !itemId) {
+      const page = Math.max(1, Number(params.get('page') || 1));
+      const pageSize = Math.min(100, Math.max(1, Number(params.get('pageSize') || 50)));
+      const all = await listDocs<TaxonomyDoc>(kind);
+      const sorted = all.sort((left, right) => left.name.localeCompare(right.name, 'th'));
+      return {
+        [key]: sorted.slice((page - 1) * pageSize, page * pageSize),
+        page,
+        pageSize,
+        total: sorted.length,
+      } as T;
+    }
+
+    if (method === 'POST' && !itemId) {
+      const name = normalizeTaxonomyName(body?.name);
+      if (!name) throw new ApiError('กรุณากรอกชื่อ 1–80 ตัวอักษร', 400);
+      const ref = doc(userCol(kind));
+      const now = Date.now();
+      const item = {
+        id: ref.id,
+        name,
+        color: typeof body?.color === 'string' ? body.color : '#10b981',
+        createdAt: now,
+        updatedAt: now,
+      };
+      await setDoc(ref, item);
+      return { [key]: item, [kind === 'categories' ? 'category' : 'tag']: item } as T;
+    }
+
+    if ((method === 'PATCH' || method === 'PUT') && itemId) {
+      const name = normalizeTaxonomyName(body?.name);
+      if (!name) throw new ApiError('กรุณากรอกชื่อ 1–80 ตัวอักษร', 400);
+      await updateDoc(userDoc(kind, itemId), {
+        name,
+        ...(typeof body?.color === 'string' ? { color: body.color } : {}),
+        updatedAt: Date.now(),
+      });
+      return { [kind === 'categories' ? 'category' : 'tag']: { id: itemId, name } } as T;
+    }
+
+    if (method === 'DELETE' && itemId) {
+      await deleteDoc(userDoc(kind, itemId));
+      return { ok: true } as T;
+    }
+  }
+
+  // 16c. Note taxonomy relations, denormalised onto the note document so list
+  // filtering never needs an N+1 query per note.
+  const noteTaxonomyMatch = pathname.match(/^\/api\/notes\/([^/]+)\/taxonomy$/);
+  if (noteTaxonomyMatch) {
+    const noteId = decodeURIComponent(noteTaxonomyMatch[1]);
+    if (method === 'PUT' || method === 'PATCH') {
+      const categoryIds = sanitizeIds(body?.categoryIds);
+      const tagIds = sanitizeIds(body?.tagIds);
+      const personIds = sanitizeIds(body?.personIds);
+      await updateDoc(userDoc('notes', noteId), {
+        categoryIds,
+        tagIds,
+        personIds,
+        updatedAt: Date.now(),
+      });
+      return { ok: true, categoryIds, tagIds, personIds } as T;
+    }
+
+    const noteSnap = await getDoc(userDoc('notes', noteId));
+    if (!noteSnap.exists()) throw new ApiError('ไม่พบโน้ตนี้', 404, { code: 'not-found' });
+    const note = noteSnap.data() as TaxonomyNoteDoc;
+    const categoryIds = Array.isArray(note.categoryIds) ? note.categoryIds : [];
+    const tagIds = Array.isArray(note.tagIds) ? note.tagIds : [];
+    const personIds = Array.isArray(note.personIds) ? note.personIds : [];
+    const [categories, tags, people] = await Promise.all([
+      Promise.all(categoryIds.map((id) => getDoc(userDoc('categories', id)))),
+      Promise.all(tagIds.map((id) => getDoc(userDoc('tags', id)))),
+      Promise.all(personIds.map((id) => getDoc(userDoc('people', id)))),
+    ]);
+    return {
+      categories: categories.filter((snap) => snap.exists()).map((snap) => ({ id: snap.id, name: String(snap.data()?.name || '') })),
+      tags: tags.filter((snap) => snap.exists()).map((snap) => ({ id: snap.id, name: String(snap.data()?.name || '') })),
+      people: people.filter((snap) => snap.exists()).map((snap) => ({
+        id: snap.id,
+        name: String(snap.data()?.name || ''),
+        roleLabel: String(snap.data()?.roleLabel || ''),
+        avatarFileId: snap.data()?.avatarFileId ?? null,
+        avatarPreset: snap.data()?.avatarPreset ?? null,
+      })),
+    } as T;
+  }
+
   // 17. Dashboard
   if (pathname === '/api/dashboard') {
     const [notes, bookmarks, tasks, reminders, habits, vault, library, people, projects, goals, timeblocks] = await Promise.all([
@@ -1216,8 +1329,12 @@ export async function handleFirebaseRequest<T>(path: string, options: RequestIni
     return { files: [], page: 1, pageSize: 50, total: 0 } as T;
   }
 
-  // Safe default fallback for any unhandled routes: never return null to avoid UI errors
-  return { ok: true } as T;
+  // Never fake success for unknown routes. Surface a real, user-readable error
+  // instead so the UI can show "feature unavailable" and report it centrally.
+  throw new ApiError(`ฟีเจอร์นี้ยังไม่พร้อมใช้งาน (${pathname})`, 501, {
+    code: 'not-implemented',
+    retryable: false,
+  });
 }
 
 /* ==========================================================================

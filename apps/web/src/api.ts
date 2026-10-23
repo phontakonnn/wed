@@ -12,6 +12,13 @@ export interface Note {
   content: string;
   createdAt: number;
   updatedAt: number;
+  /** Denormalised taxonomy ids written in the same batch as the relations. */
+  categoryIds?: string[];
+  tagIds?: string[];
+  personIds?: string[];
+  /** Display-only flag, kept in sync with the reminders collection. */
+  hasReminder?: boolean;
+  archived?: boolean;
 }
 
 export interface NoteVersion {
@@ -363,7 +370,8 @@ export interface FilePage {
   total: number;
 }
 
-import { ApiError } from './lib/errors';
+import { ApiError, toAppError } from './lib/errors';
+import { logger } from './lib/logger';
 export { ApiError };
 
 import { handleFirebaseRequest } from './lib/firebaseEngine';
@@ -377,11 +385,15 @@ export {
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   try {
     const res = await handleFirebaseRequest<T>(path, options);
-    if (res !== null && res !== undefined) return res;
-  } catch (err: any) {
-    console.warn(`handleFirebaseRequest caught for ${path}:`, err?.message || err);
+    if (res === null || res === undefined) {
+      throw new ApiError('ไม่ได้รับข้อมูลตอบกลับจากระบบ', 502, { retryable: true });
+    }
+    return res;
+  } catch (err) {
+    const appError = toAppError(err);
+    logger.error(`คำขอ ${options.method ?? 'GET'} ${path} ล้มเหลว`, appError, 'api.request', { path });
+    throw appError;
   }
-  return ({ ok: true } as any) as T;
 }
 
 export const requestJson = request;
@@ -2402,22 +2414,22 @@ export interface AuditLogsResult {
 
 export async function getLoginHistory(): Promise<{ history: LoginHistoryItem[] }> {
   const result = await request<{ history: LoginHistoryItem[] }>('/api/user/login-history');
-  return result || { history: [] };
+  return result;
 }
 
 export async function getUserSessions(): Promise<{ sessions: UserSessionDevice[] }> {
   const result = await request<{ sessions: UserSessionDevice[] }>('/api/user/sessions');
-  return result || { sessions: [] };
+  return result;
 }
 
 export async function revokeAllUserSessions(): Promise<{ ok: boolean; revoked: { revokedCount: number } }> {
   const result = await request<{ ok: boolean; revoked: { revokedCount: number } }>('/api/user/sessions/revoke-all', { method: 'POST' });
-  return result || { ok: true, revoked: { revokedCount: 0 } };
+  return result;
 }
 
 export async function getWorkspaceInvites(): Promise<{ invites: WorkspaceInviteItem[] }> {
   const result = await request<{ invites: WorkspaceInviteItem[] }>('/api/invites');
-  return result || { invites: [] };
+  return result;
 }
 
 export async function createWorkspaceInvite(options: { role?: 'admin' | 'user' | 'member' | 'editor' | 'viewer'; maxUses?: number; expiresInHours?: number }): Promise<{ ok: boolean; invite: WorkspaceInviteItem }> {
@@ -2431,7 +2443,7 @@ export async function createWorkspaceInvite(options: { role?: 'admin' | 'user' |
 
 export async function revokeWorkspaceInvite(code: string): Promise<{ ok: boolean }> {
   const result = await request<{ ok: boolean }>(`/api/invites/${encodeURIComponent(code)}`, { method: 'DELETE' });
-  return result || { ok: false };
+  return result;
 }
 
 export async function registerWithInvite(data: { inviteCode: string; username: string; password: string; displayName?: string }): Promise<{ ok: boolean; user: User }> {
@@ -2445,7 +2457,7 @@ export async function registerWithInvite(data: { inviteCode: string; username: s
 
 export async function getItemShares(itemType: string, itemId: string): Promise<{ shares: SharedItemInfo[] }> {
   const result = await request<{ shares: SharedItemInfo[] }>(`/api/shares/${encodeURIComponent(itemType)}/${encodeURIComponent(itemId)}`);
-  return result || { shares: [] };
+  return result;
 }
 
 export async function shareItem(data: { itemType: string; itemId: string; targetUsername: string; permission?: 'viewer' | 'editor' | 'admin' }): Promise<{ ok: boolean; share: SharedItemInfo }> {
@@ -2459,17 +2471,17 @@ export async function shareItem(data: { itemType: string; itemId: string; target
 
 export async function unshareItem(shareId: string): Promise<{ ok: boolean }> {
   const result = await request<{ ok: boolean }>(`/api/shares/${encodeURIComponent(shareId)}`, { method: 'DELETE' });
-  return result || { ok: false };
+  return result;
 }
 
 export async function getSharedWithMe(): Promise<{ shares: SharedItemInfo[] }> {
   const result = await request<{ shares: SharedItemInfo[] }>('/api/shared-with-me');
-  return result || { shares: [] };
+  return result;
 }
 
 export async function getNotifications(): Promise<NotificationsResult> {
   const result = await request<NotificationsResult>('/api/notifications');
-  return result || { notifications: [], unreadCount: 0 };
+  return result;
 }
 
 export async function markNotificationsAsRead(id?: string): Promise<{ ok: boolean }> {
@@ -2477,7 +2489,7 @@ export async function markNotificationsAsRead(id?: string): Promise<{ ok: boolea
     method: 'POST',
     body: JSON.stringify({ id }),
   });
-  return result || { ok: true };
+  return result;
 }
 
 export async function snoozeNotification(id: string, hours = 24): Promise<{ ok: boolean }> {
@@ -2485,14 +2497,14 @@ export async function snoozeNotification(id: string, hours = 24): Promise<{ ok: 
     method: 'POST',
     body: JSON.stringify({ hours }),
   });
-  return result || { ok: true };
+  return result;
 }
 
 export async function completeNotification(id: string): Promise<{ ok: boolean; itemType?: string; itemId?: string }> {
   const result = await request<{ ok: boolean; itemType?: string; itemId?: string }>(`/api/notifications/${encodeURIComponent(id)}/complete`, {
     method: 'POST',
   });
-  return result || { ok: true };
+  return result;
 }
 
 export interface NotificationPreferences {
@@ -2508,18 +2520,7 @@ export interface NotificationPreferences {
 
 export async function getNotificationPreferences(): Promise<{ preferences: NotificationPreferences }> {
   const result = await request<{ preferences: NotificationPreferences }>('/api/notifications/preferences');
-  return result || {
-    preferences: {
-      dndEnabled: false,
-      dndStart: '22:00',
-      dndEnd: '08:00',
-      notifyBirthdays: true,
-      notifyTasks: true,
-      notifyReminders: true,
-      notifyShopping: true,
-      isDndActive: false,
-    },
-  };
+  return result;
 }
 
 export async function updateNotificationPreferences(prefs: Partial<NotificationPreferences>): Promise<{ ok: boolean; preferences: NotificationPreferences }> {
@@ -2550,13 +2551,13 @@ export async function revokeUserSessions(userId: string): Promise<{ ok: boolean;
   const result = await request<{ ok: boolean; revokedSessions: number }>(`/api/admin/users/${encodeURIComponent(userId)}/revoke-sessions`, {
     method: 'POST',
   });
-  return result || { ok: true, revokedSessions: 0 };
+  return result;
 }
 
 export async function getSavedFilters(filterType?: string): Promise<{ filters: SavedFilterItem[] }> {
   const query = filterType ? `?filterType=${encodeURIComponent(filterType)}` : '';
   const result = await request<{ filters: SavedFilterItem[] }>(`/api/filters${query}`);
-  return result || { filters: [] };
+  return result;
 }
 
 export async function saveFilter(data: { name: string; filterType: string; criteriaJson: string; sortOrder?: string }): Promise<{ ok: boolean; filter: SavedFilterItem }> {
@@ -2570,7 +2571,7 @@ export async function saveFilter(data: { name: string; filterType: string; crite
 
 export async function deleteSavedFilter(id: string): Promise<{ ok: boolean }> {
   const result = await request<{ ok: boolean }>(`/api/filters/${encodeURIComponent(id)}`, { method: 'DELETE' });
-  return result || { ok: false };
+  return result;
 }
 
 export function exportUserData(): void {
@@ -2595,7 +2596,7 @@ export async function getAdminAuditLogs(params?: { page?: number; pageSize?: num
   if (params?.userId) query.set('userId', params.userId);
   const qs = query.toString();
   const result = await request<AuditLogsResult>(`/api/admin/audit-logs${qs ? '?' + qs : ''}`);
-  return result || { logs: [], total: 0, page: 1, pageSize: 50 };
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -2632,7 +2633,7 @@ export async function fetchUniversalTrash(params?: {
   if (params?.pageSize) query.set('pageSize', String(params.pageSize));
   const qs = query.toString();
   const result = await request<TrashResponse>(`/api/trash${qs ? '?' + qs : ''}`);
-  return result || { items: [], total: 0, page: 1, pageSize: 50 };
+  return result;
 }
 
 export async function restoreTrashItem(itemType: string, id: string): Promise<void> {
@@ -2775,7 +2776,7 @@ export async function fetchCustomRecords(
   if (params?.pageSize) query.set('pageSize', String(params.pageSize));
   const qs = query.toString();
   const result = await request<CustomRecordPage>(`/api/custom-types/${encodeURIComponent(typeId)}/records${qs ? '?' + qs : ''}`);
-  return result || { records: [], total: 0, page: 1, pageSize: 50 };
+  return result;
 }
 
 export async function createCustomRecord(

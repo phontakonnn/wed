@@ -20,8 +20,8 @@ import {
   getFirestore,
   type Firestore,
 } from 'firebase/firestore';
-import { getMessaging, isSupported as isMessagingSupported, type Messaging } from 'firebase/messaging';
-import { getAnalytics, isSupported as isAnalyticsSupported, type Analytics } from 'firebase/analytics';
+import type { Messaging } from 'firebase/messaging';
+import type { Analytics } from 'firebase/analytics';
 
 export const firebaseConfig = {
   apiKey: "AIzaSyCHm6muuT7KPQ5G4_gY6Zeg5hX9JgK2it8",
@@ -110,8 +110,9 @@ export async function getFirebaseMessaging(): Promise<Messaging | null> {
   if (messagingInstance) return messagingInstance;
   if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
     try {
-      const supported = await isMessagingSupported();
-      if (supported) {
+      // Loaded only when the user actually enables notifications.
+      const { getMessaging, isSupported } = await import('firebase/messaging');
+      if (await isSupported()) {
         messagingInstance = getMessaging(app);
       }
     } catch (err) {
@@ -126,8 +127,10 @@ export async function getFirebaseAnalytics(): Promise<Analytics | null> {
   if (analyticsInstance) return analyticsInstance;
   if (typeof window !== 'undefined') {
     try {
-      const supported = await isAnalyticsSupported();
-      if (supported) {
+      // Analytics is non-critical: never part of the first-load bundle anymore.
+      // Callers opt in after the app is idle (see scheduleAnalyticsWarmup below).
+      const { getAnalytics, isSupported } = await import('firebase/analytics');
+      if (await isSupported()) {
         analyticsInstance = getAnalytics(app);
       }
     } catch (err) {
@@ -137,6 +140,13 @@ export async function getFirebaseAnalytics(): Promise<Analytics | null> {
   return analyticsInstance;
 }
 
-if (typeof window !== 'undefined') {
-  void getFirebaseAnalytics();
+/** Warm analytics after first paint without blocking boot. */
+export function scheduleAnalyticsWarmup(): void {
+  if (typeof window === 'undefined') return;
+  const run = () => void getFirebaseAnalytics();
+  if (typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(run, { timeout: 4000 });
+  } else {
+    window.setTimeout(run, 2500);
+  }
 }

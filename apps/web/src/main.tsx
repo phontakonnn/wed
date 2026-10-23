@@ -1,4 +1,6 @@
 import './lib/firebaseEngine';
+import { scheduleAnalyticsWarmup } from './lib/firebase';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { StrictMode, lazy, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles/tokens.css';
@@ -33,15 +35,20 @@ const isDesignSystem =
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {isDesignSystem ? (
-      <Suspense fallback={<div style={{ padding: '32px', textAlign: 'center', color: '#64748b' }}>กำลังโหลดระบบดีไซน์...</div>}>
-        <DesignSystemPage />
-      </Suspense>
-    ) : (
-      <App />
-    )}
+    <ErrorBoundary>
+      {isDesignSystem ? (
+        <Suspense fallback={<div style={{ padding: '32px', textAlign: 'center', color: '#64748b' }}>กำลังโหลดระบบดีไซน์...</div>}>
+          <DesignSystemPage />
+        </Suspense>
+      ) : (
+        <App />
+      )}
+    </ErrorBoundary>
   </StrictMode>,
 );
+
+// Analytics is optional and must never delay the first paint.
+scheduleAnalyticsWarmup();
 
 // Register and force update service worker
 if ('serviceWorker' in navigator) {
