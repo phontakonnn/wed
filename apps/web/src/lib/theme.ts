@@ -19,7 +19,7 @@ export const DEFAULT_THEME_CONFIG: ThemeConfig = {
 /** Old emerald defaults that cannot reach 4.5:1 on white. */
 const LEGACY_DEFAULT_ACCENTS = new Set(['#10b981', '#0f9f6e']);
 
-export interface AccentPreset {
+interface AccentPreset {
   color: string;
   label: string;
 }

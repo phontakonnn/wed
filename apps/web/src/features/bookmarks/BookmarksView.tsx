@@ -18,7 +18,7 @@ const BOOKMARK_CATEGORY_PRESETS = [
   '📦 อื่นๆ',
 ] as const;
 
-export interface BookmarksViewProps {
+interface BookmarksViewProps {
   bookmarks: Bookmark[];
   activeBookmark: Bookmark | null;
   setActiveBookmark: (bm: Bookmark | null) => void;

@@ -75,7 +75,7 @@ export interface Person {
   noteCount?: number;
 }
 
-export interface PersonPage {
+interface PersonPage {
   people: Person[];
   page: number;
   pageSize: number;
@@ -118,23 +118,6 @@ export interface HabitHistoryDay {
   date: string;
   count: number | null;
   metTarget: boolean | null;
-}
-
-export interface HabitHistory {
-  habit: Habit;
-  from: string;
-  to: string;
-  trackingStartDate: string | null;
-  days: HabitHistoryDay[];
-  summary: {
-    daysTracked: number;
-    daysLogged: number;
-    daysMetTarget: number;
-    currentStreak: number;
-    bestStreak: number;
-    weekly: { from: string; to: string; daysTracked: number; daysLogged: number; daysMetTarget: number };
-    monthly: { from: string; to: string; daysTracked: number; daysLogged: number; daysMetTarget: number };
-  };
 }
 
 export interface HabitsHistory {
@@ -209,7 +192,7 @@ export interface VaultItem {
   updatedAt: number;
 }
 
-export interface VaultPage {
+interface VaultPage {
   items: VaultItem[];
   page: number;
   pageSize: number;
@@ -232,14 +215,14 @@ export interface LibraryItem {
   updatedAt: number;
 }
 
-export interface LibraryPage {
+interface LibraryPage {
   items: LibraryItem[];
   page: number;
   pageSize: number;
   total: number;
 }
 
-export interface VaultItemInput {
+interface VaultItemInput {
   title: string;
   category?: VaultCategory;
   keyValue?: string;
@@ -250,7 +233,7 @@ export interface VaultItemInput {
   isFavorite?: boolean;
 }
 
-export interface LibraryItemInput {
+interface LibraryItemInput {
   title: string;
   category?: LibraryCategory;
   status?: LibraryStatus;
@@ -289,13 +272,13 @@ export interface SearchResults {
   query: string;
 }
 
-export interface NoteTaxonomy {
+interface NoteTaxonomy {
   categories: Array<Pick<TaxonomyItem, 'id' | 'name'>>;
   tags: Array<Pick<TaxonomyItem, 'id' | 'name'>>;
   people: Array<Pick<Person, 'id' | 'name' | 'roleLabel' | 'avatarFileId' | 'avatarPreset'>>;
 }
 
-export interface TaxonomyPage {
+interface TaxonomyPage {
   categories?: TaxonomyItem[];
   tags?: TaxonomyItem[];
   page: number;
@@ -303,21 +286,21 @@ export interface TaxonomyPage {
   total: number;
 }
 
-export interface NotePage {
+interface NotePage {
   notes: Note[];
   page: number;
   pageSize: number;
   total: number;
 }
 
-export interface BookmarkPage {
+interface BookmarkPage {
   bookmarks: Bookmark[];
   page: number;
   pageSize: number;
   total: number;
 }
 
-export type TrashPage = NotePage;
+type TrashPage = NotePage;
 
 export type FavoriteItemType =
   | 'note'
@@ -346,7 +329,7 @@ export interface Favorite {
   updatedAt: number;
 }
 
-export interface FavoritePage {
+interface FavoritePage {
   favorites: Favorite[];
   page: number;
   pageSize: number;
@@ -363,7 +346,7 @@ export interface StoredFile {
   downloadUrl: string;
 }
 
-export interface FilePage {
+interface FilePage {
   files: StoredFile[];
   page: number;
   pageSize: number;
@@ -391,7 +374,6 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
 }
 
-export const requestJson = request;
 
 export async function getCurrentUser(): Promise<User> {
   const result = await request<{ user: User }>('/api/auth/me');
@@ -413,7 +395,7 @@ export interface HealthDiskInfo {
   usedPercent: number;
 }
 
-export interface HealthStatus {
+interface HealthStatus {
   status: 'ok' | 'unavailable';
   db: 'ready' | 'unavailable';
   uptimeSeconds: number;
@@ -426,7 +408,7 @@ export async function checkHealth(): Promise<HealthStatus> {
   return result;
 }
 
-export interface LoginResult {
+interface LoginResult {
   user?: User;
   twoFactorRequired?: boolean;
   tempToken?: string;
@@ -728,7 +710,7 @@ export async function deleteHabit(habitId: string): Promise<void> {
   await request(`/api/habits/${encodeURIComponent(habitId)}`, { method: 'DELETE' });
 }
 
-export interface SearchAllOptions {
+interface SearchAllOptions {
   limit?: number;
   types?: SearchBucketType[];
   from?: string;
@@ -758,14 +740,6 @@ export async function searchAll(
   const result = await request<SearchResults>(`/api/search?${query}`);
   if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
   return result;
-}
-
-export async function restoreNote(noteId: string): Promise<Note> {
-  const result = await request<{ note: Note }>(`/api/notes/${encodeURIComponent(noteId)}/restore`, {
-    method: 'POST',
-  });
-  if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
-  return result.note;
 }
 
 export async function permanentlyDeleteNote(noteId: string): Promise<void> {
@@ -834,12 +808,12 @@ export async function listFiles(page = 1, pageSize = 50): Promise<FilePage> {
   return result;
 }
 
-export interface UploadProgressOptions {
+interface UploadProgressOptions {
   onProgress?: (percent: number, loaded: number, total: number) => void;
   signal?: AbortSignal;
 }
 
-export function uploadFileWithProgress(
+function uploadFileWithProgress(
   file: File,
   options?: UploadProgressOptions
 ): Promise<StoredFile> {
@@ -897,10 +871,6 @@ export function uploadFileWithProgress(
 
 export async function uploadFile(file: File): Promise<StoredFile> {
   return uploadFileWithProgress(file);
-}
-
-export async function deleteFile(fileId: string): Promise<void> {
-  await request(`/api/files/${encodeURIComponent(fileId)}`, { method: 'DELETE' });
 }
 
 // ---------------------------------------------------------------- work core
@@ -983,7 +953,7 @@ export interface Goal {
   progressPercent: number | null;
 }
 
-export interface InboxPage {
+interface InboxPage {
   items: InboxItem[];
   page: number;
   pageSize: number;
@@ -1052,17 +1022,6 @@ export async function listTasks(params: {
   query.set('page', String(params.page ?? 1));
   query.set('pageSize', String(params.pageSize ?? 50));
   const result = await request<{ tasks: Task[]; total: number; today: string }>(`/api/tasks?${query}`);
-  if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
-  return result;
-}
-
-export async function getTodayTasks(): Promise<{
-  today: string;
-  overdue: Task[];
-  dueToday: Task[];
-  upcoming: Task[];
-}> {
-  const result = await request<{ today: string; overdue: Task[]; dueToday: Task[]; upcoming: Task[] }>('/api/tasks/today');
   if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
   return result;
 }
@@ -1303,13 +1262,6 @@ export async function getHabitsHistory(days = 7): Promise<HabitsHistory> {
   return result;
 }
 
-export async function getHabitHistory(habitId: string, days = 30): Promise<HabitHistory> {
-  const query = new URLSearchParams({ days: String(days) });
-  const result = await request<HabitHistory>(`/api/habits/${encodeURIComponent(habitId)}/history?${query}`);
-  if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
-  return result;
-}
-
 export async function setHabitLog(
   habitId: string,
   logDate: string,
@@ -1474,7 +1426,7 @@ export interface CustomCategory {
   updatedAt: number;
 }
 
-export interface CustomCategoryInput {
+interface CustomCategoryInput {
   name: string;
   icon?: string;
   color?: string;
@@ -1663,19 +1615,6 @@ export interface BackupItem {
 
 export async function getPublicSettings(): Promise<PublicSettings> {
   const result = await request<PublicSettings>('/api/settings/public');
-  if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
-  return result;
-}
-
-export async function updateAccount(payload: {
-  username?: string;
-  currentPassword?: string;
-  newPassword?: string;
-}): Promise<{ user: User }> {
-  const result = await request<{ user: User }>('/api/auth/account', {
-    method: 'PUT',
-    body: JSON.stringify(payload),
-  });
   if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
   return result;
 }
@@ -2030,7 +1969,7 @@ export async function updateAdminSettings(settings: Partial<SystemSettings>): Pr
 // USER PROFILE & 2FA & OTP
 // -------------------------------------------------------------
 
-export interface UserProfile {
+interface UserProfile {
   id: string;
   username: string;
   role: 'admin' | 'user';
@@ -2090,15 +2029,6 @@ export async function disable2FA(currentPassword?: string): Promise<{ ok: boolea
   const result = await request<{ ok: boolean }>('/api/user/2fa/disable', {
     method: 'POST',
     body: JSON.stringify({ currentPassword: currentPassword || '' }),
-  });
-  if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
-  return result;
-}
-
-export async function verify2FALogin(tempToken: string, code: string): Promise<{ user: User }> {
-  const result = await request<{ user: User }>('/api/auth/2fa/verify', {
-    method: 'POST',
-    body: JSON.stringify({ tempToken, code }),
   });
   if (!result) throw new ApiError('เซิร์ฟเวอร์ตอบกลับข้อมูลที่ไม่ถูกต้อง', 500);
   return result;
@@ -2374,7 +2304,7 @@ export interface NotificationItem {
   createdAt: number;
 }
 
-export interface NotificationsResult {
+interface NotificationsResult {
   notifications: NotificationItem[];
   unreadCount: number;
 }
@@ -2400,7 +2330,7 @@ export interface AuditLogItem {
   createdAt: number;
 }
 
-export interface AuditLogsResult {
+interface AuditLogsResult {
   logs: AuditLogItem[];
   total: number;
   page: number;
@@ -2441,15 +2371,6 @@ export async function revokeWorkspaceInvite(code: string): Promise<{ ok: boolean
   return result;
 }
 
-export async function registerWithInvite(data: { inviteCode: string; username: string; password: string; displayName?: string }): Promise<{ ok: boolean; user: User }> {
-  const result = await request<{ ok: boolean; user: User }>('/api/auth/register-invite', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-  if (!result) throw new ApiError('ไม่สามารถลงทะเบียนได้', 500);
-  return result;
-}
-
 export async function getItemShares(itemType: string, itemId: string): Promise<{ shares: SharedItemInfo[] }> {
   const result = await request<{ shares: SharedItemInfo[] }>(`/api/shares/${encodeURIComponent(itemType)}/${encodeURIComponent(itemId)}`);
   return result;
@@ -2466,11 +2387,6 @@ export async function shareItem(data: { itemType: string; itemId: string; target
 
 export async function unshareItem(shareId: string): Promise<{ ok: boolean }> {
   const result = await request<{ ok: boolean }>(`/api/shares/${encodeURIComponent(shareId)}`, { method: 'DELETE' });
-  return result;
-}
-
-export async function getSharedWithMe(): Promise<{ shares: SharedItemInfo[] }> {
-  const result = await request<{ shares: SharedItemInfo[] }>('/api/shared-with-me');
   return result;
 }
 
@@ -2524,21 +2440,6 @@ export async function updateNotificationPreferences(prefs: Partial<NotificationP
     body: JSON.stringify(prefs),
   });
   if (!result) throw new ApiError('ไม่สามารถอัปเดตการตั้งค่าแจ้งเตือนได้', 500);
-  return result;
-}
-
-export async function registerAccount(data: {
-  username: string;
-  password: string;
-  email?: string;
-  displayName?: string;
-  inviteCode?: string;
-}): Promise<{ ok: boolean; user: User }> {
-  const result = await request<{ ok: boolean; user: User }>('/api/auth/register-account', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-  if (!result) throw new ApiError('ไม่สามารถลงทะเบียนได้', 500);
   return result;
 }
 
@@ -2608,7 +2509,7 @@ export interface TrashItem {
   originalCreatedAt: number;
 }
 
-export interface TrashResponse {
+interface TrashResponse {
   items: TrashItem[];
   total: number;
   page: number;
@@ -2708,7 +2609,7 @@ export interface CustomDataRecord {
   updatedAt: number;
 }
 
-export interface CustomRecordPage {
+interface CustomRecordPage {
   records: CustomDataRecord[];
   total: number;
   page: number;
@@ -2918,20 +2819,6 @@ export async function fetchSupportTicket(id: string): Promise<{
   );
   if (!result?.ticket) throw new ApiError('ไม่พบข้อมูลคำร้องขอความช่วยเหลือ', 404);
   return result;
-}
-
-export async function createSupportTicket(payload: {
-  category: string;
-  priority?: string;
-  subject: string;
-  message: string;
-}): Promise<SupportTicket> {
-  const result = await request<{ ok: boolean; ticket: SupportTicket }>('/api/support-tickets', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-  if (!result?.ticket) throw new ApiError('ไม่สามารถส่งคำร้องขอความช่วยเหลือได้', 500);
-  return result.ticket;
 }
 
 export async function replySupportTicket(id: string, message: string): Promise<SupportTicketReply> {

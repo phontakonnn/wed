@@ -6,9 +6,9 @@ import { Button } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Skeleton } from '../../components/ui/Skeleton';
 
-export type CustomCategoryFilter = 'all' | 'note' | 'task' | 'bookmark' | 'file' | 'vault' | 'library';
+type CustomCategoryFilter = 'all' | 'note' | 'task' | 'bookmark' | 'file' | 'vault' | 'library';
 
-export interface CustomCategoryViewProps {
+interface CustomCategoryViewProps {
   customCategoryDataBusy: boolean;
   customCategoryData: CustomCategoryItemsResult | null;
   customCategoryFilter: CustomCategoryFilter;

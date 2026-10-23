@@ -12,7 +12,7 @@ export interface ToastItem {
   action?: ToastAction;
 }
 
-export interface ToastStackProps {
+interface ToastStackProps {
   toasts: ToastItem[];
   onDismiss: (id: number) => void;
 }

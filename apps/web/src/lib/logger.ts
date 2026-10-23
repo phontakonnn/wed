@@ -1,8 +1,8 @@
 import { isAppError, toAppError } from './errors';
 
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
-export interface LogEntry {
+interface LogEntry {
   level: LogLevel;
   message: string;
   context?: string;
@@ -12,7 +12,7 @@ export interface LogEntry {
   details?: Record<string, unknown>;
 }
 
-export type LoggerSink = (entry: LogEntry) => void;
+type LoggerSink = (entry: LogEntry) => void;
 
 const buffer: LogEntry[] = [];
 const MAX_BUFFER = 200;

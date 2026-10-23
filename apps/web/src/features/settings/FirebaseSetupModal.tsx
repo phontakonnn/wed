@@ -9,7 +9,7 @@ import {
 } from '../../lib/firebaseConfig';
 import { Button } from '../../components/ui/Button';
 
-export interface FirebaseSetupModalProps {
+interface FirebaseSetupModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConfigUpdated?: () => void;

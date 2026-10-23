@@ -10,8 +10,6 @@ import {
   RecaptchaVerifier,
   onAuthStateChanged,
   signOut,
-  type User as FirebaseUser,
-  type ConfirmationResult,
 } from 'firebase/auth';
 import { app } from './firebaseApp';
 
@@ -33,6 +31,4 @@ export {
   RecaptchaVerifier,
   onAuthStateChanged,
   signOut,
-  type FirebaseUser,
-  type ConfirmationResult,
 };

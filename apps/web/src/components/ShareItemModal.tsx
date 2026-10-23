@@ -5,7 +5,7 @@ import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { errorMessage } from '../lib/formatters';
 
-export interface ShareItemModalProps {
+interface ShareItemModalProps {
   isOpen: boolean;
   onClose: () => void;
   itemType: string;

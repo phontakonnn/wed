@@ -5,7 +5,7 @@ import { SEARCH_TYPE_LABELS } from '../../lib/constants';
 import { formatBytes } from '../../lib/formatters';
 import { Skeleton } from '../../components/ui/Skeleton';
 
-export interface CommandSearchModalProps {
+interface CommandSearchModalProps {
   isOpen: boolean;
   onClose: () => void;
   query: string;
@@ -415,7 +415,7 @@ export const CommandSearchModal: React.FC<CommandSearchModalProps> = ({
               เรียง:
               <select
                 value={sortOrder}
-                onChange={(e) => setSortOrder(e.target.value as any)}
+                onChange={(e) => setSortOrder(e.target.value as 'newest' | 'oldest' | 'az')}
                 style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', border: '1px solid var(--pkh-border-subtle)', background: 'var(--pkh-bg-surface)' }}
               >
                 <option value="newest">ใหม่สุด</option>

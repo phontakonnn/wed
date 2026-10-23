@@ -1,7 +1,7 @@
 import React from 'react';
 import './Skeleton.css';
 
-export interface SkeletonProps extends React.HTMLAttributes<HTMLDivElement> {
+interface SkeletonProps extends React.HTMLAttributes<HTMLDivElement> {
   variant?: 'text' | 'circular' | 'rectangular' | 'card';
   width?: string | number;
   height?: string | number;

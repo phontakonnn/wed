@@ -50,21 +50,6 @@ export interface ThemeConfig {
   buttonColor?: string;
 }
 
-export interface ThemeEffectsConfig {
-  /** Legacy shape kept so old Firestore documents still type-check. */
-  bgEffect?: ThemeName;
-  animatedGlow?: boolean;
-  glassCard?: boolean;
-  hoverLift?: boolean;
-  accentColor?: string;
-  neonGlowOpacity?: number;
-  glassBlur?: number;
-  glassOpacity?: number;
-  cardRadius?: number;
-  btnGradient?: string;
-  customCanvasBg?: string;
-  customSidebarBg?: string;
-}
 
 export interface ProfileState {
   name: string;

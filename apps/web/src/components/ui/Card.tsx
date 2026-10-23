@@ -1,7 +1,7 @@
 import React from 'react';
 import './Card.css';
 
-export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   variant?: 'elevated' | 'interactive' | 'flat' | 'bordered';
 }
 
@@ -52,7 +52,7 @@ export const CardDescription = React.forwardRef<HTMLParagraphElement, React.HTML
 );
 CardDescription.displayName = 'CardDescription';
 
-export interface CardContentProps extends React.HTMLAttributes<HTMLDivElement> {
+interface CardContentProps extends React.HTMLAttributes<HTMLDivElement> {
   flush?: boolean;
 }
 

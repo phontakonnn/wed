@@ -3,7 +3,7 @@ import type { ThemeMode, UiMode } from '../../types';
 import { ACCENT_PRESETS } from '../../lib/theme';
 import './ThemeModal.css';
 
-export interface ThemeModalProps {
+interface ThemeModalProps {
   isOpen: boolean;
   onClose: () => void;
   mode: ThemeMode;

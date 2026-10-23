@@ -14,10 +14,10 @@ import type {
 import { VAULT_CATEGORIES, LIBRARY_CATEGORIES, LIBRARY_STATUSES } from '../../lib/constants';
 import { formatBytes, taskStatusLabel } from '../../lib/formatters';
 
-export type QuickAddType = 'note' | 'task' | 'bookmark' | 'file' | 'vault' | 'library' | 'attach';
-export type AttachTypeFilter = 'all' | 'note' | 'task' | 'bookmark' | 'file' | 'vault' | 'library';
+type QuickAddType = 'note' | 'task' | 'bookmark' | 'file' | 'vault' | 'library' | 'attach';
+type AttachTypeFilter = 'all' | 'note' | 'task' | 'bookmark' | 'file' | 'vault' | 'library';
 
-export interface QuickAddCategoryModalProps {
+interface QuickAddCategoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   selectedCustomCategoryId: string | null;

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { NotesView } from '../types';
 
-export interface MobileBottomNavProps {
+interface MobileBottomNavProps {
   viewMode: NotesView;
   onSwitchView: (view: NotesView) => void;
   onOpenMobileMenu: () => void;

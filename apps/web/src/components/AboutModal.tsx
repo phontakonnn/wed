@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Button } from './ui/Button';
 
-export interface AboutModalProps {
+interface AboutModalProps {
   isOpen: boolean;
   onClose: () => void;
 }

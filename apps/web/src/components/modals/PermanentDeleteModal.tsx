@@ -1,7 +1,7 @@
 import React from 'react';
 import type { Note } from '../../api';
 
-export interface PermanentDeleteModalProps {
+interface PermanentDeleteModalProps {
   isOpen: boolean;
   onClose: () => void;
   note: Note | null;

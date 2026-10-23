@@ -4,7 +4,7 @@ import { formatDate } from '../../lib/formatters';
 import { MarkdownViewer } from '../../components/MarkdownViewer';
 import { Button } from '../../components/ui/Button';
 
-export interface NoteVersionHistoryModalProps {
+interface NoteVersionHistoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   note: Note;

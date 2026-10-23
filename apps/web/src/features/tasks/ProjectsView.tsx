@@ -5,7 +5,7 @@ import { Button } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Skeleton } from '../../components/ui/Skeleton';
 
-export interface ProjectsViewProps {
+interface ProjectsViewProps {
   projects: Project[];
   projectDraft: { name: string; outcome: string; dueDate: string; goalId: string };
   setProjectDraft: React.Dispatch<React.SetStateAction<{ name: string; outcome: string; dueDate: string; goalId: string }>>;

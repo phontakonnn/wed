@@ -1,7 +1,7 @@
 import React from 'react';
 import type { SidebarNavItem } from '../../sidebarNav';
 
-export interface SidebarNavModalProps {
+interface SidebarNavModalProps {
   isOpen: boolean;
   onClose: () => void;
   tempNavConfig: SidebarNavItem[];

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-export interface WebsiteLogoProps {
+interface WebsiteLogoProps {
   url?: string;
   size?: number;
   title?: string;

@@ -4,7 +4,7 @@ import { Button } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Skeleton } from '../../components/ui/Skeleton';
 
-export interface GoalsViewProps {
+interface GoalsViewProps {
   goals: Goal[];
   goalDraft: { title: string; metric: string; targetValue: string; unit: string };
   setGoalDraft: React.Dispatch<React.SetStateAction<{ title: string; metric: string; targetValue: string; unit: string }>>;

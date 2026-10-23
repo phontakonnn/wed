@@ -9,7 +9,7 @@ import { Button } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Skeleton } from '../../components/ui/Skeleton';
 
-export interface NotesViewProps {
+interface NotesViewProps {
   noteViewMode: 'grid' | 'editor';
   setNoteViewMode: (mode: 'grid' | 'editor') => void;
   activeNote: Note | null;

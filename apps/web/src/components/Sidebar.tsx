@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import type { User, CustomCategory, CustomDataType } from '../api';
 import type { ProfileState, NotesView, SidebarNavItem } from '../types';
 
-export interface SidebarProps {
+interface SidebarProps {
   mobileMenuOpen: boolean;
   onCloseMobileMenu: () => void;
   onOpenProfile: () => void;

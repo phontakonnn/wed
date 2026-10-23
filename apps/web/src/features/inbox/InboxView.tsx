@@ -4,7 +4,7 @@ import { formatDate } from '../../lib/formatters';
 import { Button } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
 
-export interface InboxViewProps {
+interface InboxViewProps {
   inboxNewCount: number;
   inboxError: string;
   inboxNotice: string;

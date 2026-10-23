@@ -3,7 +3,7 @@ import type { TaxonomyItem } from '../api';
 import { listTags, saveTaxonomyItem, deleteTaxonomyItem } from '../api';
 import { Button } from './ui/Button';
 
-export interface TagManagerModalProps {
+interface TagManagerModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSelectTag?: (tag: TaxonomyItem) => void;

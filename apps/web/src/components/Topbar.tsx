@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { User, Reminder, NotificationItem, NotificationPreferences } from '../api';
 
-export interface TopbarProps {
+interface TopbarProps {
   user: User | null;
   onOpenMobileMenu: () => void;
   onOpenCommand: () => void;

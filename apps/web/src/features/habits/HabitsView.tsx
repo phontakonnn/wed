@@ -14,7 +14,7 @@ import { reminderCategoryLabel, lifeAreaLabel } from '../../lib/formatters';
 import { Button } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
 
-export interface ReminderDraft {
+interface ReminderDraft {
   title: string;
   targetDate: string;
   category: ReminderCategory;
@@ -23,19 +23,19 @@ export interface ReminderDraft {
   notifyDaysBefore: string;
 }
 
-export interface TimeblockDraft {
+interface TimeblockDraft {
   timeRange: string;
   title: string;
   lifeArea: LifeArea;
 }
 
-export interface HabitDraft {
+interface HabitDraft {
   title: string;
   dailyTarget: string;
   unit: string;
 }
 
-export interface HabitsViewProps {
+interface HabitsViewProps {
   scheduleDate: string;
   scheduleBusy: boolean;
   scheduleError: string;
@@ -97,7 +97,7 @@ function checkTimeRangeStatus(timeRange: string, currentMinutes: number): 'curre
 }
 
 
-export interface CalendarEventItem {
+interface CalendarEventItem {
   id: string;
   title: string;
   dateStr: string;

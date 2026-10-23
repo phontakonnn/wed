@@ -8,7 +8,7 @@ import { Button } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Skeleton } from '../../components/ui/Skeleton';
 
-export interface VaultViewProps {
+interface VaultViewProps {
   vaultItems: VaultItem[];
   activeVault: VaultItem | null;
   vaultDraft: VaultDraft;

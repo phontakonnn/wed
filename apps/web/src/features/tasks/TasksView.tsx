@@ -6,7 +6,7 @@ import { Button } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Skeleton } from '../../components/ui/Skeleton';
 
-export interface TasksViewProps {
+interface TasksViewProps {
   tasks: Task[];
   taskFilter: 'open' | 'today' | 'overdue' | 'done';
   setTaskFilter: (filter: 'open' | 'today' | 'overdue' | 'done') => void;

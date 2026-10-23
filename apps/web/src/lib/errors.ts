@@ -1,4 +1,4 @@
-export type AppErrorCode =
+type AppErrorCode =
   | 'offline'
   | 'permission-denied'
   | 'quota-exceeded'
@@ -7,7 +7,7 @@ export type AppErrorCode =
   | 'not-implemented'
   | 'unknown';
 
-export interface AppErrorOptions {
+interface AppErrorOptions {
   code?: AppErrorCode;
   status?: number;
   cause?: unknown;

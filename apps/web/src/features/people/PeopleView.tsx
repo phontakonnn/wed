@@ -8,9 +8,9 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { TagManagerModal } from '../../components/TagManagerModal';
 
-export type PersonDraft = Partial<Person> & { name: string; relationshipGroup: RelationshipGroup };
+type PersonDraft = Partial<Person> & { name: string; relationshipGroup: RelationshipGroup };
 
-export interface PeopleViewProps {
+interface PeopleViewProps {
   people: Person[];
   activePerson: Person | null;
   peopleQuery: string;

@@ -1,20 +1,20 @@
 import React from 'react';
 import type { CustomCategory } from '../../api';
 
-export interface CategoryModalState {
+interface CategoryModalState {
   mode: 'create' | 'edit';
   categoryId?: string;
   parentId?: string | null;
 }
 
-export interface CategoryDraft {
+interface CategoryDraft {
   name: string;
   icon: string;
   color: string;
   parentId: string | null;
 }
 
-export interface CategoryModalProps {
+interface CategoryModalProps {
   modalState: CategoryModalState | null;
   onClose: () => void;
   draft: CategoryDraft;

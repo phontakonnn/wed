@@ -1,6 +1,6 @@
 import MiniSearch, { type SearchResult } from 'minisearch';
 
-export interface SearchableNote {
+interface SearchableNote {
   id: string;
   title: string;
   content: string;
@@ -9,7 +9,7 @@ export interface SearchableNote {
   tagIds?: string[];
 }
 
-export interface NoteSearchHit {
+interface NoteSearchHit {
   id: string;
   title: string;
   score: number;

@@ -17,7 +17,7 @@ import { Input } from '../../components/ui/Input';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Modal } from '../../components/ui/Modal';
 
-export interface FavoritesViewProps {
+interface FavoritesViewProps {
   favorites?: Favorite[];
   activeFavorite?: Favorite | null;
   setActiveFavorite?: (fav: Favorite | null) => void;

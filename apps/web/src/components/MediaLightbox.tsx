@@ -2,7 +2,7 @@ import React from 'react';
 import type { StoredFile } from '../api';
 import { fileIcon, formatBytes } from '../lib/formatters';
 
-export interface MediaLightboxProps {
+interface MediaLightboxProps {
   file: StoredFile | null;
   onClose: () => void;
 }

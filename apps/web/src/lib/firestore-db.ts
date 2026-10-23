@@ -1,16 +1,8 @@
-import {
-  collection,
-  doc,
-  setDoc,
-  deleteDoc,
-  onSnapshot,
-  query,
-  orderBy,
-  serverTimestamp,
-} from 'firebase/firestore';
-import { firestoreDb } from './firebase';
+import { collection, doc, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { firestoreDb } from './firebaseDb';
+import { logger } from './logger';
 
-export interface UserLinkItem {
+interface UserLinkItem {
   id: string;
   title: string;
   url: string;
@@ -22,7 +14,7 @@ export interface UserLinkItem {
   updatedAt?: string | number;
 }
 
-export interface UserDataCardItem {
+interface UserDataCardItem {
   id: string;
   title: string;
   content: string;
@@ -34,25 +26,11 @@ export interface UserDataCardItem {
   updatedAt?: string | number;
 }
 
-export interface UserReminderItem {
-  id: string;
-  title: string;
-  targetDate: string;
-  category: string;
-  recurrence?: 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly';
-  isCompleted?: boolean | number;
-  snoozedUntil?: string | null;
-  advanceDays?: number;
-}
-
-export interface UserCategoryItem {
-  id: string;
-  name: string;
-  icon?: string;
-  color?: string;
-}
-
-// Local Storage Fallback Helpers
+/**
+ * Local cache of the last snapshot, used only when a listener cannot be
+ * attached (Firestore unavailable). Kept as a read-through fallback so the
+ * view never renders empty on a cold start without a network.
+ */
 function getLocal<T>(key: string): T[] {
   try {
     const raw = localStorage.getItem(key);
@@ -66,7 +44,7 @@ function setLocal<T>(key: string, items: T[]): void {
   try {
     localStorage.setItem(key, JSON.stringify(items));
   } catch {
-    // ignore
+    // Quota or private mode: the live snapshot is still the source of truth.
   }
 }
 
@@ -76,8 +54,7 @@ function setLocal<T>(key: string, items: T[]): void {
 export function subscribeUserLinks(uid: string, callback: (links: UserLinkItem[]) => void): () => void {
   const localKey = `pkh.firestore.links.${uid}`;
   if (!firestoreDb) {
-    const cached = getLocal<UserLinkItem>(localKey);
-    callback(cached);
+    callback(getLocal<UserLinkItem>(localKey));
     return () => {};
   }
 
@@ -92,53 +69,14 @@ export function subscribeUserLinks(uid: string, callback: (links: UserLinkItem[]
         callback(items);
       },
       (err) => {
-        console.warn('Firestore links subscribe warning, using local cache:', err);
+        logger.warn('Firestore links subscribe warning, using local cache', 'firestore-db.links', { error: err });
         callback(getLocal<UserLinkItem>(localKey));
       }
     );
   } catch (err) {
-    console.warn('Firestore links subscribe error:', err);
+    logger.warn('Firestore links subscribe error', 'firestore-db.links', { error: err });
     callback(getLocal<UserLinkItem>(localKey));
     return () => {};
-  }
-}
-
-export async function saveUserLink(uid: string, item: UserLinkItem): Promise<void> {
-  const localKey = `pkh.firestore.links.${uid}`;
-  const local = getLocal<UserLinkItem>(localKey);
-  const existingIdx = local.findIndex((l) => l.id === item.id);
-  const now = new Date().toISOString();
-  const newItem = { ...item, updatedAt: now, createdAt: item.createdAt || now };
-
-  if (existingIdx >= 0) {
-    local[existingIdx] = newItem;
-  } else {
-    local.unshift(newItem);
-  }
-  setLocal(localKey, local);
-
-  if (firestoreDb) {
-    try {
-      const docRef = doc(firestoreDb, 'users', uid, 'links', item.id);
-      await setDoc(docRef, { ...item, updatedAt: serverTimestamp() }, { merge: true });
-    } catch (err) {
-      console.warn('Firestore write warning:', err);
-    }
-  }
-}
-
-export async function deleteUserLink(uid: string, id: string): Promise<void> {
-  const localKey = `pkh.firestore.links.${uid}`;
-  const local = getLocal<UserLinkItem>(localKey).filter((l) => l.id !== id);
-  setLocal(localKey, local);
-
-  if (firestoreDb) {
-    try {
-      const docRef = doc(firestoreDb, 'users', uid, 'links', id);
-      await deleteDoc(docRef);
-    } catch (err) {
-      console.warn('Firestore delete warning:', err);
-    }
   }
 }
 
@@ -148,8 +86,7 @@ export async function deleteUserLink(uid: string, id: string): Promise<void> {
 export function subscribeUserDataCards(uid: string, callback: (cards: UserDataCardItem[]) => void): () => void {
   const localKey = `pkh.firestore.cards.${uid}`;
   if (!firestoreDb) {
-    const cached = getLocal<UserDataCardItem>(localKey);
-    callback(cached);
+    callback(getLocal<UserDataCardItem>(localKey));
     return () => {};
   }
 
@@ -164,123 +101,21 @@ export function subscribeUserDataCards(uid: string, callback: (cards: UserDataCa
         callback(items);
       },
       (err) => {
-        console.warn('Firestore dataCards subscribe warning, using local cache:', err);
+        logger.warn('Firestore dataCards subscribe warning, using local cache', 'firestore-db.dataCards', { error: err });
         callback(getLocal<UserDataCardItem>(localKey));
       }
     );
   } catch (err) {
-    console.warn('Firestore dataCards subscribe error:', err);
+    logger.warn('Firestore dataCards subscribe error', 'firestore-db.dataCards', { error: err });
     callback(getLocal<UserDataCardItem>(localKey));
     return () => {};
   }
 }
 
-export async function saveUserDataCard(uid: string, item: UserDataCardItem): Promise<void> {
-  const localKey = `pkh.firestore.cards.${uid}`;
-  const local = getLocal<UserDataCardItem>(localKey);
-  const existingIdx = local.findIndex((c) => c.id === item.id);
-  const now = new Date().toISOString();
-  const newItem = { ...item, updatedAt: now, createdAt: item.createdAt || now };
-
-  if (existingIdx >= 0) {
-    local[existingIdx] = newItem;
-  } else {
-    local.unshift(newItem);
-  }
-  setLocal(localKey, local);
-
-  if (firestoreDb) {
-    try {
-      const docRef = doc(firestoreDb, 'users', uid, 'dataCards', item.id);
-      await setDoc(docRef, { ...item, updatedAt: serverTimestamp() }, { merge: true });
-    } catch (err) {
-      console.warn('Firestore write warning:', err);
-    }
-  }
-}
-
-export async function deleteUserDataCard(uid: string, id: string): Promise<void> {
-  const localKey = `pkh.firestore.cards.${uid}`;
-  const local = getLocal<UserDataCardItem>(localKey).filter((c) => c.id !== id);
-  setLocal(localKey, local);
-
-  if (firestoreDb) {
-    try {
-      const docRef = doc(firestoreDb, 'users', uid, 'dataCards', id);
-      await deleteDoc(docRef);
-    } catch (err) {
-      console.warn('Firestore delete warning:', err);
-    }
-  }
-}
-
 // ----------------------------------------------------
-// 3. User Reminders (ตารางชีวิต & วันสำคัญ)
+// 3. User Theme & Studio Settings (ซิงค์ธีมข้ามอุปกรณ์)
 // ----------------------------------------------------
-export function subscribeUserReminders(uid: string, callback: (reminders: UserReminderItem[]) => void): () => void {
-  const localKey = `pkh.firestore.reminders.${uid}`;
-  if (!firestoreDb) {
-    callback(getLocal<UserReminderItem>(localKey));
-    return () => {};
-  }
-
-  try {
-    const colRef = collection(firestoreDb, 'users', uid, 'reminders');
-    return onSnapshot(
-      colRef,
-      (snapshot) => {
-        const items = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as UserReminderItem));
-        setLocal(localKey, items);
-        callback(items);
-      },
-      () => callback(getLocal<UserReminderItem>(localKey))
-    );
-  } catch {
-    callback(getLocal<UserReminderItem>(localKey));
-    return () => {};
-  }
-}
-
-export async function saveUserReminder(uid: string, item: UserReminderItem): Promise<void> {
-  const localKey = `pkh.firestore.reminders.${uid}`;
-  const local = getLocal<UserReminderItem>(localKey);
-  const existingIdx = local.findIndex((r) => r.id === item.id);
-  if (existingIdx >= 0) {
-    local[existingIdx] = item;
-  } else {
-    local.push(item);
-  }
-  setLocal(localKey, local);
-
-  if (firestoreDb) {
-    try {
-      const docRef = doc(firestoreDb, 'users', uid, 'reminders', item.id);
-      await setDoc(docRef, item, { merge: true });
-    } catch (err) {
-      console.warn('Firestore reminder write warning:', err);
-    }
-  }
-}
-
-export async function deleteUserReminder(uid: string, id: string): Promise<void> {
-  const localKey = `pkh.firestore.reminders.${uid}`;
-  const local = getLocal<UserReminderItem>(localKey).filter((r) => r.id !== id);
-  setLocal(localKey, local);
-
-  if (firestoreDb) {
-    try {
-      const docRef = doc(firestoreDb, 'users', uid, 'reminders', id);
-      await deleteDoc(docRef);
-    } catch (err) {
-      console.warn('Firestore reminder delete warning:', err);
-    }
-  }
-}
-
-// ----------------------------------------------------
-// 5. User Theme & Studio Settings (ซิงค์ธีมข้ามอุปกรณ์)
-// ----------------------------------------------------
-export interface UserThemeConfig {
+interface UserThemeConfig {
   theme?: string;
   themeMode?: 'light' | 'dark';
   uiMode?: 'fast' | 'rich';
@@ -303,13 +138,17 @@ export function subscribeUserTheme(
   callback: (config: UserThemeConfig | null) => void
 ): () => void {
   const localKey = `pkh.firestore.theme.${uid}`;
-  if (!firestoreDb) {
+  const readLocal = () => {
     try {
       const raw = localStorage.getItem(localKey);
-      callback(raw ? JSON.parse(raw) : null);
+      return raw ? (JSON.parse(raw) as UserThemeConfig) : null;
     } catch {
-      callback(null);
+      return null;
     }
+  };
+
+  if (!firestoreDb) {
+    callback(readLocal());
     return () => {};
   }
 
@@ -318,44 +157,25 @@ export function subscribeUserTheme(
     return onSnapshot(
       docRef,
       (snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.data() as UserThemeConfig;
-          try {
-            localStorage.setItem(localKey, JSON.stringify(data));
-          } catch {}
-          callback(data);
-        } else {
+        if (!snapshot.exists()) {
           callback(null);
+          return;
         }
+        const data = snapshot.data() as UserThemeConfig;
+        try {
+          localStorage.setItem(localKey, JSON.stringify(data));
+        } catch {
+          // Cache is best effort; the snapshot already carries the value.
+        }
+        callback(data);
       },
       (err) => {
-        console.warn('Firestore theme subscribe warning:', err);
-        try {
-          const raw = localStorage.getItem(localKey);
-          callback(raw ? JSON.parse(raw) : null);
-        } catch {
-          callback(null);
-        }
+        logger.warn('Firestore theme subscribe warning', 'firestore-db.theme', { error: err });
+        callback(readLocal());
       }
     );
   } catch (err) {
-    console.warn('Firestore theme subscribe error:', err);
+    logger.warn('Firestore theme subscribe error', 'firestore-db.theme', { error: err });
     return () => {};
-  }
-}
-
-export async function saveUserTheme(uid: string, config: UserThemeConfig): Promise<void> {
-  const localKey = `pkh.firestore.theme.${uid}`;
-  try {
-    localStorage.setItem(localKey, JSON.stringify(config));
-  } catch {}
-
-  if (firestoreDb) {
-    try {
-      const docRef = doc(firestoreDb, 'users', uid, 'settings', 'theme');
-      await setDoc(docRef, { ...config, updatedAt: serverTimestamp() }, { merge: true });
-    } catch (err) {
-      console.warn('Firestore theme save warning:', err);
-    }
   }
 }

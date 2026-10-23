@@ -18,7 +18,7 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { Modal } from '../../components/ui/Modal';
 import { CustomTypeBuilderModal } from './CustomTypeBuilderModal';
 
-export interface CustomRecordsViewProps {
+interface CustomRecordsViewProps {
   customType: CustomDataType;
   onTypeUpdated: (updatedType: CustomDataType) => void;
   onTypeDeleted: (deletedTypeId: string) => void;

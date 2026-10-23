@@ -10,7 +10,7 @@ import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 
-export interface CustomTypeBuilderModalProps {
+interface CustomTypeBuilderModalProps {
   isOpen: boolean;
   onClose: () => void;
   typeToEdit?: CustomDataType | null;

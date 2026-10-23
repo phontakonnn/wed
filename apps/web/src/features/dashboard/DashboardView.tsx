@@ -15,7 +15,7 @@ import { Button } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Skeleton } from '../../components/ui/Skeleton';
 
-export interface DashboardViewProps {
+interface DashboardViewProps {
   dashboard: DashboardData | null;
   dashboardBusy: boolean;
   dashboardError: string;

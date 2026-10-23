@@ -14,7 +14,7 @@ import { Input } from '../../components/ui/Input';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Modal } from '../../components/ui/Modal';
 
-export interface TrashViewProps {
+interface TrashViewProps {
   viewMode?: 'all' | 'trash';
   listTotal?: number;
   activeTrashNote?: Note | null;

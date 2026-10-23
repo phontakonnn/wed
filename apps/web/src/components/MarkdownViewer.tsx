@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 
-export interface MarkdownViewerProps {
+interface MarkdownViewerProps {
   content: string;
   className?: string;
 }

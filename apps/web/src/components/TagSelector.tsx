@@ -2,7 +2,7 @@ import { useState, type KeyboardEvent } from 'react';
 import { createTag } from '../api';
 import './TagSelector.css';
 
-export interface TagSelectorProps {
+interface TagSelectorProps {
   selectedTags: string[];
   onChange: (tags: string[]) => void;
   availableTags?: string[];

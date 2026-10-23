@@ -11,7 +11,7 @@ import {
 } from '../api';
 import { fileIcon, formatBytes, errorMessage } from '../lib/formatters';
 
-export interface EntityAttachmentsProps {
+interface EntityAttachmentsProps {
   entityType: AttachmentEntityType;
   entityId: string;
   availableFiles: StoredFile[];

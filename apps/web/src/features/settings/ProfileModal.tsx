@@ -88,7 +88,7 @@ const playNotificationSound = (type: string = 'chime') => {
   }
 };
 
-export interface ProfileModalProps {
+interface ProfileModalProps {
   isOpen: boolean;
   onClose: () => void;
   profile: ProfileState;
