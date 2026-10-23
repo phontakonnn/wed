@@ -23,7 +23,7 @@ Precache size is printed by `vite-plugin-pwa` during the build
 | Baseline (`1110c69`) | **327.9 KB** | 64 entries / 1890.42 KiB | 163.4 KB | 200.95 KB | budget 330 KB, target 150 KB |
 | 1 — analysis | 327.9 KB | 64 / 1890.42 KiB | 163.4 KB | 200.95 KB | measurement only, no code change |
 | 2 — bundle | 123.7 KB | 12 / 652.47 KiB | 141.49 KB | 168.9 KB | Firebase left the entry graph |
-| 3 — cleanup | — | — | — | — | pending |
+| 3 — cleanup | 123.7 KB | 12 / 652.50 KiB | 141.49 KB | 172.99 KB | dead code + assets removed, lint 41→0; first-load unchanged |
 | 4 — refreshKey/App split | — | — | — | — | pending |
 | 5 — security | — | — | — | — | pending |
 | 6 — updates | — | — | — | — | pending |
