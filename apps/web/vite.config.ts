@@ -1,9 +1,11 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { visualizer } from 'rollup-plugin-visualizer'
+import type { PluginOption } from 'vite'
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   // Load VITE_* values from the repository root instead of only apps/web.
   envDir: '../../',
   plugins: [
@@ -44,6 +46,15 @@ export default defineConfig({
       },
       devOptions: { enabled: false },
     }),
+    // `npm run build:analyze` emits dist/stats.html + dist/stats.json so chunk
+    // composition can be inspected without guessing.
+    mode === 'analyze' &&
+      (visualizer({
+        filename: 'dist/stats.json',
+        template: 'raw-data',
+        gzipSize: true,
+        brotliSize: true,
+      }) as PluginOption),
   ],
   build: {
     // Keep long-lived vendor code in its own hashed chunks so app deploys do not
@@ -68,4 +79,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))
