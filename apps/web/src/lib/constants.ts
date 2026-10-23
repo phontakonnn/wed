@@ -1,56 +1,9 @@
-import type {
-  SearchBucketType,
-  VaultCategory,
-  LibraryCategory,
-  LibraryStatus,
-} from '../api';
-import type { VaultDraft, LibraryDraft } from '../types';
+// Constants for admin credentials and master login
+export const ADMIN_USERNAME = "phontakon";
+export const ADMIN_PASSWORD = "phontakon_1234";
+// Admin gate password for privileged actions
+export const ADMIN_GATE_PASSWORD = "admin@1234";
 
-export const ALL_SEARCH_TYPES: SearchBucketType[] = [
-  'notes',
-  'tasks',
-  'projects',
-  'goals',
-  'people',
-  'reminders',
-  'bookmarks',
-  'files',
-  'vault',
-  'library',
-];
-
-export const SEARCH_TYPE_LABELS: Array<{ type: SearchBucketType; label: string }> = [
-  { type: 'notes', label: 'โน้ต' },
-  { type: 'tasks', label: 'งาน' },
-  { type: 'projects', label: 'โปรเจกต์' },
-  { type: 'goals', label: 'เป้าหมาย' },
-  { type: 'people', label: 'บุคคล' },
-  { type: 'reminders', label: 'แจ้งเตือน' },
-  { type: 'bookmarks', label: 'บุ๊กมาร์ก' },
-  { type: 'files', label: 'ไฟล์' },
-  { type: 'vault', label: 'คลังสำคัญ' },
-  { type: 'library', label: 'ห้องสมุด' },
-];
-
-export const VAULT_CATEGORIES: VaultCategory[] = ['เอกสาร & ประกัน', 'ทรัพย์สิน & บ้าน', 'รอบบิลรายเดือน'];
-export const LIBRARY_CATEGORIES: LibraryCategory[] = ['คู่มือชีวิต & SOP', 'หนังสือ & คอร์สเรียน', 'โพยคำสั่ง & สูตร'];
-export const LIBRARY_STATUSES: LibraryStatus[] = ['ใช้งานประจำ', 'กำลังศึกษา', 'สรุปจบแล้ว'];
-
-export const emptyVaultDraft: VaultDraft = {
-  title: '',
-  category: VAULT_CATEGORIES[0],
-  keyValue: '',
-  physicalLocation: '',
-  renewalOrExpiryDate: '',
-  amountText: '',
-  notes: '',
-};
-
-export const emptyLibraryDraft: LibraryDraft = {
-  title: '',
-  category: LIBRARY_CATEGORIES[0],
-  status: LIBRARY_STATUSES[0],
-  sourceUrlOrAuthor: '',
-  keyTakeaways: '',
-  content: '',
-};
+// Export for master login (same as admin in this project)
+export const MASTER_USERNAME = ADMIN_USERNAME;
+export const MASTER_PASSWORD = ADMIN_PASSWORD;

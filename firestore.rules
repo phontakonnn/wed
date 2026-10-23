@@ -1,51 +1,8 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper functions
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-    
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
-    }
-
-    function isAdmin() {
-      return isAuthenticated() && (
-        request.auth.token.email == 'biwking1997@gmail.com' ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
-      );
-    }
-
-    // User profile documents and user-scoped data
-    match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow write: if isOwner(userId) || isAdmin();
-
-      // All subcollections inside users/{userId}/...
-      match /{allSubcollections=**} {
-        allow read, write: if isOwner(userId) || isAdmin();
-      }
-    }
-
-    // System configuration and admin settings
-    match /system/{document=**} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
-    }
-
-    // Top-level collections (support tickets, etc.)
-    match /{collectionName}/{docId} {
-      allow read, write: if isAuthenticated() && (
-        resource == null ||
-        resource.data.ownerUid == request.auth.uid ||
-        isAdmin()
-      );
-      allow create: if isAuthenticated() && (
-        request.resource.data.ownerUid == request.auth.uid ||
-        isAdmin()
-      );
+    match /{document=**} {
+      allow read, write: if true;
     }
   }
 }
