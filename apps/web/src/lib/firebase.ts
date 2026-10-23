@@ -1,95 +1,21 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import {
-  getAuth,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  sendPasswordResetEmail,
-  sendSignInLinkToEmail,
-  isSignInWithEmailLink,
-  signInWithEmailLink,
-  signInWithPhoneNumber,
-  RecaptchaVerifier,
-  onAuthStateChanged,
-  type User as FirebaseUser,
-  type ConfirmationResult,
-} from 'firebase/auth';
-import {
-  initializeFirestore,
-  persistentLocalCache,
-  persistentMultipleTabManager,
-  getFirestore,
-  type Firestore,
-} from 'firebase/firestore';
-import {
-  initializeAppCheck,
-  ReCaptchaEnterpriseProvider,
-  type AppCheck,
-} from 'firebase/app-check';
-import type { Messaging } from 'firebase/messaging';
-import type { Analytics } from 'firebase/analytics';
-
-// Values come from .env (VITE_FIREBASE_*). The fallback keeps the existing
-// personal project working locally; production should always provide env vars.
-const env = import.meta.env;
-
-export const firebaseConfig = {
-  apiKey: env.VITE_FIREBASE_API_KEY || 'AIzaSyCHm6muuT7KPQ5G4_gY6Zeg5hX9JgK2it8',
-  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || 'personal-life-os-68631.firebaseapp.com',
-  projectId: env.VITE_FIREBASE_PROJECT_ID || 'personal-life-os-68631',
-  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || 'personal-life-os-68631.firebasestorage.app',
-  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || '311035303046',
-  appId: env.VITE_FIREBASE_APP_ID || '1:311035303046:web:79d34adee66c41b232ed07',
-  measurementId: env.VITE_FIREBASE_MEASUREMENT_ID || 'G-LL97E8BWRJ',
-};
-
-export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-
 /**
- * App Check is optional in local development: without a site key the app still
- * boots, while production can enforce it from the Firebase Console. A debug
- * token must be registered in the console before using it locally.
+ * Firebase barrel.
+ *
+ * The SDK is split into three lazy-loadable modules so the entry graph never
+ * contains it:
+ * - `firebaseConfig` — plain config + localStorage helpers (no SDK)
+ * - `firebaseAuth`  — `firebase/app` + `firebase/auth`
+ * - `firebaseDb`    — `firebase/firestore` (+ optional App Check)
+ * - `firebaseTelemetry` — messaging/analytics, both dynamic imports
+ *
+ * Prefer importing the specific module. This barrel exists for callers that
+ * genuinely need auth and Firestore together (the in-browser API engine).
  */
-function createAppCheck(): AppCheck | null {
-  if (typeof window === 'undefined') return null;
-  const siteKey = env.VITE_FIREBASE_APP_CHECK_SITE_KEY;
-  if (!siteKey) return null;
-
-  if (import.meta.env.DEV && env.VITE_FIREBASE_APP_CHECK_DEBUG_TOKEN) {
-    (globalThis as typeof globalThis & { FIREBASE_APP_CHECK_DEBUG_TOKEN?: string })
-      .FIREBASE_APP_CHECK_DEBUG_TOKEN = env.VITE_FIREBASE_APP_CHECK_DEBUG_TOKEN;
-  }
-
-  try {
-    return initializeAppCheck(app, {
-      provider: new ReCaptchaEnterpriseProvider(siteKey),
-      isTokenAutoRefreshEnabled: true,
-    });
-  } catch (error) {
-    console.warn('[firebase] App Check initialization failed:', error);
-    return null;
-  }
-}
-
-export const appCheck = createAppCheck();
-export const auth = getAuth(app);
-export const firebaseAuth = auth;
-
-let firestoreInstance: Firestore;
-try {
-  firestoreInstance = initializeFirestore(app, {
-    localCache: persistentLocalCache({
-      tabManager: persistentMultipleTabManager(),
-    }),
-  });
-} catch {
-  firestoreInstance = getFirestore(app);
-}
-
-export const db = firestoreInstance;
-export const firestoreDb = db;
-
-// Firebase Auth re-exports
+export { firebaseConfig, getSavedFirebaseConfig, saveFirebaseConfig, clearFirebaseConfig, isFirebaseConfigured, initFirebase, type FirebaseConfig } from './firebaseConfig';
+export { app } from './firebaseApp';
 export {
+  auth,
+  firebaseAuth,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
@@ -99,91 +25,9 @@ export {
   signInWithPhoneNumber,
   RecaptchaVerifier,
   onAuthStateChanged,
+  signOut,
   type FirebaseUser,
   type ConfirmationResult,
-};
-
-// Firebase Config / Setup Modal Helpers
-export interface FirebaseConfig {
-  apiKey: string;
-  authDomain: string;
-  projectId: string;
-  storageBucket?: string;
-  messagingSenderId?: string;
-  appId?: string;
-  measurementId?: string;
-}
-
-export function getSavedFirebaseConfig(): FirebaseConfig | null {
-  try {
-    const raw = localStorage.getItem('pkh.firebaseConfig');
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return firebaseConfig;
-}
-
-export function saveFirebaseConfig(cfg: FirebaseConfig): void {
-  try {
-    localStorage.setItem('pkh.firebaseConfig', JSON.stringify(cfg));
-  } catch {}
-}
-
-export function clearFirebaseConfig(): void {
-  try {
-    localStorage.removeItem('pkh.firebaseConfig');
-  } catch {}
-}
-
-export function isFirebaseConfigured(): boolean {
-  return Boolean(firebaseConfig.apiKey && firebaseConfig.projectId);
-}
-
-export function initFirebase(_cfg?: FirebaseConfig): void {
-  // Config personal-life-os-68631 is already active
-}
-
-let messagingInstance: Messaging | null = null;
-export async function getFirebaseMessaging(): Promise<Messaging | null> {
-  if (messagingInstance) return messagingInstance;
-  if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-    try {
-      // Loaded only when the user actually enables notifications.
-      const { getMessaging, isSupported } = await import('firebase/messaging');
-      if (await isSupported()) {
-        messagingInstance = getMessaging(app);
-      }
-    } catch (err) {
-      console.warn('Firebase Messaging is not supported:', err);
-    }
-  }
-  return messagingInstance;
-}
-
-let analyticsInstance: Analytics | null = null;
-export async function getFirebaseAnalytics(): Promise<Analytics | null> {
-  if (analyticsInstance) return analyticsInstance;
-  if (typeof window !== 'undefined') {
-    try {
-      // Analytics is non-critical: never part of the first-load bundle anymore.
-      // Callers opt in after the app is idle (see scheduleAnalyticsWarmup below).
-      const { getAnalytics, isSupported } = await import('firebase/analytics');
-      if (await isSupported()) {
-        analyticsInstance = getAnalytics(app);
-      }
-    } catch (err) {
-      console.warn('Firebase Analytics is not supported:', err);
-    }
-  }
-  return analyticsInstance;
-}
-
-/** Warm analytics after first paint without blocking boot. */
-export function scheduleAnalyticsWarmup(): void {
-  if (typeof window === 'undefined') return;
-  const run = () => void getFirebaseAnalytics();
-  if (typeof window.requestIdleCallback === 'function') {
-    window.requestIdleCallback(run, { timeout: 4000 });
-  } else {
-    window.setTimeout(run, 2500);
-  }
-}
+} from './firebaseAuth';
+export { db, firestoreDb, appCheck } from './firebaseDb';
+export { getFirebaseMessaging, getFirebaseAnalytics, scheduleAnalyticsWarmup } from './firebaseTelemetry';

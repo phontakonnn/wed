@@ -1,5 +1,3 @@
-import './lib/firebaseEngine';
-import { scheduleAnalyticsWarmup } from './lib/firebase';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { PwaUpdatePrompt } from './components/PwaUpdatePrompt';
 import { queryClient } from './lib/queryClient';
@@ -48,5 +46,15 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 );
 
-// Analytics is optional and must never delay the first paint.
-scheduleAnalyticsWarmup();
+// Analytics is optional and must never delay the first paint. The telemetry
+// module (and the analytics SDK itself) is a separate chunk loaded on idle.
+if (typeof window !== 'undefined') {
+  const warm = () => {
+    void import('./lib/firebaseTelemetry').then((m) => m.scheduleAnalyticsWarmup());
+  };
+  if (typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(warm, { timeout: 4000 });
+  } else {
+    window.setTimeout(warm, 2500);
+  }
+}

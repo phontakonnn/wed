@@ -1047,3 +1047,42 @@ runs before first paint in `main.tsx`, so there is no flash.
   dense desktop-first layout below 360px.
 
 
+
+## 2026-10-24 - SLICE 2: Firebase leaves the entry graph
+
+**Decision.** Split the Firebase bootstrap into `firebaseConfig` (no SDK),
+`firebaseAuth` (`firebase/app` + `firebase/auth`), `firebaseDb`
+(`firebase/firestore` + optional App Check) and `firebaseTelemetry`
+(messaging/analytics, dynamic imports). `lib/firebase.ts` remains a barrel for
+callers that need auth and Firestore together (the in-browser API engine).
+`api.ts`, `App.tsx`, `theme.ts` and `main.tsx` now reach the SDK through
+dynamic `import()` only.
+
+**Why.** The visualizer showed 254.9 KB gzip of Firebase on the boot path, of
+which 116.9 KB was Firestore and 52.9 KB was its `re2js` dependency. Nothing on
+the login screen or the shell needs Firestore; the SDK should load on first
+sign-in/data access. Measured result: first-load 327.9 -> 123.7 KB gzip.
+
+**Offline-first is intact.** `persistentLocalCache` with
+`persistentMultipleTabManager` is unchanged and still created on the first
+data access. `firebaseDb` is the only place that calls `initializeFirestore`.
+
+**`build.target: 'es2022'`.** At `es2020` the compiler injected
+`@oxc-project/runtime` class-field helpers into the SDK chunk and the entry
+imported one of them, which dragged the whole Firebase chunk back into the
+first load (the budget script caught it: 332.6 KB). `es2022` emits native class
+fields, removes the bridge, and is still well inside the browsers Firebase Auth
+supports. Verified in the built `index.html`: only `index`, `react-vendor`,
+`vendor` and `rolldown-runtime` are preloaded.
+
+**Precache target.** 64 entries / 1890 KiB -> 12 entries / 652 KiB raw
+(~124 KiB gzip). The literal 400 KiB raw target is not reachable without
+dropping `react-dom` (235.8 KiB) or the entry chunk (168.9 KiB) from the
+precache, which would break offline reloads. Lazy chunks move to a
+`StaleWhileRevalidate` runtime cache instead.
+
+**Budget gate.** `scripts/check-bundle-budget.mjs` now parses `dist/index.html`
+(entry script + `modulepreload`) instead of matching chunk filename prefixes,
+so a chunk that silently becomes static is caught. It also enforces a 260 KB
+gzip ceiling on any single lazy chunk. `bundle-budget.json` is tightened from
+330 KB to 150 KB.

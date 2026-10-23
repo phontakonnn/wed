@@ -374,16 +374,11 @@ import { ApiError, toAppError } from './lib/errors';
 import { logger } from './lib/logger';
 export { ApiError };
 
-import { handleFirebaseRequest } from './lib/firebaseEngine';
-export { auth, db } from './lib/firebase';
-export {
-  sendMagicLink,
-  completeMagicLinkSignIn,
-  sendSmsOtp,
-} from './lib/firebaseEngine';
-
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   try {
+    // The in-browser Firebase engine (and the whole Firestore SDK) is loaded on
+    // the first real request instead of at boot.
+    const { handleFirebaseRequest } = await import('./lib/firebaseEngine');
     const res = await handleFirebaseRequest<T>(path, options);
     if (res === null || res === undefined) {
       throw new ApiError('ไม่ได้รับข้อมูลตอบกลับจากระบบ', 502, { retryable: true });

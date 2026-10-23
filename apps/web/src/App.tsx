@@ -168,18 +168,7 @@ import { ToastStack, type ToastItem } from './components/ToastStack';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { Skeleton } from './components/ui/Skeleton';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import {
-  firebaseAuth,
-  isSignInWithEmailLink,
-  signInWithEmailLink,
-  onAuthStateChanged,
-  type FirebaseUser,
-} from './lib/firebase';
-import {
-  subscribeUserLinks,
-  subscribeUserDataCards,
-  subscribeUserTheme,
-} from './lib/firestore-db';
+import type { User as FirebaseUser } from 'firebase/auth';
 import {
   applyThemeConfig,
   loadThemeConfig,
@@ -941,25 +930,36 @@ function App() {
   // Only accept values that differ, so a snapshot cannot echo back into a save loop.
   useEffect(() => {
     if (!firebaseUser?.uid) return;
-    const unsubTheme = subscribeUserTheme(firebaseUser.uid, (remoteTheme) => {
-      if (!remoteTheme) return;
-      const current = themeRef.current;
-      const next = normalizeThemeConfig({
-        mode: (remoteTheme.themeMode as ThemeMode | undefined) ?? current.mode,
-        uiMode: (remoteTheme.uiMode as UiMode | undefined) ?? current.uiMode,
-        accentColor: remoteTheme.accentColor ?? current.accentColor,
+    let active = true;
+    let unsubscribe: (() => void) | undefined;
+
+    void (async () => {
+      const { subscribeUserTheme } = await import('./lib/firestore-db');
+      if (!active) return;
+      unsubscribe = subscribeUserTheme(firebaseUser.uid, (remoteTheme) => {
+        if (!remoteTheme) return;
+        const current = themeRef.current;
+        const next = normalizeThemeConfig({
+          mode: (remoteTheme.themeMode as ThemeMode | undefined) ?? current.mode,
+          uiMode: (remoteTheme.uiMode as UiMode | undefined) ?? current.uiMode,
+          accentColor: remoteTheme.accentColor ?? current.accentColor,
+        });
+        if (
+          next.mode === current.mode
+          && next.uiMode === current.uiMode
+          && next.accentColor === current.accentColor
+        ) {
+          return;
+        }
+        themeRef.current = next;
+        setThemeConfig(next);
       });
-      if (
-        next.mode === current.mode
-        && next.uiMode === current.uiMode
-        && next.accentColor === current.accentColor
-      ) {
-        return;
-      }
-      themeRef.current = next;
-      setThemeConfig(next);
-    });
-    return () => unsubTheme();
+    })();
+
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
   }, [firebaseUser?.uid]);
 
   useEffect(() => {
@@ -1364,83 +1364,113 @@ function App() {
     }
   }
 
-  // Firebase Auth State Listener & Email Link Sign-in Check
+  // Firebase Auth State Listener & Email Link Sign-in Check.
+  // Auth is a separate lazy chunk: the shell paints before the SDK is parsed.
   useEffect(() => {
-    if (!firebaseAuth) return;
-    const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
-      if (user) {
-        setFirebaseUser(user);
-        setUser({
-          id: user.uid,
-          username: user.email || user.phoneNumber || 'User',
-          displayName: user.displayName || user.email?.split('@')[0] || 'User',
-          role: 'user',
-        });
-        setAuthState('signed-in');
-        setNotesBusy(false);
-      } else {
-        setFirebaseUser(null);
-      }
-    });
+    let active = true;
+    let unsubscribe: (() => void) | undefined;
 
-    try {
-      if (isSignInWithEmailLink(firebaseAuth, window.location.href)) {
-        let email = window.localStorage.getItem('pkh.emailForSignIn');
-        if (!email) {
-          email = window.prompt('กรุณายืนยันอีเมลของคุณสำหรับการเข้าสู่ระบบ:');
+    void (async () => {
+      const {
+        firebaseAuth,
+        onAuthStateChanged,
+        isSignInWithEmailLink,
+        signInWithEmailLink,
+      } = await import('./lib/firebaseAuth');
+      if (!active || !firebaseAuth) return;
+
+      unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
+        if (user) {
+          setFirebaseUser(user);
+          setUser({
+            id: user.uid,
+            username: user.email || user.phoneNumber || 'User',
+            displayName: user.displayName || user.email?.split('@')[0] || 'User',
+            role: 'user',
+          });
+          setAuthState('signed-in');
+          setNotesBusy(false);
+        } else {
+          setFirebaseUser(null);
         }
-        if (email) {
-          signInWithEmailLink(firebaseAuth, email, window.location.href)
-            .then(() => {
-              window.localStorage.removeItem('pkh.emailForSignIn');
-              pushToast('success', 'เข้าสู่ระบบด้วยลิงก์อีเมลสำเร็จ');
-            })
-            .catch((err) => {
-              console.error('Email link sign in error:', err);
-            });
+      });
+
+      try {
+        if (isSignInWithEmailLink(firebaseAuth, window.location.href)) {
+          let email = window.localStorage.getItem('pkh.emailForSignIn');
+          if (!email) {
+            email = window.prompt('กรุณายืนยันอีเมลของคุณสำหรับการเข้าสู่ระบบ:');
+          }
+          if (email) {
+            signInWithEmailLink(firebaseAuth, email, window.location.href)
+              .then(() => {
+                window.localStorage.removeItem('pkh.emailForSignIn');
+                pushToast('success', 'เข้าสู่ระบบด้วยลิงก์อีเมลสำเร็จ');
+              })
+              .catch((err) => {
+                console.error('Email link sign in error:', err);
+              });
+          }
         }
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
-    }
-
-    return () => unsubscribe();
-  }, []);
-
-  // Sync with Firestore Real-time Collections when Firebase user is active
-  useEffect(() => {
-    if (!firebaseUser?.uid) return;
-    const unsubLinks = subscribeUserLinks(firebaseUser.uid, (fbLinks) => {
-      if (fbLinks && fbLinks.length > 0) {
-        setBookmarks(fbLinks.map((l) => ({
-          id: l.id,
-          title: l.title,
-          url: l.url,
-          description: l.description || '',
-          category: l.category,
-          tags: l.tags || [],
-          isFavorite: l.isFavorite,
-          createdAt: typeof l.createdAt === 'number' ? l.createdAt : Date.now(),
-          updatedAt: typeof l.updatedAt === 'number' ? l.updatedAt : Date.now(),
-        })));
-      }
-    });
-
-    const unsubCards = subscribeUserDataCards(firebaseUser.uid, (fbCards) => {
-      if (fbCards && fbCards.length > 0) {
-        setNotes(fbCards.map((c) => ({
-          id: c.id,
-          title: c.title,
-          content: c.content,
-          createdAt: typeof c.createdAt === 'number' ? c.createdAt : Date.now(),
-          updatedAt: typeof c.updatedAt === 'number' ? c.updatedAt : Date.now(),
-        })));
-      }
-    });
+    })();
 
     return () => {
-      unsubLinks();
-      unsubCards();
+      active = false;
+      unsubscribe?.();
+    };
+  }, []);
+
+  // Sync with Firestore Real-time Collections when Firebase user is active.
+  // Firestore is loaded only after there is a uid, never at boot.
+  useEffect(() => {
+    if (!firebaseUser?.uid) return;
+    let active = true;
+    let cleanup: (() => void) | undefined;
+
+    void (async () => {
+      const { subscribeUserLinks, subscribeUserDataCards } = await import('./lib/firestore-db');
+      if (!active) return;
+
+      const unsubLinks = subscribeUserLinks(firebaseUser.uid, (fbLinks) => {
+        if (fbLinks && fbLinks.length > 0) {
+          setBookmarks(fbLinks.map((l) => ({
+            id: l.id,
+            title: l.title,
+            url: l.url,
+            description: l.description || '',
+            category: l.category,
+            tags: l.tags || [],
+            isFavorite: l.isFavorite,
+            createdAt: typeof l.createdAt === 'number' ? l.createdAt : Date.now(),
+            updatedAt: typeof l.updatedAt === 'number' ? l.updatedAt : Date.now(),
+          })));
+        }
+      });
+
+      const unsubCards = subscribeUserDataCards(firebaseUser.uid, (fbCards) => {
+        if (fbCards && fbCards.length > 0) {
+          setNotes(fbCards.map((c) => ({
+            id: c.id,
+            title: c.title,
+            content: c.content,
+            createdAt: typeof c.createdAt === 'number' ? c.createdAt : Date.now(),
+            updatedAt: typeof c.updatedAt === 'number' ? c.updatedAt : Date.now(),
+          })));
+        }
+      });
+
+      cleanup = () => {
+        unsubLinks();
+        unsubCards();
+      };
+    })();
+
+    return () => {
+      active = false;
+      cleanup?.();
     };
   }, [firebaseUser?.uid]);
 

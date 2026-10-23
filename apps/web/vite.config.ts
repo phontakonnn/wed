@@ -15,17 +15,43 @@ export default defineConfig(({ mode }) => ({
       manifest: false,
       registerType: 'prompt',
       injectRegister: null,
-      includeAssets: ['favicon.svg', 'icon-192.png', 'icon-512.png'],
+      includeAssets: [],
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2,ttf,json}'],
+        // Precache only the app shell. Lazy feature chunks, images and any
+        // future assets fall through to the runtime cache below, so an install
+        // no longer downloads every view up front (was 71 entries / ~1.9 MiB).
+        globPatterns: [
+          'index.html',
+          'manifest.json',
+          'favicon.svg',
+          'icon-*.png',
+          'fonts/**/*.woff2',
+          'assets/index-*.js',
+          'assets/index-*.css',
+          'assets/react-vendor-*.js',
+          'assets/vendor-*.js',
+          'assets/rolldown-runtime-*.js',
+        ],
         // FCM owns its own scope and must never be precached by Workbox.
         globIgnores: ['**/firebase-messaging-sw.js'],
+        // Analytics/messaging are optional and not needed for an offline boot.
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//],
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: false,
         runtimeCaching: [
+          {
+            // Feature views and the Firebase SDK chunks.
+            urlPattern: /\/assets\/.*\.(?:js|css)$/,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'lazy-chunks',
+              expiration: { maxEntries: 80, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
           {
             urlPattern: /\/fonts\/.*\.woff2$/,
             handler: 'CacheFirst',
@@ -57,9 +83,18 @@ export default defineConfig(({ mode }) => ({
       }) as PluginOption),
   ],
   build: {
+    // Modern baseline: the app targets evergreen browsers and Firebase Auth
+    // already requires them. No legacy polyfills are shipped.
+    target: 'es2022',
+    cssTarget: 'chrome100',
+    // Strip debug output from production bundles (the logger is DEV-gated and
+    // routes through a sink in production).
+    esbuild: {
+      drop: ['console', 'debugger'],
+    },
     // Keep long-lived vendor code in its own hashed chunks so app deploys do not
-    // invalidate the React/Firebase cache. Analytics and messaging are dynamic
-    // imports and stay out of the entry graph entirely.
+    // invalidate the React/Firebase cache. Firebase is imported dynamically and
+    // stays out of the entry graph entirely.
     rollupOptions: {
       output: {
         manualChunks(id) {

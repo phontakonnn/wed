@@ -1,6 +1,4 @@
 import type { ThemeConfig, ThemeMode, UiMode } from '../types';
-import { db, auth } from './firebase';
-import { doc, setDoc } from 'firebase/firestore';
 
 /**
  * Single theme engine for the Calm Minimal UI.
@@ -170,10 +168,17 @@ export async function saveThemeConfig(config: ThemeConfig, userUid?: string | nu
     // storage may be unavailable (private mode)
   }
 
-  const uid = userUid || auth.currentUser?.uid;
+  const uid = userUid
+    || (await import('./firebaseAuth')).auth.currentUser?.uid;
   if (!uid) return;
 
   try {
+    // Firestore is only touched for a signed-in user, so this import stays off
+    // the boot path (theme must apply before first paint).
+    const [{ db }, { doc, setDoc }] = await Promise.all([
+      import('./firebaseDb'),
+      import('firebase/firestore'),
+    ]);
     const themeDocRef = doc(db, 'users', uid, 'settings', 'theme');
     await setDoc(
       themeDocRef,

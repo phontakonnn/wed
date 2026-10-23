@@ -24,7 +24,8 @@ import {
   where,
   limit,
 } from 'firebase/firestore';
-import { auth, db } from './firebase';
+import { auth } from './firebaseAuth';
+import { db } from './firebaseDb';
 import { ApiError } from './errors';
 import { normalizeTaxonomyName, sanitizeIds } from './taxonomy';
 

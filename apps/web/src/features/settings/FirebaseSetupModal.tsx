@@ -6,7 +6,7 @@ import {
   initFirebase,
   isFirebaseConfigured,
   type FirebaseConfig,
-} from '../../lib/firebase';
+} from '../../lib/firebaseConfig';
 import { Button } from '../../components/ui/Button';
 
 export interface FirebaseSetupModalProps {

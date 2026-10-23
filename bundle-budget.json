@@ -1,5 +1,6 @@
 {
-  "firstLoadGzipKb": 330,
+  "firstLoadGzipKb": 150,
   "targetGzipKb": 150,
-  "note": "Interim regression budget after Phase B chunking. Tighten toward targetGzipKb once Firebase/API leave the critical path."
+  "maxChunkGzipKb": 260,
+  "note": "First-load = the entry graph in dist/index.html (entry script + modulepreload JS). Lazy chunks are capped separately: firebase-vendor is ~208 KB gzip and only loads on first sign-in/data access."
 }

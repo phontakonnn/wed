@@ -51,7 +51,7 @@ import {
   getSavedFirebaseConfig,
   saveFirebaseConfig,
   type FirebaseConfig,
-} from '../../lib/firebase';
+} from '../../lib/firebaseConfig';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
