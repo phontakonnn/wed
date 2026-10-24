@@ -155,8 +155,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
     localStorage.setItem('pkh.notification_settings', JSON.stringify(newConfig));
   };
 
-  // Forgot password via OTP within Security tab
-
   // Password change state
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');

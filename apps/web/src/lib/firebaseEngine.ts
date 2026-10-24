@@ -363,18 +363,18 @@ export async function handleFirebaseRequest<T>(path: string, options: RequestIni
     return { ok: true } as T;
   }
 
+  // Sends a real Firebase password-reset email. No screen calls this today
+  // (the profile modal tells users to ask an admin), but it is the only
+  // account-recovery path that does not need a second factor, so the route
+  // stays for a future "forgot password" link on the sign-in screen.
+  // There is deliberately no `/forgot-password/reset` counterpart: changing a
+  // password without proving the old one is exactly what
+  // `/api/user/change-password` re-authenticates to prevent.
   if (pathname === '/api/auth/forgot-password/otp') {
     const raw = (body?.identifier || body?.email || '').trim();
     const email = toValidAuthEmail(raw);
     await sendPasswordResetEmail(auth, email);
     return { ok: true, message: `ส่งลิงก์รีเซ็ตรหัสผ่านจริงไปยังอีเมล ${email} เรียบร้อยแล้ว`, method: 'email' } as T;
-  }
-
-  if (pathname === '/api/auth/forgot-password/reset') {
-    if (auth.currentUser && body?.newPassword) {
-      await fbUpdatePassword(auth.currentUser, body.newPassword);
-    }
-    return { ok: true, message: 'รีเซ็ตรหัสผ่านสำเร็จ' } as T;
   }
 
   // 1b. User profile (settings screen)
