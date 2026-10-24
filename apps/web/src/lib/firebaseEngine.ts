@@ -9,6 +9,8 @@ import {
   RecaptchaVerifier,
   updateProfile as fbUpdateProfile,
   updatePassword as fbUpdatePassword,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
   type ConfirmationResult,
 } from 'firebase/auth';
 import {
@@ -28,6 +30,15 @@ import { auth } from './firebaseAuth';
 import { db } from './firebaseDb';
 import { ApiError } from './errors';
 import { normalizeTaxonomyName, sanitizeIds } from './taxonomy';
+import {
+  clampProfileText,
+  MAX_BIO,
+  MAX_DAILY_STATUS,
+  MAX_DISPLAY_NAME,
+  MAX_EMAIL,
+  MAX_PHONE,
+  validateAvatarDataUrl,
+} from './profileValidation';
 import { logger } from './logger';
 
 export { ApiError };
@@ -364,6 +375,84 @@ export async function handleFirebaseRequest<T>(path: string, options: RequestIni
       await fbUpdatePassword(auth.currentUser, body.newPassword);
     }
     return { ok: true, message: 'รีเซ็ตรหัสผ่านสำเร็จ' } as T;
+  }
+
+  // 1b. User profile (settings screen)
+  // The profile lives in `users/{uid}`; Firebase Auth stays the only place a
+  // password is verified. Fields that grant privilege (role, isActive) are
+  // never writable through this route.
+  if (pathname === '/api/user/profile') {
+    const uid = getCurrentUid();
+    const ref = doc(db, 'users', uid);
+    const fbUser = auth.currentUser;
+    const isSuperAdmin = fbUser?.email?.toLowerCase() === OWNER_EMAIL;
+
+    if (method === 'PUT' || method === 'PATCH') {
+      const patch: Record<string, unknown> = {};
+      const displayName = clampProfileText(body?.displayName, MAX_DISPLAY_NAME);
+      const bio = clampProfileText(body?.bio, MAX_BIO);
+      const dailyStatus = clampProfileText(body?.dailyStatus, MAX_DAILY_STATUS);
+      // Contact details are stored as profile data only. Changing the *login*
+      // address needs `verifyBeforeUpdateEmail`, which is a separate feature.
+      const email = clampProfileText(body?.email, MAX_EMAIL);
+      const phone = clampProfileText(body?.phone, MAX_PHONE);
+      if (displayName !== null) patch.displayName = displayName;
+      if (bio !== null) patch.bio = bio;
+      if (dailyStatus !== null) patch.dailyStatus = dailyStatus;
+      if (email !== null) patch.email = email;
+      if (phone !== null) patch.phone = phone;
+      if (typeof body?.avatarDataUrl === 'string') {
+        const avatarError = validateAvatarDataUrl(body.avatarDataUrl);
+        if (avatarError) throw new ApiError(avatarError, 400);
+        patch.avatarDataUrl = body.avatarDataUrl;
+      }
+      patch.updatedAt = Date.now();
+
+      await setDoc(ref, patch, { merge: true });
+      if (typeof patch.displayName === 'string' && fbUser) {
+        await fbUpdateProfile(fbUser, { displayName: patch.displayName });
+      }
+    }
+
+    const snap = await getDoc(ref);
+    const d = snap.exists() ? snap.data() : {};
+    const username = (d.username as string) || fbUser?.email?.split('@')[0] || 'user';
+    const profile = {
+      id: uid,
+      username,
+      role: isSuperAdmin ? 'admin' : ((d.role as string) || 'user'),
+      displayName: (d.displayName as string) ?? fbUser?.displayName ?? username,
+      email: (d.email as string) ?? fbUser?.email ?? null,
+      phone: (d.phone as string) ?? null,
+      bio: (d.bio as string) ?? null,
+      dailyStatus: (d.dailyStatus as string) ?? null,
+      avatarDataUrl: (d.avatarDataUrl as string) ?? null,
+      twoFactorEnabled: Boolean(d.twoFactorEnabled),
+      emailVerified: Boolean(fbUser?.emailVerified || d.emailVerified),
+      phoneVerified: Boolean(d.phoneVerified),
+    };
+    return { profile } as T;
+  }
+
+  if (pathname === '/api/user/change-password') {
+    const fbUser = auth.currentUser;
+    if (!fbUser?.email) throw new ApiError('ไม่ได้เข้าสู่ระบบ', 401);
+
+    const currentPassword = String(body?.currentPassword ?? '');
+    const newPassword = String(body?.newPassword ?? '');
+    if (!currentPassword) throw new ApiError('กรุณากรอกรหัสผ่านปัจจุบัน', 400);
+    if (newPassword.length < 8) throw new ApiError('รหัสผ่านใหม่ต้องมีอย่างน้อย 8 ตัวอักษร', 400);
+    if (newPassword === currentPassword) throw new ApiError('รหัสผ่านใหม่ต้องต่างจากรหัสเดิม', 400);
+
+    try {
+      // Firebase refuses `updatePassword` on a stale session, so re-authenticate
+      // first: that is also what proves the user knows the current password.
+      await reauthenticateWithCredential(fbUser, EmailAuthProvider.credential(fbUser.email, currentPassword));
+    } catch {
+      throw new ApiError('รหัสผ่านปัจจุบันไม่ถูกต้อง', 401);
+    }
+    await fbUpdatePassword(fbUser, newPassword);
+    return { ok: true } as T;
   }
 
   // 2. Health & Settings
@@ -1042,6 +1131,18 @@ export async function handleFirebaseRequest<T>(path: string, options: RequestIni
       return { ok: true, isUnlocked: false } as T;
     }
     if (pathname === '/api/admin/users') {
+      if (method === 'POST') {
+        // Creating a Firebase Auth account requires the Admin SDK. The client
+        // SDK can only do it via `createUserWithEmailAndPassword`, which would
+        // sign the current admin *out* and hand the session to the new user —
+        // a privilege inversion, not a feature. Until a Cloud Function exists,
+        // fail loudly instead of writing a profile doc nobody can sign in to.
+        throw new ApiError(
+          'การสร้างบัญชีผู้ใช้ต้องทำใน Firebase Console (Authentication → Add user) หรือผ่าน Cloud Function — เว็บเบราว์เซอร์สร้างบัญชี Auth ให้ไม่ได้',
+          501,
+          { code: 'not-implemented', retryable: false },
+        );
+      }
       const snap = await getDocs(collection(db, 'users'));
       const users = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       return { users } as T;
