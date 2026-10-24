@@ -1,5 +1,11 @@
 # Architecture
 
+> **เอกสารประวัติศาสตร์ (historical):** Fastify/SQLite backend และสคริปต์ที่อ้างถึงในเอกสารนี้
+> ถูกลบออกจากโปรเจกต์แล้ว (ดู `docs/CLEANUP_LOG.md` และ `docs/DECISIONS.md`) ปัจจุบันระบบเป็น
+> PWA ที่ทำงานบน Firebase ทั้งหมด — คำสั่งอย่าง `npm run dev:server`, `backup:create` หรือ
+> `bootstrap:admin` ไม่มีอยู่แล้ว ใช้ `npm run dev` และ `docs/SECURITY.md` แทน
+
+
 ## Overview
 This is a self-hosted Personal Knowledge Hub intended to run on a single local Windows machine and be accessed from personal devices only through Tailscale after all required gates are satisfied.
 

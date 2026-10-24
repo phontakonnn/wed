@@ -1,5 +1,11 @@
 # Test Plan
 
+> **เอกสารประวัติศาสตร์ (historical):** Fastify/SQLite backend และสคริปต์ที่อ้างถึงในเอกสารนี้
+> ถูกลบออกจากโปรเจกต์แล้ว (ดู `docs/CLEANUP_LOG.md` และ `docs/DECISIONS.md`) ปัจจุบันระบบเป็น
+> PWA ที่ทำงานบน Firebase ทั้งหมด — คำสั่งอย่าง `npm run dev:server`, `backup:create` หรือ
+> `bootstrap:admin` ไม่มีอยู่แล้ว ใช้ `npm run dev` และ `docs/SECURITY.md` แทน
+
+
 **Status:** reflects the automated suite as of 2026-10-19, including Notes search, backup/restore,
 and the pre-migration backup guard.
 **Runner:** Vitest (`npm test` → `vitest run src` from `apps/server`).

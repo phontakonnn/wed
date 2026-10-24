@@ -1,48 +1,33 @@
 # PKH web client
 
-The React + TypeScript + Vite client calls the Fastify API at `/api`; it uses no production mock
-data. In development, Vite proxies `/api` to `http://127.0.0.1:3001`. In production, Fastify serves
-the built frontend and API from one origin.
+React 19 + TypeScript + Vite 8 PWA. The client is self-contained: `src/api.ts` exposes a typed
+function per operation, and every call is served by the in-browser Firebase engine
+(`src/lib/firebaseEngine.ts`) against Firestore/Storage. There is no HTTP backend and no dev proxy.
 
-## Development (PowerShell)
+Offline-first comes from `persistentLocalCache` in `src/lib/firebaseDb.ts`, so reads keep working
+without a network and writes are queued until the connection returns.
 
-Use two terminals from the repository root. The username/port in `EXPECTED_ORIGIN` must match the
-address used in the browser because the API validates both the `Origin` and `Host` headers.
+## Commands
 
-Terminal 1:
+Run from the repository root (or prefix with `npm --prefix apps/web`):
 
-```powershell
-$env:DATA_DIR = 'C:\PKH-data'
-$env:EXPECTED_ORIGIN = 'http://localhost:5173'
-npm.cmd run dev:server
-```
+| Command | What it does |
+| :--- | :--- |
+| `npm run dev` | Vite dev server on `http://127.0.0.1:5173` |
+| `npm run build` | `tsc -b` then `vite build` into `dist/` |
+| `npm run typecheck` | Types only, no emit |
+| `npm run lint` | ESLint flat config |
+| `npm test` | Vitest unit tests |
+| `npm run test:rules` | Firestore/Storage rules tests via the Firebase Emulator |
+| `npm run audit:mobile` | Playwright mobile layout audit |
 
-Terminal 2:
+## Configuration
 
-```powershell
-npm.cmd run dev:web
-```
+Firebase web config is read from Vite env vars (`VITE_FIREBASE_*`); see `.env.example` at the
+repository root. The values baked into `src/lib/firebaseConfig.ts` are public client identifiers,
+not secrets — security comes from `firestore.rules` and `storage.rules`.
 
-Open `http://localhost:5173`. Create the administrator locally first with
-`$env:DATA_DIR = 'C:\PKH-data'; npm.cmd run bootstrap:admin` in an interactive terminal. Use a
-temporary DATA_DIR for development if the machine does not yet have an approved data directory.
+## Bundle budget
 
-## Production build
-
-```powershell
-npm.cmd run build:web
-npm.cmd run build:server
-$env:DATA_DIR = 'C:\PKH-data'
-npm.cmd --prefix apps/server start
-```
-
-The server requires the web build at `apps/web/dist` and listens on `127.0.0.1`. It does not bind a
-public interface. Remote access is not configured by this application; any later remote access
-must follow the approved Tailscale-only policy, never Funnel and never a public port.
-
-## Notes behavior
-
-- Login uses the existing local administrator session.
-- Active notes can be created, listed, opened, edited, and soft-deleted.
-- Pagination is server-side. Deleted records remain in SQLite and are omitted from the active list.
-- The Notes FTS5 index is maintained for future search work; there is no search UI/API in this slice.
+`bundle-budget.json` caps the first-load JS graph. `npm run check:budget` fails the build when the
+entry graph grows past the cap, and CI runs it on every push.

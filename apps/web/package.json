@@ -1,7 +1,7 @@
 {
   "name": "web",
   "private": true,
-  "version": "0.0.0",
+  "version": "3.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,7 +12,6 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
     "audit:mobile": "node e2e/mobile-audit.mjs",
     "test:rules": "firebase emulators:exec --only firestore,storage --project demo-pkh-rules \"vitest run --config vitest.rules.config.ts\"",
     "test:rules:watch": "firebase emulators:exec --only firestore,storage --project demo-pkh-rules \"vitest --config vitest.rules.config.ts\""

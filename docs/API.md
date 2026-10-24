@@ -1,5 +1,11 @@
 # HTTP API
 
+> **เอกสารประวัติศาสตร์ (historical):** Fastify/SQLite backend และสคริปต์ที่อ้างถึงในเอกสารนี้
+> ถูกลบออกจากโปรเจกต์แล้ว (ดู `docs/CLEANUP_LOG.md` และ `docs/DECISIONS.md`) ปัจจุบันระบบเป็น
+> PWA ที่ทำงานบน Firebase ทั้งหมด — คำสั่งอย่าง `npm run dev:server`, `backup:create` หรือ
+> `bootstrap:admin` ไม่มีอยู่แล้ว ใช้ `npm run dev` และ `docs/SECURITY.md` แทน
+
+
 **Status:** documents the routes that exist in `apps/server/src/index.ts` as of 2026-10-19.
 **Base URL (local):** `http://127.0.0.1:3001`
 **Binding:** `startServer()` always listens on host `127.0.0.1`. There is no remote-access mode.

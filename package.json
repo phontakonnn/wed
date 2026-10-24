@@ -1,33 +1,25 @@
 {
   "name": "wed-phontakon",
   "private": true,
-  "version": "1.0.0",
+  "version": "3.1.0",
   "workspaces": [
-    "apps/*",
-    "packages/*"
+    "apps/web"
   ],
   "scripts": {
-    "dev": "npm --prefix apps/server run dev",
-    "dev:web": "npm --prefix apps/web run dev",
-    "build:web": "npm --prefix apps/web run build",
-    "dev:server": "npm --prefix apps/server run dev",
-    "build:server": "npm --prefix apps/server run build",
-    "start:server": "npm --prefix apps/server start",
-    "bootstrap:admin": "npm --prefix apps/server run bootstrap:admin",
-    "backup:create": "npm --prefix apps/server run backup:create --",
-    "backup:list": "npm --prefix apps/server run backup:list --",
-    "backup:verify": "npm --prefix apps/server run backup:verify --",
-    "backup:restore": "npm --prefix apps/server run backup:restore --",
+    "dev": "npm --prefix apps/web run dev",
+    "build": "npm --prefix apps/web run build",
+    "preview": "npm --prefix apps/web run preview",
+    "typecheck": "npm --prefix apps/web run typecheck",
     "lint": "npm --prefix apps/web run lint",
-    "test": "npm --prefix apps/server run test",
-    "storage:check": "npm --prefix apps/server run storage:check --",
-    "storage:quarantine": "npm --prefix apps/server run storage:quarantine --",
-    "backup:preflight": "npm --prefix apps/server run backup:preflight --",
-    "backup:staging": "npm --prefix apps/server run backup:staging --",
-    "test:e2e": "npm --prefix apps/web run test:e2e",
+    "test": "npm --prefix apps/web run test",
+    "test:rules": "npm --prefix apps/web run test:rules",
+    "test:rules:watch": "npm --prefix apps/web run test:rules:watch",
+    "audit:mobile": "npm --prefix apps/web run audit:mobile",
+    "check:budget": "node scripts/check-bundle-budget.mjs",
+    "release": "npm run typecheck && npm run lint && npm run test && npm run build && npm run check:budget",
+    "deploy:hosting": "firebase deploy --only hosting",
     "prepare": "git config core.hooksPath .githooks",
-    "hooks:setup": "git config core.hooksPath .githooks",
-    "test:rules": "npm --prefix apps/web run test:rules"
+    "hooks:setup": "git config core.hooksPath .githooks"
   },
   "license": "MIT",
   "type": "module"

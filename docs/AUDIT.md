@@ -1,5 +1,11 @@
 # AUDIT — Firebase-first PWA refactor (Phase A)
 
+> **เอกสารประวัติศาสตร์ (historical):** Fastify/SQLite backend และสคริปต์ที่อ้างถึงในเอกสารนี้
+> ถูกลบออกจากโปรเจกต์แล้ว (ดู `docs/CLEANUP_LOG.md` และ `docs/DECISIONS.md`) ปัจจุบันระบบเป็น
+> PWA ที่ทำงานบน Firebase ทั้งหมด — คำสั่งอย่าง `npm run dev:server`, `backup:create` หรือ
+> `bootstrap:admin` ไม่มีอยู่แล้ว ใช้ `npm run dev` และ `docs/SECURITY.md` แทน
+
+
 วันที่ตรวจ: 2026-10-23
 Branch: `refactor/firebase-pwa-second-brain`
 Commit ตั้งต้น: `c0fe073` (snapshot งานค้างของผู้ใช้) + commit ซ่อม baseline ก่อนเฟส A

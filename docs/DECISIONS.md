@@ -1142,3 +1142,56 @@ from the service worker (above) but kept in `firebaseConfig.ts` because no
 `.env.local` exists in this checkout and there is no CI env yet: removing it
 would brick the current deployment. Flagged in `SECURITY.md` with the exact
 steps to finish the move.
+
+---
+
+## SLICE 3b — backend removal (2026-10-24)
+
+### Decision: remove `apps/server` and every artefact that only served it
+
+The product is a Firebase-only PWA. `src/api.ts` routes every call to
+`handleFirebaseRequest()`, hosting rewrites `**` to `/index.html`, and CI was
+already web-only. Keeping a Fastify/SQLite backend that no build step, no import
+and no deployment path touches is pure maintenance cost — it is the single
+largest source of "which architecture is real?" confusion in the repo.
+
+This reverses the earlier "keep `apps/server`" decision in SLICE 3. That call
+was correct at the time (root scripts still referenced it, and it held the only
+backup CLI), but it was a *deferral pending the user's call*, not a conclusion.
+The user has now decided.
+
+Removed with `git rm` (recoverable from history): `apps/server/`, the empty
+`packages/shared/`, the Docker/PM2/LiteFS/Tailscale deploy artefacts, the
+SQLite backup scripts, the server-bound Playwright suite, and the SQLite search
+benchmark. Full list + per-item evidence: `docs/CLEANUP_LOG.md` § SLICE 3b.
+
+### Decision: delete the Playwright suite instead of porting it
+
+The 8 specs drive the app through `/api/*` and boot a Fastify instance from
+`e2e/start-test-server.ts`. They test an app that no longer exists, so porting
+them would mean rewriting every assertion against Firestore emulator state —
+work that belongs to a dedicated testing slice, not a cleanup. Coverage that
+remains: 44 unit tests, the rules suites (need JDK + Firebase CLI),
+`mobile-audit.mjs`, and the manual checklist.
+
+### Decision: docs are kept and banner-marked, not deleted
+
+18 documents describe the removed backend. They are the project's memory
+(incident history, threat model, backup drills), so deleting them loses more
+than it saves. The 15 that contain runnable instructions got a one-line
+"เอกสารประวัติศาสตร์ (historical)" banner at the top so nobody follows
+`npm run dev:server` into a dead end.
+
+### Decision: bump the app to 3.1.0
+
+The About screen hardcoded `v3.0.0 (Production Release)`. The build now injects
+`__APP_VERSION__` from `apps/web/package.json`, so the package version had to
+stop being `0.0.0`. `3.1.0` continues the 3.x line the UI already advertised.
+
+### Note: no dev proxy and no HTTP layer at all
+
+`vite.config.ts` no longer proxies `/api` to `127.0.0.1:3001`. The `/api/...`
+strings that remain in `src/api.ts` are an internal routing vocabulary for the
+Firebase engine (one `switch` over paths), not network calls. Renaming them was
+rejected for this slice: it would touch ~120 call sites for zero behavioural
+gain and would bury the actual deletion in noise.

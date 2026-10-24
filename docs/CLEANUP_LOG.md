@@ -80,3 +80,68 @@ import/config/CI/HTML + `knip@5`) แล้วลบด้วย `git rm` เพ
 | `console.*` ใน `src/` | 13 | 0 (เหลือเฉพาะใน `logger.ts` ซึ่งเป็นตัว sink) |
 | lockfile | 3 | 1 |
 | ไฟล์ที่ track ทั้งหมด | — | −7 ไฟล์ |
+
+---
+
+# SLICE 3b — ถอด Fastify/SQLite backend ออกทั้งก้อน (2026-10-24)
+
+## เหตุผล
+
+ผู้ใช้สั่งให้ลบ "ทุกอย่างที่ไม่เกี่ยวกับเว็บ ที่เว็บไม่ได้ใช้งาน" หลังตรวจสอบแล้วพบว่า
+backend ไม่ได้ถูกเรียกใช้จาก production build เลย:
+
+| หลักฐาน | ผล |
+|---|---|
+| `apps/web/src/api.ts` → `request()` | เรียก `handleFirebaseRequest()` ทุกครั้ง ไม่มี `fetch()` ออกนอกเบราว์เซอร์ |
+| `grep -rn "apps/server\|packages/shared\|@pkh/shared" apps/web/` | **0 ผลลัพธ์** |
+| `firebase.json` hosting | `public: apps/web/dist` + rewrite `**` → `/index.html` ไม่มี API rewrite |
+| `.github/workflows/ci.yml` | รันเฉพาะ `apps/web` (typecheck/lint/test/build/budget) อยู่แล้ว |
+| `vite.config.ts` | proxy `/api` → `127.0.0.1:3001` เป็นของ dev server เก่า ไม่มีใครเรียก |
+
+## ไฟล์ที่ลบ (ทั้งหมดผ่าน `git rm` — กู้คืนได้จาก git history)
+
+| กลุ่ม | รายการ | หลักฐานว่าไม่ถูกใช้ |
+|---|---|---|
+| Backend | `apps/server/` (146 ไฟล์, 8.3 MB) | ไม่มี import จาก `apps/web`; hosting ไม่ได้ proxy ไปหา |
+| ว่างเปล่า | `packages/shared/` | 0 ไฟล์ (มีแต่ไดเรกทอรีเปล่า) |
+| Infra/VPS | `Dockerfile`, `docker-compose.yml`, `litefs.yml`, `ecosystem.config.js`, `start-pkh.bat`, `Start-PKH.cmd` | สร้าง container/PM2 ให้ Fastify เท่านั้น |
+| Scripts | `scripts/deploy-vps.sh`, `start-production.cmd`, `backup-config.cmd`, `backup-config.example.cmd`, `backup-daily.cmd`, `register-backup-task.ps1` | ทำงานกับ `DATA_DIR` + SQLite backup |
+| E2E | `apps/web/e2e/*.spec.ts` (8), `start-test-server.ts`, `apps/web/playwright.config.ts` | `start-test-server.ts` `import '../../server/src/*'` → พังเมื่อไม่มี server; spec เหล่านี้ยิง `/api/*` |
+| Test | `tests/thai-search-evaluation.mjs` | `createRequire('../apps/server/package.json')` + `better-sqlite3` |
+
+## สิ่งที่ **ไม่** ลบ
+
+- `apps/web/e2e/mobile-audit.mjs` — เป็น web-only (วัด layout ที่ขนาดมือถือ) ยังใช้ได้ผ่าน `npm run audit:mobile`
+- `scripts/check-bundle-budget.mjs`, `scripts/analyze-stats.mjs` — ใช้โดย CI และการวัด bundle
+- `docs/` ทั้งหมด — เก็บไว้เป็นประวัติ; เอกสารที่อธิบาย backend ถูกติดป้าย
+  "เอกสารประวัติศาสตร์ (historical)" ที่หัวไฟล์ 15 ฉบับ เพื่อไม่ให้มีคนทำตามคำสั่งที่ไม่มีอยู่แล้ว
+- `.workbuddy-ai/` — ข้อมูลโปรเจกต์ของ agent ไม่ใช่แคช
+
+## แก้ตามหลังการลบ
+
+| ไฟล์ | การเปลี่ยนแปลง |
+|---|---|
+| `package.json` (root) | workspaces → `["apps/web"]`; ตัด 13 สคริปต์ที่ชี้ `apps/server`; เพิ่ม `typecheck`, `build`, `check:budget`, `release`, `deploy:hosting`; `test` → vitest ของ web |
+| `apps/web/package.json` | ตัด `test:e2e`; เวอร์ชัน → `3.1.0` |
+| `.githooks/pre-push` | เลิกเรียก `apps/server test` และ Playwright; เหลือ typecheck → lint → test → build+budget |
+| `apps/web/vite.config.ts` | ลบ proxy `/api` → `127.0.0.1:3001` |
+| `README.md`, `apps/web/README.md` | เขียนใหม่ให้ตรงสถาปัตยกรรม Firebase-only |
+| `.env.example` | ลบหมวด "Legacy Fastify/SQLite server" (PORT/HOST/DATA_DIR/APP_ORIGIN/…) |
+| `.gitignore` | ลบกฎเฉพาะ SQLite/DATA_DIR/backup-config ที่ตายแล้ว เหลือกฎ defensive |
+| `package-lock.json` | `npm install` ถอด 152 แพ็กเกจ; ลบ entry `apps/server` ที่ค้างแบบ `extraneous` |
+
+## ผลกระทบที่ยอมรับ
+
+- ไม่มี E2E อัตโนมัติที่ครอบ UI flow อีกแล้ว (spec เดิมทดสอบแอปที่ต่อ Fastify ซึ่งไม่มีอยู่)
+  → ใช้ `npm run audit:mobile`, unit test และ manual checklist ใน `docs/MANUAL_UI_CHECKLIST.md` แทน
+- `npm run test:rules` ยังต้องใช้ Firebase CLI + JDK (สภาพแวดล้อมนี้ไม่มี) — สถานะเดิมไม่เปลี่ยน
+
+## ตัวเลขหลังลบ
+
+| ตัวชี้วัด | ก่อน | หลัง |
+|---|---:|---:|
+| ไฟล์ที่ track ทั้งหมด | 278 | 171 (−107) |
+| ขนาดไฟล์ที่ track (ไบต์จริงจาก `git ls-tree`) | 3.98 MB | 2.70 MB |
+| แพ็กเกจใน `node_modules` | — | −152 แพ็กเกจ (`npm install` หลังถอด workspace) |
+| First-load JS (gzip) | 125.1 KB | 125.1 KB (ไม่เปลี่ยน) |
+| Precache | 12 entries / 656.5 KiB | 12 entries / 656.5 KiB (ไม่เปลี่ยน) |

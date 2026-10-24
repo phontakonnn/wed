@@ -1,5 +1,11 @@
 # คู่มือการติดตั้งและดูแลระบบในสภาพแวดล้อมจริง (Production Deployment Guide)
 
+> **เอกสารประวัติศาสตร์ (historical):** Fastify/SQLite backend และสคริปต์ที่อ้างถึงในเอกสารนี้
+> ถูกลบออกจากโปรเจกต์แล้ว (ดู `docs/CLEANUP_LOG.md` และ `docs/DECISIONS.md`) ปัจจุบันระบบเป็น
+> PWA ที่ทำงานบน Firebase ทั้งหมด — คำสั่งอย่าง `npm run dev:server`, `backup:create` หรือ
+> `bootstrap:admin` ไม่มีอยู่แล้ว ใช้ `npm run dev` และ `docs/SECURITY.md` แทน
+
+
 > **PKH / Life OS** ออกแบบมาเพื่อให้ทำงานแบบ Single-Tenant บนเครื่องส่วนตัว (Self-Hosted on Windows) โดยเน้นความปลอดภัยสูงสุด ความเสถียร และสามารถเข้าถึงจากมือถือได้จากทุกที่แบบปลอดภัย 100% ฟรี ไม่มีค่าใช้จ่าย และไม่ต้องเปิดพอร์ตเราเตอร์ (No Port Forwarding)
 
 ---

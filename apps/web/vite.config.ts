@@ -129,12 +129,6 @@ export default defineConfig(({ mode }) => ({
       },
     },
   },
-  server: {
-    proxy: {
-      '/api': {
-        target: 'http://127.0.0.1:3001',
-        changeOrigin: false,
-      },
-    },
-  },
+  // No dev proxy: every request is served by the in-browser Firebase engine.
+  // The old `/api` -> 127.0.0.1:3001 proxy died with the Fastify backend.
 }))

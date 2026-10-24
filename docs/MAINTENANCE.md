@@ -1,5 +1,11 @@
 # คู่มือการดูแลรักษาระบบอย่างยั่งยืน (System Maintenance Guide)
 
+> **เอกสารประวัติศาสตร์ (historical):** Fastify/SQLite backend และสคริปต์ที่อ้างถึงในเอกสารนี้
+> ถูกลบออกจากโปรเจกต์แล้ว (ดู `docs/CLEANUP_LOG.md` และ `docs/DECISIONS.md`) ปัจจุบันระบบเป็น
+> PWA ที่ทำงานบน Firebase ทั้งหมด — คำสั่งอย่าง `npm run dev:server`, `backup:create` หรือ
+> `bootstrap:admin` ไม่มีอยู่แล้ว ใช้ `npm run dev` และ `docs/SECURITY.md` แทน
+
+
 > **PKH / Life OS** ออกแบบมาเพื่อให้ผู้ใช้คนเดียวสามารถดูแลรักษาระบบ (Single-Operator Maintenance) ได้อย่างมั่นใจ ปลอดภัย และไม่เสียเวลา โดยมีคำสั่งที่พร้อมคัดลอกไปรันใน PowerShell หรือ Terminal ได้ทันที
 
 ---

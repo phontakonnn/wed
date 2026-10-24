@@ -1,5 +1,11 @@
 # Acceptance Criteria
 
+> **เอกสารประวัติศาสตร์ (historical):** Fastify/SQLite backend และสคริปต์ที่อ้างถึงในเอกสารนี้
+> ถูกลบออกจากโปรเจกต์แล้ว (ดู `docs/CLEANUP_LOG.md` และ `docs/DECISIONS.md`) ปัจจุบันระบบเป็น
+> PWA ที่ทำงานบน Firebase ทั้งหมด — คำสั่งอย่าง `npm run dev:server`, `backup:create` หรือ
+> `bootstrap:admin` ไม่มีอยู่แล้ว ใช้ `npm run dev` และ `docs/SECURITY.md` แทน
+
+
 **Verdict as of 2026-10-20: NOT ACCEPTABLE FOR REAL DATA / NOT PRODUCTION-READY.**
 Phase 2 is partially complete. Authentication, Notes CRUD, Trash operations, search, Bookmarks CRUD,
 categories/tags, favorites and file upload/download have an owner-scoped API, automated coverage, and

@@ -1,5 +1,11 @@
 # รายงานการซ้อมสำรองและกู้คืนข้อมูลจริง (Disaster Recovery & Backup Drill)
 
+> **เอกสารประวัติศาสตร์ (historical):** Fastify/SQLite backend และสคริปต์ที่อ้างถึงในเอกสารนี้
+> ถูกลบออกจากโปรเจกต์แล้ว (ดู `docs/CLEANUP_LOG.md` และ `docs/DECISIONS.md`) ปัจจุบันระบบเป็น
+> PWA ที่ทำงานบน Firebase ทั้งหมด — คำสั่งอย่าง `npm run dev:server`, `backup:create` หรือ
+> `bootstrap:admin` ไม่มีอยู่แล้ว ใช้ `npm run dev` และ `docs/SECURITY.md` แทน
+
+
 > **วันที่ทำการซ้อม**: 21 ตุลาคม 2026 (2026-10-21T11:46:46Z)  
 > **ระบบ**: PKH / Life OS (Fastify + SQLite 3 + React Monorepo)  
 > **สภาพแวดล้อม**: Windows 11 / Node.js v24.x / tsx  

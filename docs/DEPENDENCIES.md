@@ -1,5 +1,11 @@
 # Dependencies and approval status
 
+> **เอกสารประวัติศาสตร์ (historical):** Fastify/SQLite backend และสคริปต์ที่อ้างถึงในเอกสารนี้
+> ถูกลบออกจากโปรเจกต์แล้ว (ดู `docs/CLEANUP_LOG.md` และ `docs/DECISIONS.md`) ปัจจุบันระบบเป็น
+> PWA ที่ทำงานบน Firebase ทั้งหมด — คำสั่งอย่าง `npm run dev:server`, `backup:create` หรือ
+> `bootstrap:admin` ไม่มีอยู่แล้ว ใช้ `npm run dev` และ `docs/SECURITY.md` แทน
+
+
 ## Runtime state observed 2026-10-19
 - Node.js v24.22.0; npm 11.19.1, verified by `node -v` and `npm -v`.
 - Git repository root was verified as `C:\Users\_phontakonnn\Documents\Wed_Phontakon` on

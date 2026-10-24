@@ -1,5 +1,11 @@
 # Feature Gap Analysis — PKH & Life OS
 
+> **เอกสารประวัติศาสตร์ (historical):** Fastify/SQLite backend และสคริปต์ที่อ้างถึงในเอกสารนี้
+> ถูกลบออกจากโปรเจกต์แล้ว (ดู `docs/CLEANUP_LOG.md` และ `docs/DECISIONS.md`) ปัจจุบันระบบเป็น
+> PWA ที่ทำงานบน Firebase ทั้งหมด — คำสั่งอย่าง `npm run dev:server`, `backup:create` หรือ
+> `bootstrap:admin` ไม่มีอยู่แล้ว ใช้ `npm run dev` และ `docs/SECURITY.md` แทน
+
+
 Date: 2026-10-20
 Baseline: `main` @ `02d08b5` with a dirty worktree (schema 008, Life OS UI, all uncommitted).
 Method: read the migrations, the route table, the tests and the current `App.tsx`; no assumptions from
