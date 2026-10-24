@@ -2534,6 +2534,30 @@ a.button {
   gap: 12px;
 }
 
+/* Tab bar of the profile modal: wraps on narrow screens instead of scrolling. */
+.profile-tabs-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  border-bottom: 1px solid var(--pkh-border-subtle, #e2e8f0);
+  padding-bottom: 8px;
+  margin: 12px 0 16px;
+}
+
+.profile-tabs-header > button {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 8px;
+  min-height: 36px;
+}
+
+@media (max-width: 480px) {
+  .profile-tabs-header > button {
+    flex: 1 1 calc(50% - 6px);
+    min-height: 44px;
+  }
+}
+
 .profile-form label {
   display: grid;
   gap: 4px;

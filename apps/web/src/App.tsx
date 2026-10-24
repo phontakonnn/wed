@@ -126,6 +126,7 @@ import {
   type NotificationPreferences,
   fetchCustomTypes,
   type CustomDataType,
+  updateUserProfile,
 } from './api';
 import {
   type NotesView,
@@ -2780,10 +2781,28 @@ function App() {
     }
   }
 
-  function saveProfile(event: FormEvent<HTMLFormElement>) {
+  async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    localStorage.setItem('pkh.profile', JSON.stringify(profile));
-    setProfileOpen(false);
+    // localStorage stays as the offline cache the UI reads on boot, but the
+    // profile must also reach Firestore: saving only locally meant every edit
+    // was lost on the next device (or the next cache clear).
+    const payload = {
+      displayName: profile.name,
+      bio: profile.bio,
+      dailyStatus: profile.status,
+      email: profile.email,
+      phone: profile.phone,
+      avatarDataUrl: profile.avatarDataUrl,
+    };
+    try {
+      await updateUserProfile(payload);
+      localStorage.setItem('pkh.profile', JSON.stringify(profile));
+      setProfileOpen(false);
+      pushToast('success', 'บันทึกข้อมูลส่วนตัวแล้ว');
+    } catch (error) {
+      setNotesError(errorMessage(error));
+      pushToast('error', 'บันทึกข้อมูลส่วนตัวไม่สำเร็จ');
+    }
   }
 
   async function handleProfileAvatarUpload(event: ChangeEvent<HTMLInputElement>) {

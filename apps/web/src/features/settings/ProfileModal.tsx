@@ -3,20 +3,12 @@ import React, { useState, useEffect, useRef, useCallback, type ChangeEvent, type
 import {
   type User,
   getUserProfile,
-  updateUserProfile,
   changeUserPassword,
-  setup2FA,
-  enable2FA,
-  disable2FA,
   getUserSessions,
   revokeAllUserSessions,
   getLoginHistory,
   exportUserData,
   importUserData,
-  requestEmailVerificationOtp,
-  confirmEmailVerificationOtp,
-  requestPhoneVerificationOtp,
-  confirmPhoneVerificationOtp,
   requestForgotOtp,
   resetPasswordWithOtp,
   type UserSessionDevice,
@@ -117,8 +109,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   onSetPostSaveBehavior,
 }) => {
 
-  // Active section tab: 'profile' | 'preferences' | 'verify' | 'security' | '2fa' | 'sessions' | 'data-backup'
-  const [activeTab, setActiveTab] = useState<'profile' | 'preferences' | 'verify' | 'security' | '2fa' | 'sessions' | 'data-backup'>('profile');
+  // Active section tab: 'profile' | 'preferences' | 'security' | 'sessions' | 'data-backup'
+  const [activeTab, setActiveTab] = useState<'profile' | 'preferences' | 'security' | 'sessions' | 'data-backup'>('profile');
   const [sessions, setSessions] = useState<UserSessionDevice[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [loginHistory, setLoginHistory] = useState<LoginHistoryItem[]>([]);
@@ -127,24 +119,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
   const [notice, setNotice] = useState<string>('');
   const [error, setError] = useState<string>('');
-
-  // Email & Phone Verification State
-  const [emailVerified, setEmailVerified] = useState<boolean>(false);
-  const [phoneVerified, setPhoneVerified] = useState<boolean>(false);
-  const [emailOtpInput, setEmailOtpInput] = useState('');
-  const [phoneOtpInput, setPhoneOtpInput] = useState('');
-  const [emailOtpCountdown, setEmailOtpCountdown] = useState(0);
-  const [phoneOtpCountdown, setPhoneOtpCountdown] = useState(0);
-  const [emailOtpSent, setEmailOtpSent] = useState(false);
-  const [phoneOtpSent, setPhoneOtpSent] = useState(false);
-  const [simulatedOtpNotice, setSimulatedOtpNotice] = useState<string | null>(null);
-  const [simulatedEmailOtp, setSimulatedEmailOtp] = useState<string | null>(null);
-  const [simulatedPhoneOtp, setSimulatedPhoneOtp] = useState<string | null>(null);
-  const [directEmailOtpSent, setDirectEmailOtpSent] = useState(false);
-  const [directPhoneOtpSent, setDirectPhoneOtpSent] = useState(false);
-  const [directEmailOtp, setDirectEmailOtp] = useState('');
-  const [directPhoneOtp, setDirectPhoneOtp] = useState('');
-  const [verifyBusy, setVerifyBusy] = useState(false);
 
   // Detailed Notification Settings
   const [browserNotificationStatus, setBrowserNotificationStatus] = useState<'default' | 'granted' | 'denied'>(() => {
@@ -192,32 +166,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const [forgotConfirmPass, setForgotConfirmPass] = useState('');
   const [forgotBusy, setForgotBusy] = useState(false);
 
-  useEffect(() => {
-    if (emailOtpCountdown <= 0) return;
-    const timer = setInterval(() => setEmailOtpCountdown((c) => c - 1), 1000);
-    return () => clearInterval(timer);
-  }, [emailOtpCountdown]);
-
-  useEffect(() => {
-    if (phoneOtpCountdown <= 0) return;
-    const timer = setInterval(() => setPhoneOtpCountdown((c) => c - 1), 1000);
-    return () => clearInterval(timer);
-  }, [phoneOtpCountdown]);
-
   // Password change state
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordBusy, setPasswordBusy] = useState(false);
-
-  // 2FA state
-  const [twoFactorActive, setTwoFactorActive] = useState<boolean>(false);
-  const [setupSecret, setSetupSecret] = useState<string>('');
-  const [totpVerifyCode, setTotpVerifyCode] = useState<string>('');
-  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
-  const [twoFactorBusy, setTwoFactorBusy] = useState<boolean>(false);
-  const [disablePassword, setDisablePassword] = useState<string>('');
-  const [isDisableOpen, setIsDisableOpen] = useState<boolean>(false);
 
   const loadSessionsAndHistory = useCallback(async () => {
     setSessionsLoading(true);
@@ -286,9 +239,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           phone: p.phone || prev.phone || '',
           bio: p.bio || prev.bio || '',
         }));
-        setTwoFactorActive(Boolean(p.twoFactorEnabled));
-        setEmailVerified(Boolean(p.emailVerified));
-        setPhoneVerified(Boolean(p.phoneVerified));
       })
       .catch(() => undefined);
   }, [isOpen, setProfile]);
@@ -337,168 +287,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       showError(errorMessage(err));
     } finally {
       setPasswordBusy(false);
-    }
-  };
-
-  const handleStart2FASetup = async () => {
-    setTwoFactorBusy(true);
-    try {
-      const res = await setup2FA();
-      setSetupSecret(res.secret);
-      setRecoveryCodes([]);
-      setTotpVerifyCode('');
-    } catch (err) {
-      showError(errorMessage(err));
-    } finally {
-      setTwoFactorBusy(false);
-    }
-  };
-
-  const handleEnable2FA = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!totpVerifyCode.trim()) return;
-    setTwoFactorBusy(true);
-    try {
-      const res = await enable2FA(totpVerifyCode.trim());
-      setRecoveryCodes(res.recoveryCodes || []);
-      setTwoFactorActive(true);
-      setSetupSecret('');
-      showNotice('เปิดใช้งาน 2FA สำเร็จ! กรุณาบันทึกรหัสกู้คืน');
-    } catch (err) {
-      showError(errorMessage(err));
-    } finally {
-      setTwoFactorBusy(false);
-    }
-  };
-
-  const handleDisable2FA = async (e: FormEvent) => {
-    e.preventDefault();
-    setTwoFactorBusy(true);
-    try {
-      await disable2FA(disablePassword);
-      setTwoFactorActive(false);
-      setIsDisableOpen(false);
-      setDisablePassword('');
-      setRecoveryCodes([]);
-      showNotice('ปิดใช้งาน 2FA เรียบร้อยแล้ว');
-    } catch (err) {
-      showError(errorMessage(err));
-    } finally {
-      setTwoFactorBusy(false);
-    }
-  };
-
-  const handleRequestEmailOtp = async () => {
-    if (!profile.email?.trim()) {
-      showError('กรุณากรอกอีเมลก่อนขอรับรหัส OTP');
-      return;
-    }
-    setVerifyBusy(true);
-    setSimulatedOtpNotice(null);
-    setSimulatedEmailOtp(null);
-    try {
-      // Auto-save email to server database first so OTP matches DB!
-      await updateUserProfile({ email: profile.email.trim() });
-      const res = await requestEmailVerificationOtp();
-      setEmailOtpSent(true);
-      setDirectEmailOtpSent(true);
-      setEmailOtpCountdown(300);
-      showNotice(res.message);
-      if (res.simulatedOtp) {
-        setSimulatedEmailOtp(res.simulatedOtp);
-        setDirectEmailOtp(res.simulatedOtp);
-        setSimulatedOtpNotice(`อีเมล: รหัส OTP จำลองสำหรับทดสอบคือ ${res.simulatedOtp}`);
-      }
-    } catch (err) {
-      showError(errorMessage(err) || 'ขอรหัส OTP ล้มเหลว');
-    } finally {
-      setVerifyBusy(false);
-    }
-  };
-
-  const handleConfirmEmailOtp = async (codeOverride?: string | React.MouseEvent) => {
-    const code = (typeof codeOverride === 'string' ? codeOverride : '') || directEmailOtp.trim() || emailOtpInput.trim();
-    if (!code) return;
-    setVerifyBusy(true);
-    try {
-      const res = await confirmEmailVerificationOtp(code);
-      setEmailVerified(true);
-      setEmailOtpSent(false);
-      setDirectEmailOtpSent(false);
-      setEmailOtpInput('');
-      setDirectEmailOtp('');
-      setSimulatedOtpNotice(null);
-      setSimulatedEmailOtp(null);
-      showNotice(res.message || 'ยืนยันอีเมลสำเร็จเรียบร้อยแล้ว');
-    } catch (err) {
-      showError(errorMessage(err) || 'รหัส OTP ไม่ถูกต้องหรือหมดอายุ');
-    } finally {
-      setVerifyBusy(false);
-    }
-  };
-
-  const handleAutoFillAndVerifyEmail = async () => {
-    if (simulatedEmailOtp) {
-      setDirectEmailOtp(simulatedEmailOtp);
-      setEmailOtpInput(simulatedEmailOtp);
-      await handleConfirmEmailOtp(simulatedEmailOtp);
-    }
-  };
-
-  const handleRequestPhoneOtp = async () => {
-    if (!profile.phone?.trim()) {
-      showError('กรุณากรอกเบอร์โทรศัพท์ก่อนขอรับรหัส OTP');
-      return;
-    }
-    setVerifyBusy(true);
-    setSimulatedOtpNotice(null);
-    setSimulatedPhoneOtp(null);
-    try {
-      // Auto-save phone to server database first so OTP matches DB!
-      await updateUserProfile({ phone: profile.phone.trim() });
-      const res = await requestPhoneVerificationOtp();
-      setPhoneOtpSent(true);
-      setDirectPhoneOtpSent(true);
-      setPhoneOtpCountdown(300);
-      showNotice(res.message);
-      if (res.simulatedOtp) {
-        setSimulatedPhoneOtp(res.simulatedOtp);
-        setDirectPhoneOtp(res.simulatedOtp);
-        setSimulatedOtpNotice(`เบอร์โทร: รหัส OTP จำลองสำหรับทดสอบคือ ${res.simulatedOtp}`);
-      }
-    } catch (err) {
-      showError(errorMessage(err) || 'ขอรหัส OTP ล้มเหลว');
-    } finally {
-      setVerifyBusy(false);
-    }
-  };
-
-  const handleConfirmPhoneOtp = async (codeOverride?: string | React.MouseEvent) => {
-    const code = (typeof codeOverride === 'string' ? codeOverride : '') || directPhoneOtp.trim() || phoneOtpInput.trim();
-    if (!code) return;
-    setVerifyBusy(true);
-    try {
-      const res = await confirmPhoneVerificationOtp(code);
-      setPhoneVerified(true);
-      setPhoneOtpSent(false);
-      setDirectPhoneOtpSent(false);
-      setPhoneOtpInput('');
-      setDirectPhoneOtp('');
-      setSimulatedOtpNotice(null);
-      setSimulatedPhoneOtp(null);
-      showNotice(res.message || 'ยืนยันเบอร์โทรศัพท์สำเร็จเรียบร้อยแล้ว');
-    } catch (err) {
-      showError(errorMessage(err) || 'รหัส OTP ไม่ถูกต้องหรือหมดอายุ');
-    } finally {
-      setVerifyBusy(false);
-    }
-  };
-
-  const handleAutoFillAndVerifyPhone = async () => {
-    if (simulatedPhoneOtp) {
-      setDirectPhoneOtp(simulatedPhoneOtp);
-      setPhoneOtpInput(simulatedPhoneOtp);
-      await handleConfirmPhoneOtp(simulatedPhoneOtp);
     }
   };
 
@@ -594,21 +382,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
     }
   };
 
-  const handleCopyRecoveryCodes = () => {
-    try {
-      void navigator.clipboard.writeText(recoveryCodes.join('\n'));
-      showNotice('คัดลอกรหัสกู้คืน 6 ชุดไปยังคลิปบอร์ดแล้ว!');
-    } catch {
-      // fallback
-    }
-  };
-
   return (
     <div
       className="dialog-backdrop"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
-          if (currentPassword || newPassword || confirmPassword || totpVerifyCode) {
+          if (currentPassword || newPassword || confirmPassword) {
             if (window.confirm('คุณมีข้อมูลที่ยังไม่ได้บันทึก ยืนยันที่จะปิดหน้าต่างหรือไม่?')) {
               onClose();
             }
@@ -649,11 +428,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
         )}
 
         {/* Navigation Tabs */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', borderBottom: '1px solid var(--pkh-border-subtle, #e2e8f0)', paddingBottom: '8px', margin: '12px 0 16px' }}>
+        <div className="profile-tabs-header">
           <button
             type="button"
             className={`button ${activeTab === 'profile' ? 'button-primary' : 'button-quiet'}`}
-            style={{ fontSize: '12px', padding: '4px 12px', borderRadius: '8px' }}
             onClick={() => setActiveTab('profile')}
           >
             👤 ข้อมูลส่วนตัว
@@ -661,50 +439,30 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           <button
             type="button"
             className={`button ${activeTab === 'preferences' ? 'button-primary' : 'button-quiet'}`}
-            style={{ fontSize: '12px', padding: '4px 12px', borderRadius: '8px' }}
             onClick={() => setActiveTab('preferences')}
           >
-            ⚙️ การใช้งาน & บันทึก
-          </button>
-          <button
-            type="button"
-            className={`button ${activeTab === 'verify' ? 'button-primary' : 'button-quiet'}`}
-            style={{ fontSize: '12px', padding: '4px 12px', borderRadius: '8px' }}
-            onClick={() => setActiveTab('verify')}
-          >
-            ✉️ ยืนยันอีเมล & เบอร์โทร {(emailVerified && phoneVerified) ? '✅' : '⚠️'}
+            ⚙️ การใช้งาน & พฤติกรรม
           </button>
           <button
             type="button"
             className={`button ${activeTab === 'security' ? 'button-primary' : 'button-quiet'}`}
-            style={{ fontSize: '12px', padding: '4px 12px', borderRadius: '8px' }}
             onClick={() => setActiveTab('security')}
           >
             🔑 เปลี่ยนรหัสผ่าน
           </button>
           <button
             type="button"
-            className={`button ${activeTab === '2fa' ? 'button-primary' : 'button-quiet'}`}
-            style={{ fontSize: '12px', padding: '4px 12px', borderRadius: '8px' }}
-            onClick={() => setActiveTab('2fa')}
-          >
-            🛡️ 2FA {twoFactorActive && '🟢'}
-          </button>
-          <button
-            type="button"
             className={`button ${activeTab === 'sessions' ? 'button-primary' : 'button-quiet'}`}
-            style={{ fontSize: '12px', padding: '4px 12px', borderRadius: '8px' }}
             onClick={() => selectTab('sessions')}
           >
-            💻 อุปกรณ์ & เซสชัน
+            💻 อุปกรณ์ที่เข้าสู่ระบบ
           </button>
           <button
             type="button"
             className={`button ${activeTab === 'data-backup' ? 'button-primary' : 'button-quiet'}`}
-            style={{ fontSize: '12px', padding: '4px 12px', borderRadius: '8px' }}
             onClick={() => setActiveTab('data-backup')}
           >
-            📦 สำรอง & ถ่ายโอน
+            📦 สำรอง & นำเข้าข้อมูล
           </button>
         </div>
 
@@ -803,206 +561,32 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px', marginBottom: '14px' }}>
               {/* Email Section */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--pkh-text-secondary)' }}>
-                    อีเมล (สำหรับกู้คืน OTP)
-                  </label>
-                  {profile.email && (
-                    <div>
-                      {emailVerified ? (
-                        <span style={{ color: '#16a34a', fontWeight: 700, fontSize: '12px' }}>✅ ยืนยันอีเมลแล้ว</span>
-                      ) : (
-                        <span style={{ color: '#d97706', fontWeight: 600, fontSize: '12px' }}>⚠️ ยังไม่ได้ยืนยัน</span>
-                      )}
-                    </div>
-                  )}
-                </div>
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  <input
-                    type="email"
-                    style={{ flex: 1, boxSizing: 'border-box' }}
-                    value={profile.email || ''}
-                    onChange={(event) => setProfile({ ...profile, email: event.target.value })}
-                    placeholder="name@example.com"
-                    maxLength={120}
-                  />
-                  {!emailVerified && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      type="button"
-                      disabled={verifyBusy || !profile.email?.trim()}
-                      onClick={handleRequestEmailOtp}
-                      style={{ whiteSpace: 'nowrap', fontSize: '11px', padding: '0 10px' }}
-                    >
-                      📲 ส่ง OTP ยืนยันทันที
-                    </Button>
-                  )}
-                </div>
-
-                {/* Inline OTP box for Email */}
-                {directEmailOtpSent && !emailVerified && (
-                  <div style={{
-                    marginTop: '6px',
-                    padding: '8px 10px',
-                    borderRadius: '8px',
-                    background: 'rgba(56, 189, 248, 0.12)',
-                    border: '1px solid rgba(56, 189, 248, 0.35)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '6px',
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--pkh-text-primary)' }}>
-                        กรอกรหัส OTP 6 หลักที่ส่งไปยังอีเมล
-                      </span>
-                      {simulatedEmailOtp && (
-                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#0284c7' }}>
-                          รหัสจำลอง: {simulatedEmailOtp}
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                      <input
-                        type="text"
-                        maxLength={6}
-                        placeholder="000000"
-                        value={directEmailOtp}
-                        onChange={(e) => setDirectEmailOtp(e.target.value.replace(/\D/g, ''))}
-                        style={{ width: '90px', textAlign: 'center', letterSpacing: '2px', fontWeight: 700, fontSize: '13px' }}
-                      />
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        type="button"
-                        disabled={verifyBusy || directEmailOtp.length !== 6}
-                        onClick={() => void handleConfirmEmailOtp(directEmailOtp)}
-                        style={{ fontSize: '11px' }}
-                      >
-                        ยืนยัน OTP
-                      </Button>
-                      {simulatedEmailOtp && (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          type="button"
-                          disabled={verifyBusy}
-                          onClick={() => void handleAutoFillAndVerifyEmail()}
-                          style={{
-                            fontSize: '11px',
-                            background: 'linear-gradient(135deg, #10b981 0%, #06b6d4 100%)',
-                            color: '#fff',
-                            border: 'none',
-                          }}
-                        >
-                          ⚡ กรอกรหัส OTP อัตโนมัติ & ยืนยันทันที
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                )}
+                <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--pkh-text-secondary)' }}>
+                  อีเมล (สำหรับติดต่อและกู้คืนบัญชี)
+                </label>
+                <input
+                  type="email"
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                  value={profile.email || ''}
+                  onChange={(event) => setProfile({ ...profile, email: event.target.value })}
+                  placeholder="name@example.com"
+                  maxLength={120}
+                />
               </div>
 
               {/* Phone Section */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--pkh-text-secondary)' }}>
-                    เบอร์โทรศัพท์ (ถ้ามี)
-                  </label>
-                  {profile.phone && (
-                    <div>
-                      {phoneVerified ? (
-                        <span style={{ color: '#16a34a', fontWeight: 700, fontSize: '12px' }}>✅ ยืนยันเบอร์โทรแล้ว</span>
-                      ) : (
-                        <span style={{ color: '#d97706', fontWeight: 600, fontSize: '12px' }}>⚠️ ยังไม่ได้ยืนยัน</span>
-                      )}
-                    </div>
-                  )}
-                </div>
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  <input
-                    type="tel"
-                    style={{ flex: 1, boxSizing: 'border-box' }}
-                    value={profile.phone || ''}
-                    onChange={(event) => setProfile({ ...profile, phone: event.target.value })}
-                    placeholder="081-234-5678"
-                    maxLength={30}
-                  />
-                  {!phoneVerified && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      type="button"
-                      disabled={verifyBusy || !profile.phone?.trim()}
-                      onClick={handleRequestPhoneOtp}
-                      style={{ whiteSpace: 'nowrap', fontSize: '11px', padding: '0 10px' }}
-                    >
-                      📲 ส่ง OTP ยืนยันทันที
-                    </Button>
-                  )}
-                </div>
-
-                {/* Inline OTP box for Phone */}
-                {directPhoneOtpSent && !phoneVerified && (
-                  <div style={{
-                    marginTop: '6px',
-                    padding: '8px 10px',
-                    borderRadius: '8px',
-                    background: 'rgba(168, 85, 247, 0.12)',
-                    border: '1px solid rgba(168, 85, 247, 0.35)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '6px',
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--pkh-text-primary)' }}>
-                        กรอกรหัส OTP 6 หลักที่ส่งไปยังเบอร์โทร
-                      </span>
-                      {simulatedPhoneOtp && (
-                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#9333ea' }}>
-                          รหัสจำลอง: {simulatedPhoneOtp}
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                      <input
-                        type="text"
-                        maxLength={6}
-                        placeholder="000000"
-                        value={directPhoneOtp}
-                        onChange={(e) => setDirectPhoneOtp(e.target.value.replace(/\D/g, ''))}
-                        style={{ width: '90px', textAlign: 'center', letterSpacing: '2px', fontWeight: 700, fontSize: '13px' }}
-                      />
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        type="button"
-                        disabled={verifyBusy || directPhoneOtp.length !== 6}
-                        onClick={() => void handleConfirmPhoneOtp(directPhoneOtp)}
-                        style={{ fontSize: '11px' }}
-                      >
-                        ยืนยัน OTP
-                      </Button>
-                      {simulatedPhoneOtp && (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          type="button"
-                          disabled={verifyBusy}
-                          onClick={() => void handleAutoFillAndVerifyPhone()}
-                          style={{
-                            fontSize: '11px',
-                            background: 'linear-gradient(135deg, #10b981 0%, #a855f7 100%)',
-                            color: '#fff',
-                            border: 'none',
-                          }}
-                        >
-                          ⚡ กรอกรหัส OTP อัตโนมัติ & ยืนยันทันที
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                )}
+                <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--pkh-text-secondary)' }}>
+                  เบอร์โทรศัพท์ (ถ้ามี)
+                </label>
+                <input
+                  type="tel"
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                  value={profile.phone || ''}
+                  onChange={(event) => setProfile({ ...profile, phone: event.target.value })}
+                  placeholder="081-234-5678"
+                  maxLength={30}
+                />
               </div>
             </div>
 
@@ -1304,302 +888,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           </div>
         )}
 
-        {/* TAB: EMAIL & PHONE VERIFICATION */}
-        {activeTab === 'verify' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {simulatedOtpNotice && (
-              <div
-                style={{
-                  background: 'rgba(59, 130, 246, 0.1)',
-                  border: '1px solid rgba(59, 130, 246, 0.3)',
-                  color: '#2563eb',
-                  padding: '12px 14px',
-                  borderRadius: '10px',
-                  fontSize: '13px',
-                  lineHeight: 1.5,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '10px',
-                }}
-              >
-                <span>💡 <strong>{simulatedOtpNotice}</strong></span>
-                <button
-                  type="button"
-                  className="button button-quiet"
-                  style={{ fontSize: '11px', padding: '2px 8px' }}
-                  onClick={() => {
-                    const match = simulatedOtpNotice.match(/\d{6}/);
-                    if (match) {
-                      if (simulatedOtpNotice.includes('อีเมล')) setEmailOtpInput(match[0]);
-                      else setPhoneOtpInput(match[0]);
-                    }
-                  }}
-                >
-                  วางรหัสลงช่องทันที
-                </button>
-              </div>
-            )}
-
-            {/* Email Verification Box */}
-            <div
-              style={{
-                padding: '16px',
-                borderRadius: '12px',
-                border: '1px solid var(--pkh-border-subtle, #e2e8f0)',
-                backgroundColor: 'var(--pkh-bg-subtle, rgba(255,255,255,0.03))',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px',
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '20px' }}>📧</span>
-                  <div>
-                    <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: 'var(--pkh-text-primary)' }}>
-                      ยืนยันอีเมล (Email Verification)
-                    </h4>
-                    <span style={{ fontSize: '12px', color: 'var(--pkh-text-muted)' }}>
-                      {profile.email ? profile.email : 'ยังไม่ได้ระบุอีเมล'}
-                    </span>
-                  </div>
-                </div>
-                <div>
-                  {emailVerified ? (
-                    <span
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        padding: '4px 10px',
-                        borderRadius: '20px',
-                        backgroundColor: 'rgba(22, 163, 74, 0.1)',
-                        color: '#16a34a',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        border: '1px solid rgba(22, 163, 74, 0.3)',
-                      }}
-                    >
-                      ✅ ยืนยันแล้ว
-                    </span>
-                  ) : (
-                    <span
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        padding: '4px 10px',
-                        borderRadius: '20px',
-                        backgroundColor: 'rgba(217, 119, 6, 0.1)',
-                        color: '#d97706',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        border: '1px solid rgba(217, 119, 6, 0.3)',
-                      }}
-                    >
-                      ⚠️ ยังไม่ได้ยืนยัน
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {!emailVerified && (
-                <>
-                  {!profile.email ? (
-                    <p style={{ margin: 0, fontSize: '12px', color: 'var(--pkh-text-muted)' }}>
-                      กรุณาระบุและบันทึกอีเมลของคุณในแท็บ "👤 ข้อมูลส่วนตัว" ก่อนเพื่อขอรับรหัส OTP
-                    </p>
-                  ) : !emailOtpSent ? (
-                    <div>
-                      <Button
-                        type="button"
-                        variant="primary"
-                        size="sm"
-                        disabled={verifyBusy}
-                        onClick={handleRequestEmailOtp}
-                      >
-                        {verifyBusy ? 'กำลังส่งรหัส...' : 'ขอรหัส OTP ยืนยันอีเมล'}
-                      </Button>
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <p style={{ margin: 0, fontSize: '12px', color: 'var(--pkh-text-secondary)' }}>
-                        ระบบส่งรหัส OTP ไปที่ <strong>{profile.email}</strong> แล้ว (รหัสมีอายุ 5 นาที)
-                      </p>
-                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                        <input
-                          type="text"
-                          maxLength={6}
-                          placeholder="รหัส OTP 6 หลัก"
-                          value={emailOtpInput}
-                          onChange={(e) => setEmailOtpInput(e.target.value.replace(/\D/g, ''))}
-                          style={{
-                            width: '160px',
-                            textAlign: 'center',
-                            fontSize: '16px',
-                            fontWeight: 700,
-                            letterSpacing: '4px',
-                            padding: '6px 10px',
-                            borderRadius: '8px',
-                            border: '1px solid var(--pkh-border-default)',
-                          }}
-                        />
-                        <Button
-                          type="button"
-                          variant="primary"
-                          size="sm"
-                          disabled={verifyBusy || emailOtpInput.length !== 6}
-                          onClick={handleConfirmEmailOtp}
-                        >
-                          {verifyBusy ? 'กำลังยืนยัน...' : 'ยืนยันรหัส OTP'}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="quiet"
-                          size="sm"
-                          disabled={verifyBusy || emailOtpCountdown > 240}
-                          onClick={handleRequestEmailOtp}
-                        >
-                          {emailOtpCountdown > 0 ? `ขอรหัสใหม่ (${emailOtpCountdown}s)` : 'ขอรหัสใหม่'}
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-
-            {/* Phone Verification Box */}
-            <div
-              style={{
-                padding: '16px',
-                borderRadius: '12px',
-                border: '1px solid var(--pkh-border-subtle, #e2e8f0)',
-                backgroundColor: 'var(--pkh-bg-subtle, rgba(255,255,255,0.03))',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px',
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '20px' }}>📱</span>
-                  <div>
-                    <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: 'var(--pkh-text-primary)' }}>
-                      ยืนยันเบอร์โทรศัพท์ (Phone Verification)
-                    </h4>
-                    <span style={{ fontSize: '12px', color: 'var(--pkh-text-muted)' }}>
-                      {profile.phone ? profile.phone : 'ยังไม่ได้ระบุเบอร์โทรศัพท์'}
-                    </span>
-                  </div>
-                </div>
-                <div>
-                  {phoneVerified ? (
-                    <span
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        padding: '4px 10px',
-                        borderRadius: '20px',
-                        backgroundColor: 'rgba(22, 163, 74, 0.1)',
-                        color: '#16a34a',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        border: '1px solid rgba(22, 163, 74, 0.3)',
-                      }}
-                    >
-                      ✅ ยืนยันแล้ว
-                    </span>
-                  ) : (
-                    <span
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        padding: '4px 10px',
-                        borderRadius: '20px',
-                        backgroundColor: 'rgba(217, 119, 6, 0.1)',
-                        color: '#d97706',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        border: '1px solid rgba(217, 119, 6, 0.3)',
-                      }}
-                    >
-                      ⚠️ ยังไม่ได้ยืนยัน
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {!phoneVerified && (
-                <>
-                  {!profile.phone ? (
-                    <p style={{ margin: 0, fontSize: '12px', color: 'var(--pkh-text-muted)' }}>
-                      กรุณาระบุและบันทึกเบอร์โทรศัพท์ของคุณในแท็บ "👤 ข้อมูลส่วนตัว" ก่อนเพื่อขอรับรหัส OTP
-                    </p>
-                  ) : !phoneOtpSent ? (
-                    <div>
-                      <Button
-                        type="button"
-                        variant="primary"
-                        size="sm"
-                        disabled={verifyBusy}
-                        onClick={handleRequestPhoneOtp}
-                      >
-                        {verifyBusy ? 'กำลังส่งรหัส...' : 'ขอรหัส OTP ยืนยันเบอร์โทร'}
-                      </Button>
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <p style={{ margin: 0, fontSize: '12px', color: 'var(--pkh-text-secondary)' }}>
-                        ระบบส่งรหัส OTP ไปที่เบอร์ <strong>{profile.phone}</strong> แล้ว (รหัสมีอายุ 5 นาที)
-                      </p>
-                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                        <input
-                          type="text"
-                          maxLength={6}
-                          placeholder="รหัส OTP 6 หลัก"
-                          value={phoneOtpInput}
-                          onChange={(e) => setPhoneOtpInput(e.target.value.replace(/\D/g, ''))}
-                          style={{
-                            width: '160px',
-                            textAlign: 'center',
-                            fontSize: '16px',
-                            fontWeight: 700,
-                            letterSpacing: '4px',
-                            padding: '6px 10px',
-                            borderRadius: '8px',
-                            border: '1px solid var(--pkh-border-default)',
-                          }}
-                        />
-                        <Button
-                          type="button"
-                          variant="primary"
-                          size="sm"
-                          disabled={verifyBusy || phoneOtpInput.length !== 6}
-                          onClick={handleConfirmPhoneOtp}
-                        >
-                          {verifyBusy ? 'กำลังยืนยัน...' : 'ยืนยันรหัส OTP'}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="quiet"
-                          size="sm"
-                          disabled={verifyBusy || phoneOtpCountdown > 240}
-                          onClick={handleRequestPhoneOtp}
-                        >
-                          {phoneOtpCountdown > 0 ? `ขอรหัสใหม่ (${phoneOtpCountdown}s)` : 'ขอรหัสใหม่'}
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-        )}
 
         {/* TAB 2: CHANGE PASSWORD */}
         {activeTab === 'security' && (
@@ -1819,163 +1107,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           </div>
         )}
 
-        {/* TAB 3: 2FA (TWO-FACTOR AUTHENTICATION) */}
-        {activeTab === '2fa' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '12px',
-              borderRadius: '10px',
-              background: twoFactorActive ? '#f0fdf4' : 'var(--pkh-bg-subtle)',
-              border: twoFactorActive ? '1px solid #86efac' : '1px solid var(--pkh-border-subtle)',
-            }}>
-              <div>
-                <strong style={{ fontSize: '14px', color: twoFactorActive ? '#166534' : 'var(--pkh-text-primary)' }}>
-                  {twoFactorActive ? '🟢 2FA กำลังเปิดใช้งาน (Active)' : '⚪ ยังไม่ได้เปิดใช้งาน 2FA'}
-                </strong>
-                <div style={{ fontSize: '12px', color: 'var(--pkh-text-muted)', marginTop: '2px' }}>
-                  {twoFactorActive
-                    ? 'บัญชีของคุณได้รับการปกป้องด้วยรหัส 6 หลักจากแอป Authenticator'
-                    : 'เพิ่มความปลอดภัยอีกระดับด้วยรหัสยืนยันจาก Google Authenticator / Authy'}
-                </div>
-              </div>
-
-              {!twoFactorActive ? (
-                <Button variant="primary" size="sm" onClick={handleStart2FASetup} disabled={twoFactorBusy}>
-                  {twoFactorBusy ? 'กำลังสร้าง...' : '🔐 เริ่มตั้งค่า 2FA'}
-                </Button>
-              ) : (
-                <Button variant="danger-quiet" size="sm" onClick={() => setIsDisableOpen(true)}>
-                  🔴 ปิดใช้งาน 2FA
-                </Button>
-              )}
-            </div>
-
-            {/* Disable 2FA Prompt */}
-            {isDisableOpen && (
-              <form onSubmit={handleDisable2FA} style={{ padding: '12px', border: '1px solid #fecaca', borderRadius: '8px', background: '#fff5f5' }}>
-                <strong style={{ fontSize: '13px', color: '#991b1b', display: 'block', marginBottom: '6px' }}>
-                  ยืนยันการปิดใช้งาน 2FA
-                </strong>
-                <p style={{ fontSize: '12px', color: '#7f1d1d', margin: '0 0 8px' }}>
-                  กรุณากรอกรหัสผ่านปัจจุบันของคุณเพื่อยืนยันความปลอดภัย:
-                </p>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <input
-                    type="password"
-                    placeholder="รหัสผ่านปัจจุบัน..."
-                    value={disablePassword}
-                    onChange={(e) => setDisablePassword(e.target.value)}
-                    required
-                    style={{ flex: 1, fontSize: '13px' }}
-                  />
-                  <Button variant="danger" size="sm" type="submit" disabled={twoFactorBusy}>
-                    ยืนยันปิด
-                  </Button>
-                  <Button variant="quiet" size="sm" type="button" onClick={() => setIsDisableOpen(false)}>
-                    ยกเลิก
-                  </Button>
-                </div>
-              </form>
-            )}
-
-            {/* Setup 2FA Form */}
-            {setupSecret && !twoFactorActive && (
-              <div style={{ border: '1px solid #93c5fd', borderRadius: '10px', padding: '16px', background: '#eff6ff' }}>
-                <strong style={{ fontSize: '14px', color: '#1e40af' }}>
-                  ขั้นตอนที่ 1: สแกนหรือกรอกรหัสลับในแอป Authenticator
-                </strong>
-                <p style={{ fontSize: '12px', color: '#1e3a8a', margin: '6px 0 12px' }}>
-                  เปิดแอป Google Authenticator, Microsoft Authenticator หรือ 1Password แล้วเลือก "Enter a setup key":
-                </p>
-
-                <div style={{ background: '#fff', padding: '10px 14px', borderRadius: '8px', border: '1px solid #bfdbfe', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-                  <div>
-                    <span style={{ fontSize: '11px', color: '#64748b', display: 'block' }}>SECRET KEY (BASE32):</span>
-                    <strong style={{ fontFamily: 'monospace', fontSize: '16px', color: '#1e293b', letterSpacing: '1px' }}>
-                      {setupSecret}
-                    </strong>
-                  </div>
-                  <Button
-                    variant="quiet"
-                    size="sm"
-                    type="button"
-                    onClick={() => {
-                      void navigator.clipboard.writeText(setupSecret);
-                      showNotice('คัดลอก Secret Key แล้ว!');
-                    }}
-                  >
-                    📋 คัดลอก
-                  </Button>
-                </div>
-
-                <form onSubmit={handleEnable2FA} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 600, color: '#1e40af' }}>
-                    ขั้นตอนที่ 2: กรอกรหัส 6 หลักจากแอปเพื่อยืนยัน
-                  </label>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={6}
-                      placeholder="เช่น 123456"
-                      value={totpVerifyCode}
-                      onChange={(e) => setTotpVerifyCode(e.target.value.replace(/\D/g, ''))}
-                      required
-                      style={{ fontSize: '16px', letterSpacing: '2px', textAlign: 'center', width: '140px', fontWeight: 700 }}
-                    />
-                    <Button variant="primary" type="submit" disabled={twoFactorBusy || totpVerifyCode.length !== 6}>
-                      {twoFactorBusy ? 'กำลังตรวจสอบ...' : '✓ ยืนยันและเปิดใช้งาน'}
-                    </Button>
-                    <Button variant="quiet" type="button" onClick={() => setSetupSecret('')}>
-                      ยกเลิก
-                    </Button>
-                  </div>
-                </form>
-              </div>
-            )}
-
-            {/* Recovery Codes Display */}
-            {recoveryCodes.length > 0 && (
-              <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', padding: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                  <strong style={{ fontSize: '14px', color: '#92400e' }}>
-                    🛡️ รหัสกู้คืนฉุกเฉิน (Recovery Codes)
-                  </strong>
-                  <Button variant="quiet" size="sm" onClick={handleCopyRecoveryCodes}>
-                    📋 คัดลอกทั้งหมด
-                  </Button>
-                </div>
-                <p style={{ fontSize: '12px', color: '#b45309', margin: '0 0 10px' }}>
-                  โปรดบันทึกรหัสเหล่านี้ไว้ในที่ปลอดภัย แต่ละรหัสสามารถใช้แทนรหัส OTP ได้ 1 ครั้ง หากทำโทรศัพท์หาย
-                </p>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-                  {recoveryCodes.map((code) => (
-                    <div
-                      key={code}
-                      style={{
-                        background: '#ffffff',
-                        border: '1px solid #fcd34d',
-                        borderRadius: '6px',
-                        padding: '6px',
-                        fontFamily: 'monospace',
-                        fontWeight: 700,
-                        fontSize: '13px',
-                        textAlign: 'center',
-                        color: '#78350f',
-                      }}
-                    >
-                      {code}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
 
 
         {/* TAB 4: ACTIVE SESSIONS & LOGIN HISTORY */}
