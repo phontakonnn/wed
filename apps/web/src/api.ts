@@ -1650,8 +1650,6 @@ export async function createAdminUser(payload: {
   password: string;
   displayName?: string;
   role?: 'admin' | 'user' | 'member' | 'editor' | 'viewer';
-  email?: string;
-  phone?: string;
 }): Promise<{ user: AdminUser }> {
   const result = await request<{ user: AdminUser }>('/api/admin/users', {
     method: 'POST',

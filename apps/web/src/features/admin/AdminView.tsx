@@ -100,8 +100,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [addUsername, setAddUsername] = useState('');
   const [addUserPassword, setAddUserPassword] = useState('');
   const [addUserDisplayName, setAddUserDisplayName] = useState('');
-  const [addUserEmail, setAddUserEmail] = useState('');
-  const [addUserPhone, setAddUserPhone] = useState('');
   const [addUserRole, setAddUserRole] = useState<'admin' | 'member' | 'editor' | 'viewer' | 'user'>('member');
   const [isResetPassOpen, setIsResetPassOpen] = useState(false);
   const [resetTargetUser, setResetTargetUser] = useState<AdminUser | null>(null);
@@ -548,23 +546,25 @@ export const AdminView: React.FC<AdminViewProps> = ({
       showNotification('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน', 'error');
       return;
     }
+    // The label promises a 12-character minimum; enforce it here instead of
+    // letting the request fail later.
+    if (addUserPassword.length < 12) {
+      showNotification('รหัสผ่านต้องมีอย่างน้อย 12 ตัวอักษร', 'error');
+      return;
+    }
     try {
       await createAdminUser({
         username: addUsername.trim(),
         password: addUserPassword,
         displayName: addUserDisplayName.trim() || undefined,
         role: addUserRole,
-        email: addUserEmail.trim() || undefined,
-        phone: addUserPhone.trim() || undefined,
       });
       showNotification(`สร้างผู้ใช้ ${addUsername} สำเร็จแล้ว`);
       setIsAddUserOpen(false);
       setAddUsername('');
       setAddUserPassword('');
       setAddUserDisplayName('');
-      setAddUserEmail('');
-      setAddUserPhone('');
-      setAddUserRole('user');
+      setAddUserRole('member');
       void loadUsersAndSessions();
     } catch (err) {
       showNotification(errorMessage(err), 'error');
@@ -2359,26 +2359,6 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 value={addUserDisplayName}
                 onChange={(e) => setAddUserDisplayName(e.target.value)}
               />
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 600 }}>อีเมล (Email สำหรับกู้รหัส OTP)</label>
-                <Input
-                  type="email"
-                  placeholder="เช่น user@example.com"
-                  value={addUserEmail}
-                  onChange={(e) => setAddUserEmail(e.target.value)}
-                />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 600 }}>เบอร์โทรศัพท์ (Phone สำหรับ OTP)</label>
-                <Input
-                  type="tel"
-                  placeholder="เช่น 081-234-5678"
-                  value={addUserPhone}
-                  onChange={(e) => setAddUserPhone(e.target.value)}
-                />
-              </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <label style={{ fontSize: '12px', fontWeight: 600 }}>รหัสผ่าน (ขั้นต่ำ 12 ตัวอักษร) *</label>
