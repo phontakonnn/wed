@@ -136,6 +136,7 @@ import {
 } from './sidebarNav';
 import { logger } from './lib/logger';
 import { emitDataRefresh, subscribeDataRefresh } from './lib/dataRefresh';
+import { registerDraftFlush, setDraftPending } from './lib/updateGuard';
 import './App.css';
 
 import type {
@@ -341,6 +342,8 @@ function App() {
   const autosaveRef = useRef<{ noteId: string; title: string; content: string } | null>(null);
   const autosaveInFlightRef = useRef(false);
   const autosaveQueuedRef = useRef(false);
+  /** Latest `flushAutosave` closure, so the update prompt can always save the current draft. */
+  const flushDraftImpl = useRef<() => Promise<void>>(async () => {});
   const [inboxItems, setInboxItems] = useState<InboxItem[]>([]);
   const [inboxNewCount, setInboxNewCount] = useState(0);
   const [inboxDraft, setInboxDraft] = useState('');
@@ -1232,20 +1235,33 @@ function App() {
 
   // Autosave only applies to notes that already exist on the server: a brand-new note is still
   // created by the explicit save button, so autosave can never spawn empty notes.
+  const noteDirty = Boolean(activeNote && (title !== activeNote.title || content !== activeNote.content));
+
   useEffect(() => {
     if (authState !== 'signed-in' || !activeNote) return;
-    if (title === activeNote.title && content === activeNote.content) {
+    if (!noteDirty) {
       autosaveRef.current = null;
       return;
     }
     autosaveRef.current = { noteId: activeNote.id, title, content };
     const timer = window.setTimeout(() => {
-      void flushAutosave();
+      void flushDraftImpl.current();
     }, 1200);
     return () => window.clearTimeout(timer);
-    // flushAutosave is intentionally excluded: including it would re-arm the timer on every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authState, activeNote, title, content]);
+  }, [authState, activeNote, noteDirty, title, content]);
+
+  // Keep the "save now" hook pointing at the newest closure without re-registering.
+  useEffect(() => {
+    flushDraftImpl.current = flushAutosave;
+  });
+
+  // The update prompt asks before reloading and writes any pending draft first.
+  useEffect(() => {
+    setDraftPending(noteDirty);
+    return () => setDraftPending(false);
+  }, [noteDirty]);
+
+  useEffect(() => registerDraftFlush(() => flushDraftImpl.current()), []);
 
   useEffect(() => {
     if (authState !== 'signed-in') return;

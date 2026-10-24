@@ -1,12 +1,26 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Button } from './ui/Button';
+import { buildLabel, checkForUpdate, type UpdateCheckResult } from '../lib/pwaUpdate';
 
 interface AboutModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
+type CheckState = 'idle' | 'checking' | UpdateCheckResult;
+
+const CHECK_MESSAGE: Record<CheckState, string> = {
+  idle: '',
+  checking: 'กำลังตรวจสอบ…',
+  current: 'เป็นเวอร์ชันล่าสุดแล้ว',
+  updated: 'พบเวอร์ชันใหม่ กำลังดาวน์โหลด — จะแจ้งให้อัปเดต',
+  unsupported: 'เบราว์เซอร์นี้ไม่รองรับการอัปเดตอัตโนมัติ',
+  failed: 'ตรวจสอบไม่สำเร็จ ลองอีกครั้งเมื่อออนไลน์',
+};
+
 export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
+  const [checkState, setCheckState] = useState<CheckState>('idle');
+
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -15,6 +29,12 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
+
+  const handleCheck = useCallback(async () => {
+    setCheckState('checking');
+    const result = await checkForUpdate();
+    setCheckState(result);
+  }, []);
 
   if (!isOpen) return null;
 
@@ -68,7 +88,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
             <div>
               <div style={{ fontSize: '12px', color: 'var(--pkh-text-muted)' }}>เวอร์ชันระบบ (Version)</div>
               <strong style={{ fontSize: '15px', color: 'var(--pkh-primary, #3b82f6)' }}>
-                v3.0.0 (Production Release)
+                {buildLabel()}
               </strong>
             </div>
             <div>
@@ -77,6 +97,20 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
                 _phontakonnn
               </strong>
             </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <Button
+              variant="secondary"
+              type="button"
+              onClick={() => void handleCheck()}
+              disabled={checkState === 'checking'}
+            >
+              {checkState === 'checking' ? 'กำลังตรวจสอบ…' : 'ตรวจสอบอัปเดต'}
+            </Button>
+            <span role="status" aria-live="polite" style={{ fontSize: '12px', color: 'var(--pkh-text-muted)' }}>
+              {checkState === 'idle' ? '' : CHECK_MESSAGE[checkState]}
+            </span>
           </div>
 
           {/* System Purpose */}

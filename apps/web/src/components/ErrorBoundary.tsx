@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { Button } from './ui/Button';
 import { logger } from '../lib/logger';
+import { isChunkLoadError, recoverFromChunkError } from '../lib/chunkRecovery';
 
 interface Props {
   children: ReactNode;
@@ -31,6 +32,9 @@ export class ErrorBoundary extends Component<Props, State> {
     logger.error('React render failed', error, this.props.scope ?? 'route', {
       componentStack: errorInfo.componentStack ?? undefined,
     });
+    // A missing lazy chunk means the tab runs an older build: reload once to
+    // pick up the current one. Guarded against reload loops.
+    if (isChunkLoadError(error)) recoverFromChunkError(error);
   }
 
   private handleReset = (): void => {
@@ -45,14 +49,21 @@ export class ErrorBoundary extends Component<Props, State> {
   public override render(): ReactNode {
     if (!this.state.hasError) return this.props.children;
 
+    const staleBuild = isChunkLoadError(this.state.error);
+
     return (
       <div className="error-boundary" role="alert" aria-live="assertive">
         <div className="life-card error-boundary-card">
           <div className="error-boundary-icon" aria-hidden="true">🛡️</div>
-          <h2>{this.props.title ?? 'เกิดข้อผิดพลาดในการแสดงผล'}</h2>
+          <h2>
+            {staleBuild
+              ? 'มีเวอร์ชันใหม่ของแอป'
+              : (this.props.title ?? 'เกิดข้อผิดพลาดในการแสดงผล')}
+          </h2>
           <p>
-            ระบบดักจับข้อผิดพลาดไว้แล้วเพื่อไม่ให้หน้าจอค้าง ข้อมูลของคุณยังปลอดภัยดี
-            ลองโหลดส่วนนี้อีกครั้งหรือกลับสู่หน้าหลัก
+            {staleBuild
+              ? 'หน้านี้โหลดโค้ดชุดเก่าที่ไม่มีอยู่แล้ว กดปุ่มด้านล่างเพื่อโหลดเวอร์ชันล่าสุด ข้อมูลที่บันทึกไว้ยังอยู่ครบ'
+              : 'ระบบดักจับข้อผิดพลาดไว้แล้วเพื่อไม่ให้หน้าจอค้าง ข้อมูลของคุณยังปลอดภัยดี ลองโหลดส่วนนี้อีกครั้งหรือกลับสู่หน้าหลัก'}
           </p>
 
           {this.state.error && (
