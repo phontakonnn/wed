@@ -5077,3 +5077,28 @@ textarea:focus-visible {
     flex-wrap: wrap;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Mobile modals
+   The dialog family caps at 680px and subtracts 48px of vertical chrome. On a
+   phone that leaves a form narrower than the screen and, with a long form, an
+   action row the user cannot reach. Use the viewport width and only reserve
+   32px so the footer buttons stay visible above the browser bar.
+   --------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+  /* 95vw only fits if the backdrop stops spending 20px of padding per side. */
+  .dialog-backdrop {
+    padding: 8px;
+    padding-top: max(8px, env(safe-area-inset-top, 0px));
+    padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
+  }
+
+  .dialog,
+  .studio-dialog,
+  .command-dialog {
+    width: 95vw;
+    max-width: 95vw;
+    max-height: calc(100dvh - 32px);
+    border-radius: 16px;
+  }
+}

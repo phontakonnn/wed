@@ -26,9 +26,18 @@
   box-sizing: border-box;
 }
 
+html {
+  min-height: 100vh;
+  min-height: 100dvh;
+  /* Stops iOS from inflating text when the phone is rotated to landscape. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   min-width: 320px;
   min-height: 100vh;
+  min-height: 100dvh;
   margin: 0;
   font-family: var(--pkh-font-sans);
   color: var(--pkh-text-primary);
@@ -77,4 +86,20 @@ a:focus-visible,
 ::selection {
   color: var(--pkh-primary-text, #ffffff);
   background: var(--pkh-primary, #0f9f6e);
+}
+
+/* ---------------------------------------------------------------------------
+   iOS Safari auto-zoom
+   Focusing a field whose computed font-size is below 16px makes Safari zoom the
+   whole page, and it never zooms back out. The only reliable fix is a 16px
+   floor on small screens, which has to win over component styles
+   (`.pkh-input`, `.dialog input`, ...) — hence `!important` here and nowhere
+   else in the sheet.
+   --------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
 }

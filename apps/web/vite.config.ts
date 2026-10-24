@@ -108,7 +108,11 @@ export default defineConfig(({ mode }) => ({
     // Modern baseline: the app targets evergreen browsers and Firebase Auth
     // already requires them. No legacy polyfills are shipped.
     target: 'es2022',
-    cssTarget: 'chrome100',
+    // Safari must be listed explicitly. With only `chrome100` the CSS pipeline
+    // treats every `-webkit-` prefix as dead weight and strips it, which broke
+    // `-webkit-backdrop-filter`, `-webkit-line-clamp` and
+    // `-webkit-text-size-adjust` on iOS — the primary target platform.
+    cssTarget: ['chrome100', 'safari16'],
     // Strip debug output from production bundles (the logger is DEV-gated and
     // routes through a sink in production).
     esbuild: {
