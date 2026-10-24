@@ -2,9 +2,15 @@
 /// <reference types="vite-plugin-pwa/client" />
 
 /**
- * Build identity, injected by `define` in vite.config.ts at build time.
- * Declared here so `lib/pwaUpdate.ts` can read them with a real type.
+ * Build identity, injected by `define` in vite.config.ts.
+ * Declared here so `lib/pwaUpdate.ts` reads them with a real type.
  */
-declare const __APP_VERSION__: string;
-declare const __BUILD_TIME__: string;
-declare const __GIT_SHA__: string;
+interface ImportMetaEnv {
+  readonly VITE_APP_VERSION?: string;
+  readonly VITE_BUILD_TIME?: string;
+  readonly VITE_GIT_SHA?: string;
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
+}

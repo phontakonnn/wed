@@ -19,10 +19,13 @@ const gitSha = (() => {
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
+  // Build identity is injected through `import.meta.env` rather than bare
+  // globals: Vite replaces env keys in dev *and* build, while a bare global is
+  // only substituted at build time (dev would throw ReferenceError on boot).
   define: {
-    __APP_VERSION__: JSON.stringify(pkg.version),
-    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
-    __GIT_SHA__: JSON.stringify(gitSha),
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(pkg.version),
+    'import.meta.env.VITE_BUILD_TIME': JSON.stringify(new Date().toISOString()),
+    'import.meta.env.VITE_GIT_SHA': JSON.stringify(gitSha),
   },
   // Load VITE_* values from the repository root instead of only apps/web.
   envDir: '../../',

@@ -3,9 +3,9 @@
  * worker bridge used by the "check for updates" button and the idle auto-update.
  */
 
-export const APP_VERSION: string = __APP_VERSION__;
-export const BUILD_TIME: string = __BUILD_TIME__;
-export const GIT_SHA: string = __GIT_SHA__;
+export const APP_VERSION: string = import.meta.env.VITE_APP_VERSION ?? '0.0.0';
+export const BUILD_TIME: string = import.meta.env.VITE_BUILD_TIME ?? '';
+export const GIT_SHA: string = import.meta.env.VITE_GIT_SHA ?? 'unknown';
 
 let registration: ServiceWorkerRegistration | null = null;
 
