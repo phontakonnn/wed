@@ -6,8 +6,6 @@ import type {
   Person,
   Timeblock,
   LifeArea,
-  Habit,
-  HabitsHistory,
 } from '../../api';
 import type { NotesView } from '../../types';
 import { reminderCategoryLabel, lifeAreaLabel } from '../../lib/formatters';
@@ -27,12 +25,6 @@ interface TimeblockDraft {
   timeRange: string;
   title: string;
   lifeArea: LifeArea;
-}
-
-interface HabitDraft {
-  title: string;
-  dailyTarget: string;
-  unit: string;
 }
 
 interface HabitsViewProps {
@@ -55,21 +47,35 @@ interface HabitsViewProps {
   onAddTimeblock: (e: FormEvent) => void;
   onToggleTimeblock: (block: Timeblock) => Promise<void>;
   onRemoveTimeblock: (block: Timeblock) => Promise<void>;
-  habits: Habit[];
-  habitWeek: HabitsHistory | null;
-  habitDraft: HabitDraft;
-  setHabitDraft: React.Dispatch<React.SetStateAction<HabitDraft>>;
-  onAddHabit: (e: FormEvent) => void;
-  onCheckHabitToday: (habit: Habit) => Promise<void>;
-  onCorrectHabitDay: (habit: Habit, date: string, currentCount: number | null) => Promise<void>;
-  onRemoveHabit: (habit: Habit) => Promise<void>;
   onSwitchView: (view: NotesView) => void;
 }
+
+/** Top-level split of this screen: the calendar+reminders workspace, or the daily timeline. */
+type MainTab = 'calendar' | 'timeblocks';
+/** How the important-dates column is narrowed down. */
+type ReminderTier = 'upcoming' | 'month' | 'all';
+type CountdownTone = 'overdue' | 'today' | 'soon' | 'later' | 'done';
 
 const THAI_MONTHS = [
   'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
   'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม',
 ];
+
+const REMINDER_TIERS: Array<{ key: ReminderTier; label: string; emptyTitle: string }> = [
+  { key: 'upcoming', label: 'ใกล้ถึง', emptyTitle: 'ยังไม่มีวันสำคัญที่กำลังจะถึง' },
+  { key: 'month', label: 'เดือนนี้', emptyTitle: 'ไม่มีวันสำคัญในเดือนนี้' },
+  { key: 'all', label: 'ทั้งหมด', emptyTitle: 'ยังไม่มีการแจ้งเตือน' },
+];
+
+/**
+ * Format a Date as YYYY-MM-DD using **local** calendar fields.
+ * `toISOString()` must not be used here: it converts to UTC first, so a local
+ * midnight in UTC+7 becomes 17:00 of the previous day and every date shifts
+ * back by one.
+ */
+function toLocalISO(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
 
 function parseTimeMinutes(timeStr: string): number | null {
   const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})$/);
@@ -96,6 +102,77 @@ function checkTimeRangeStatus(timeRange: string, currentMinutes: number): 'curre
   return 'upcoming';
 }
 
+/** Whole days from `fromDate` to `targetDate` (both YYYY-MM-DD, local midnights). */
+function daysBetween(targetDate: string, fromDate: string): number {
+  const target = new Date(targetDate + 'T00:00:00').getTime();
+  const from = new Date(fromDate + 'T00:00:00').getTime();
+  if (Number.isNaN(target) || Number.isNaN(from)) return 0;
+  return Math.round((target - from) / 86_400_000);
+}
+
+function countdownLabel(days: number, done: boolean): string {
+  if (done) return '✓ เสร็จแล้ว';
+  if (days === 0) return 'วันนี้!';
+  if (days === 1) return 'พรุ่งนี้';
+  if (days > 1) return `อีก ${days} วัน`;
+  if (days === -1) return 'เลยมา 1 วัน';
+  return `เลยมา ${Math.abs(days)} วัน`;
+}
+
+function countdownTone(days: number, done: boolean): CountdownTone {
+  if (done) return 'done';
+  if (days < 0) return 'overdue';
+  if (days === 0) return 'today';
+  if (days <= 7) return 'soon';
+  return 'later';
+}
+
+/**
+ * Resolve the date a reminder should be counted down to.
+ * Recurring reminders roll forward, otherwise a yearly birthday would read
+ * "เลยมา 300 วัน" instead of "อีก 65 วัน".
+ */
+function resolveReminderDate(reminder: Reminder, today: string): string {
+  const base = reminder.snoozedUntil || reminder.targetDate;
+  const recurrence = reminder.recurrence ?? 'none';
+  if (recurrence === 'none' || !base) return base;
+  if (base >= today) return base;
+
+  if (recurrence === 'daily') return today;
+
+  if (recurrence === 'weekly') {
+    const baseDow = new Date(base + 'T00:00:00').getDay();
+    const cursor = new Date(today + 'T00:00:00');
+    const delta = (baseDow - cursor.getDay() + 7) % 7;
+    cursor.setDate(cursor.getDate() + delta);
+    return toLocalISO(cursor);
+  }
+
+  if (recurrence === 'monthly') {
+    const dayOfMonth = Number(base.slice(8, 10));
+    const cursor = new Date(today + 'T00:00:00');
+    for (let i = 0; i < 14; i += 1) {
+      const candidate = new Date(cursor.getFullYear(), cursor.getMonth() + i, dayOfMonth);
+      // Skip months where that day number does not exist (e.g. 31st in February).
+      if (candidate.getDate() !== dayOfMonth) continue;
+      const iso = toLocalISO(candidate);
+      if (iso >= today) return iso;
+    }
+    return base;
+  }
+
+  // yearly
+  const month = Number(base.slice(5, 7)) - 1;
+  const dayOfMonth = Number(base.slice(8, 10));
+  const cursor = new Date(today + 'T00:00:00');
+  for (let i = 0; i < 2; i += 1) {
+    const candidate = new Date(cursor.getFullYear() + i, month, dayOfMonth);
+    if (candidate.getDate() !== dayOfMonth) continue;
+    const iso = toLocalISO(candidate);
+    if (iso >= today) return iso;
+  }
+  return base;
+}
 
 interface CalendarEventItem {
   id: string;
@@ -129,13 +206,6 @@ export const HabitsView: React.FC<HabitsViewProps> = ({
   onAddTimeblock,
   onToggleTimeblock,
   onRemoveTimeblock,
-  habits,
-  habitWeek,
-  habitDraft,
-  setHabitDraft,
-  onAddHabit,
-  onCheckHabitToday,
-  onRemoveHabit,
   onSwitchView,
 }) => {
   // Real-time Bangkok Clock
@@ -181,6 +251,9 @@ export const HabitsView: React.FC<HabitsViewProps> = ({
     };
   }, [bangkokTime]);
 
+  // Top-level tab: calendar workspace vs daily timeline
+  const [mainTab, setMainTab] = useState<MainTab>('calendar');
+
   // Calendar State (Month & Year navigation)
   const [calendarMonth, setCalendarMonth] = useState<number>(() => new Date().getMonth());
   const [calendarYear, setCalendarYear] = useState<number>(() => new Date().getFullYear());
@@ -196,6 +269,13 @@ export const HabitsView: React.FC<HabitsViewProps> = ({
   const [quickEventRecurrence, setQuickEventRecurrence] = useState<NonNullable<Reminder['recurrence']>>('none');
   const [quickEventPersonId, setQuickEventPersonId] = useState('');
   const [quickEventDaysBefore, setQuickEventDaysBefore] = useState('0');
+
+  // The inline "add important date" form stays collapsed so the countdown
+  // list keeps the panel's attention; the modal covers the same ground.
+  const [reminderFormOpen, setReminderFormOpen] = useState(false);
+
+  // Which slice of the important-dates column is showing.
+  const [reminderTier, setReminderTier] = useState<ReminderTier>('upcoming');
 
   // Multi-Source Events Engine with Dynamic Recurrence Calculation
   const getEventsForDate = useCallback((dateStr: string): CalendarEventItem[] => {
@@ -306,27 +386,35 @@ export const HabitsView: React.FC<HabitsViewProps> = ({
     return items;
   }, [reminders, people, tasks]);
 
-  // 3-tier Reminders navigation: 'today' | 'month' | 'yearly'
-  const [reminderTier, setReminderTier] = useState<'today' | 'month' | 'yearly'>('today');
+  // Reminder rows with countdown metadata, filtered by tier and sorted by proximity.
+  const reminderRows = useMemo(() => {
+    const today = scheduleDate;
+    const rows = reminders.map((reminder) => {
+      const dateStr = resolveReminderDate(reminder, today);
+      const done = reminder.isCompleted === 1;
+      const days = daysBetween(dateStr, today);
+      return {
+        reminder,
+        dateStr,
+        days,
+        done,
+        tone: countdownTone(days, done),
+        label: countdownLabel(days, done),
+      };
+    });
 
-  // Filter reminders based on selected tier
-  const filteredReminders = useMemo(() => {
-    const todayStr = scheduleDate;
-    const currentMonthPrefix = todayStr.slice(0, 7);
+    const filtered = rows.filter(({ dateStr, done }) => {
+      if (reminderTier === 'upcoming') return !done || dateStr === today;
+      if (reminderTier === 'month') {
+        return dateStr.slice(0, 7) === today.slice(0, 7) || (dateStr < today && !done);
+      }
+      return true;
+    });
 
-    if (reminderTier === 'today') {
-      return reminders.filter((r) => {
-        const effective = r.snoozedUntil || r.targetDate;
-        return effective === todayStr || effective <= todayStr;
-      });
-    }
-    if (reminderTier === 'month') {
-      return reminders.filter((r) => {
-        const effective = r.snoozedUntil || r.targetDate;
-        return effective.startsWith(currentMonthPrefix) || (effective < todayStr && r.isCompleted === 0);
-      });
-    }
-    return reminders;
+    return filtered.sort((a, b) => {
+      if (a.done !== b.done) return a.done ? 1 : -1;
+      return a.dateStr.localeCompare(b.dateStr);
+    });
   }, [reminders, reminderTier, scheduleDate]);
 
   // Calendar dates matrix for Month View
@@ -388,7 +476,7 @@ export const HabitsView: React.FC<HabitsViewProps> = ({
     for (let i = 0; i < 7; i++) {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
-      const dateStr = d.toISOString().slice(0, 10);
+      const dateStr = toLocalISO(d);
       days.push({
         dateStr,
         dayNum: d.getDate(),
@@ -445,6 +533,11 @@ export const HabitsView: React.FC<HabitsViewProps> = ({
     return years;
   }, []);
 
+  const doneBlocks = timeblocks.filter((b) => b.isDone === 1).length;
+  const activeBlock = timeblocks.find((b) => checkTimeRangeStatus(b.timeRange, currentMinutes) === 'current');
+  const openReminderCount = reminders.filter((r) => r.isCompleted === 0).length;
+  const nextReminder = reminderRows.find((row) => !row.done);
+
   return (
     <section className="life-view-container" aria-label="ปฏิทินและตารางชีวิต">
       {/* Header Banner */}
@@ -454,31 +547,18 @@ export const HabitsView: React.FC<HabitsViewProps> = ({
           <span className="eyebrow">Smart Calendar &amp; Live Time Engine</span>
           <h2 className="banner-title">ปฏิทินอัจฉริยะและตารางชีวิต</h2>
           <p className="banner-subtitle">
-            ติดตามกิจกรรม วันสำคัญ นัดหมาย วงจรการทำซ้ำ และกิจวัตรประจำวัน
+            ติดตามกิจกรรม วันสำคัญ นัดหมาย และวงจรการทำซ้ำในที่เดียว
           </p>
         </div>
 
         {/* Real-time Bangkok Clock Widget */}
-        <div style={{
-          background: 'var(--pkh-bg-surface, #ffffff)',
-          border: '1px solid var(--pkh-border-default, #e2e8f0)',
-          borderRadius: '12px',
-          padding: '10px 16px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-          textAlign: 'right',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
-            <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', animation: 'pulse 2s infinite' }} />
-            <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--pkh-text-muted)' }}>
-              🇹🇭 BANGKOK TIME (UTC+7)
-            </span>
+        <div className="life-clock-widget">
+          <div className="life-clock-label">
+            <span className="life-clock-dot" aria-hidden="true" />
+            🇹🇭 BANGKOK TIME (UTC+7)
           </div>
-          <div style={{ fontSize: '20px', fontWeight: 700, fontFamily: 'monospace', color: 'var(--pkh-primary, #2563eb)', letterSpacing: '0.5px' }}>
-            {bangkokTimeString}
-          </div>
-          <div style={{ fontSize: '11px', color: 'var(--pkh-text-secondary)', marginTop: '2px' }}>
-            {bangkokDateString}
-          </div>
+          <div className="life-clock-time">{bangkokTimeString}</div>
+          <div className="life-clock-date">{bangkokDateString}</div>
         </div>
 
         <div className="banner-actions">
@@ -491,23 +571,53 @@ export const HabitsView: React.FC<HabitsViewProps> = ({
       {scheduleError && <p className="form-error editor-error" role="alert">{scheduleError}</p>}
       {scheduleNotice && <p className="form-notice" role="status">{scheduleNotice}</p>}
 
-      {/* Main Grid: Calendar & Habits (Top) + Timeblocks & Reminders (Bottom) */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        
-        {/* Top Section: Smart Interactive Calendar & Habit Matrix */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '20px' }}>
-          
+      {/* Primary tabs: the two pages this screen is made of */}
+      <div className="life-main-tabs" role="tablist" aria-label="มุมมองหลัก">
+        <button
+          type="button"
+          role="tab"
+          id="life-tab-calendar"
+          aria-selected={mainTab === 'calendar'}
+          aria-controls="life-panel-calendar"
+          className={`life-main-tab ${mainTab === 'calendar' ? 'is-active' : ''}`}
+          onClick={() => setMainTab('calendar')}
+        >
+          <span className="life-main-tab-icon" aria-hidden="true">📅</span>
+          ปฏิทินอัจฉริยะ &amp; วันสำคัญ
+        </button>
+        <button
+          type="button"
+          role="tab"
+          id="life-tab-timeblocks"
+          aria-selected={mainTab === 'timeblocks'}
+          aria-controls="life-panel-timeblocks"
+          className={`life-main-tab ${mainTab === 'timeblocks' ? 'is-active' : ''}`}
+          onClick={() => setMainTab('timeblocks')}
+        >
+          <span className="life-main-tab-icon" aria-hidden="true">⏱️</span>
+          ตารางชีวิต (Timeblocks)
+        </button>
+      </div>
+
+      {/* ── TAB 1: Calendar + important dates ─────────────────────── */}
+      {mainTab === 'calendar' && (
+        <div
+          className="life-calendar-layout"
+          role="tabpanel"
+          id="life-panel-calendar"
+          aria-labelledby="life-tab-calendar"
+        >
           {/* Smart Calendar Card */}
           <div className="life-quick-card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            
+
             {/* Calendar Controls Bar */}
             <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-              
+
               {/* Direct Month & Year Dropdowns */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '18px' }}>📆</span>
                 <strong style={{ fontSize: '14px', color: 'var(--pkh-text-primary)' }}>{monthLabel}</strong>
-                
+
                 {/* Month Dropdown */}
                 <select
                   value={calendarMonth}
@@ -612,36 +722,40 @@ export const HabitsView: React.FC<HabitsViewProps> = ({
               </div>
             </div>
 
-            {/* View Modes Tabs Bar */}
-            <div style={{ display: 'flex', gap: '6px', borderBottom: '1px solid var(--pkh-border-subtle)', paddingBottom: '8px' }}>
-              <button
-                type="button"
-                className={`button ${calendarView === 'month' ? 'button-primary' : 'button-quiet'}`}
-                style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '6px' }}
-                onClick={() => setCalendarView('month')}
-              >
-                📅 รายเดือน
-              </button>
-              <button
-                type="button"
-                className={`button ${calendarView === 'week' ? 'button-primary' : 'button-quiet'}`}
-                style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '6px' }}
-                onClick={() => setCalendarView('week')}
-              >
-                📆 รายสัปดาห์
-              </button>
+            {/* View Mode Tabs: day -> week -> month -> year */}
+            <div className="life-cal-view-tabs">
               <button
                 type="button"
                 className={`button ${calendarView === 'day' ? 'button-primary' : 'button-quiet'}`}
                 style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '6px' }}
+                aria-pressed={calendarView === 'day'}
                 onClick={() => setCalendarView('day')}
               >
                 🕒 รายวัน
               </button>
               <button
                 type="button"
+                className={`button ${calendarView === 'week' ? 'button-primary' : 'button-quiet'}`}
+                style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '6px' }}
+                aria-pressed={calendarView === 'week'}
+                onClick={() => setCalendarView('week')}
+              >
+                📆 รายสัปดาห์
+              </button>
+              <button
+                type="button"
+                className={`button ${calendarView === 'month' ? 'button-primary' : 'button-quiet'}`}
+                style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '6px' }}
+                aria-pressed={calendarView === 'month'}
+                onClick={() => setCalendarView('month')}
+              >
+                📅 รายเดือน
+              </button>
+              <button
+                type="button"
                 className={`button ${calendarView === 'year' ? 'button-primary' : 'button-quiet'}`}
                 style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '6px' }}
+                aria-pressed={calendarView === 'year'}
                 onClick={() => setCalendarView('year')}
               >
                 🗓️ รายปี
@@ -681,6 +795,8 @@ export const HabitsView: React.FC<HabitsViewProps> = ({
                         key={cell.dateStr}
                         type="button"
                         onClick={() => setSelectedCalendarDate(cell.dateStr)}
+                        aria-label={`เลือกวันที่ ${cell.dateStr}`}
+                        aria-pressed={isSelected}
                         style={{
                           minHeight: '48px',
                           padding: '4px 2px',
@@ -755,9 +871,12 @@ export const HabitsView: React.FC<HabitsViewProps> = ({
                 {weekDays.map((wd) => {
                   const isSelected = selectedCalendarDate === wd.dateStr;
                   return (
-                    <div
+                    <button
                       key={wd.dateStr}
+                      type="button"
                       onClick={() => setSelectedCalendarDate(wd.dateStr)}
+                      aria-label={`เลือกวันที่ ${wd.dateStr}`}
+                      aria-pressed={isSelected}
                       style={{
                         padding: '8px 6px',
                         borderRadius: '8px',
@@ -768,15 +887,18 @@ export const HabitsView: React.FC<HabitsViewProps> = ({
                         flexDirection: 'column',
                         gap: '6px',
                         minHeight: '140px',
+                        textAlign: 'left',
+                        font: 'inherit',
+                        color: 'inherit',
                       }}
                     >
-                      <div style={{ textAlign: 'center', borderBottom: '1px solid var(--pkh-border-subtle)', paddingBottom: '4px' }}>
+                      <div style={{ textAlign: 'center', borderBottom: '1px solid var(--pkh-border-subtle)', paddingBottom: '4px', width: '100%' }}>
                         <div style={{ fontSize: '11px', color: 'var(--pkh-text-muted)' }}>{wd.dayLabel}</div>
                         <strong style={{ fontSize: '14px', color: wd.isToday ? 'var(--pkh-primary)' : 'var(--pkh-text-primary)' }}>
                           {wd.dayNum}
                         </strong>
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1, width: '100%' }}>
                         {wd.events.length === 0 ? (
                           <span style={{ fontSize: '10px', color: 'var(--pkh-text-muted)', textAlign: 'center', marginTop: '8px' }}>-</span>
                         ) : (
@@ -801,7 +923,7 @@ export const HabitsView: React.FC<HabitsViewProps> = ({
                           ))
                         )}
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -860,6 +982,7 @@ export const HabitsView: React.FC<HabitsViewProps> = ({
                         setCalendarMonth(mIdx);
                         setCalendarView('month');
                       }}
+                      aria-label={`ไปที่เดือน${mName}`}
                       style={{
                         padding: '12px 6px',
                         borderRadius: '8px',
@@ -867,6 +990,7 @@ export const HabitsView: React.FC<HabitsViewProps> = ({
                         background: isCurrent ? 'rgba(37, 99, 235, 0.08)' : 'var(--pkh-bg-surface)',
                         cursor: 'pointer',
                         textAlign: 'center',
+                        font: 'inherit',
                       }}
                     >
                       <strong style={{ fontSize: '13px', color: isCurrent ? 'var(--pkh-primary)' : 'var(--pkh-text-primary)' }}>
@@ -908,362 +1032,50 @@ export const HabitsView: React.FC<HabitsViewProps> = ({
             </div>
           </div>
 
-          {/* Section 1: Habits & Daily Routines */}
-          <div className="life-quick-card" style={{ padding: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '16px', color: 'var(--pkh-text-primary)' }}>
-                  🎯 กิจวัตรประจำวัน (Habits)
+          {/* ── Right column: important dates with countdowns ──────── */}
+          <aside className="life-quick-card life-reminders-panel" aria-label="แจ้งเตือนวันสำคัญ">
+            <div className="life-reminders-head">
+              <div style={{ minWidth: 0 }}>
+                <h3 className="life-reminders-title">
+                  <span aria-hidden="true">🔔</span> แจ้งเตือนวันสำคัญ
                 </h3>
-                <span style={{ fontSize: '12px', color: 'var(--pkh-text-muted)' }}>
-                  บันทึกกิจวัตรต่อเนื่อง เพื่อสร้างวินัยและนิสัยที่ดี
+                <span className="life-reminders-sub">
+                  {openReminderCount} รายการที่กำลังติดตาม
+                  {nextReminder && !nextReminder.done && (
+                    <> · ใกล้สุด {nextReminder.label}</>
+                  )}
                 </span>
               </div>
+              <button
+                type="button"
+                className={`button ${reminderFormOpen ? 'button-quiet' : 'button-primary'}`}
+                style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '6px', flexShrink: 0 }}
+                aria-expanded={reminderFormOpen}
+                onClick={() => setReminderFormOpen((open) => !open)}
+              >
+                {reminderFormOpen ? '✕ ปิดฟอร์ม' : '＋ เพิ่มวันสำคัญ'}
+              </button>
             </div>
 
-            {/* Quick Add Habit Form */}
-            <form onSubmit={onAddHabit} style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-              <input
-                required
-                placeholder="ชื่อกิจวัตรใหม่ เช่น ดื่มน้ำ 2 ลิตร..."
-                value={habitDraft.title}
-                onChange={(e) => setHabitDraft({ ...habitDraft, title: e.target.value })}
-                maxLength={120}
-                style={{
-                  flex: 1,
-                  padding: '6px 10px',
-                  borderRadius: 'var(--pkh-radius-md)',
-                  border: '1px solid var(--pkh-border-default)',
-                  background: 'var(--pkh-bg-surface)',
-                  fontSize: '12px',
-                }}
-              />
-              <input
-                type="number"
-                min="1"
-                max="999"
-                placeholder="เป้าหมาย"
-                value={habitDraft.dailyTarget}
-                onChange={(e) => setHabitDraft({ ...habitDraft, dailyTarget: e.target.value })}
-                style={{
-                  width: '70px',
-                  padding: '6px 8px',
-                  borderRadius: 'var(--pkh-radius-md)',
-                  border: '1px solid var(--pkh-border-default)',
-                  background: 'var(--pkh-bg-surface)',
-                  fontSize: '12px',
-                }}
-              />
-              <input
-                placeholder="หน่วย (ครั้ง)"
-                value={habitDraft.unit}
-                onChange={(e) => setHabitDraft({ ...habitDraft, unit: e.target.value })}
-                maxLength={20}
-                style={{
-                  width: '80px',
-                  padding: '6px 8px',
-                  borderRadius: 'var(--pkh-radius-md)',
-                  border: '1px solid var(--pkh-border-default)',
-                  background: 'var(--pkh-bg-surface)',
-                  fontSize: '12px',
-                }}
-              />
-              <Button variant="primary" size="sm" type="submit" disabled={scheduleBusy}>
-                ＋ เพิ่มกิจวัตร
-              </Button>
-            </form>
-
-            {/* Habits Matrix List */}
-            {habits.length === 0 ? (
-              <EmptyState
-                icon="🎯"
-                title="ยังไม่มีกิจวัตร"
-                description="สร้างกิจวัตรเพื่อติดตามความสม่ำเสมอในแต่ละวัน"
-              />
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '220px', overflowY: 'auto' }}>
-                {habits.map((habit) => {
-                  const habitRow = habitWeek?.habits.find((h) => h.habitId === habit.id);
-                  const isCheckedToday = (habit.currentCount ?? 0) >= (habit.dailyTarget ?? 1);
-
-                  return (
-                    <div
-                      key={habit.id}
-                      className="task-row-card habit-matrix-card"
-                      style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <button
-                          type="button"
-                          className="button is-small"
-                          onClick={() => void onCheckHabitToday(habit)}
-                          style={{
-                            borderRadius: '50%',
-                            width: '28px',
-                            height: '28px',
-                            padding: 0,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            background: isCheckedToday ? '#10b981' : 'var(--pkh-bg-subtle)',
-                            color: isCheckedToday ? '#fff' : 'inherit',
-                            border: isCheckedToday ? 'none' : '1px solid var(--pkh-border-default)',
-                          }}
-                          title={isCheckedToday ? 'เสร็จแล้วสำหรับวันนี้' : 'กดเพื่อเช็กชื่อวันนี้'}
-                        >
-                          {isCheckedToday ? '✓' : '+1'}
-                        </button>
-                        <div>
-                          <strong style={{ fontSize: '13px', color: 'var(--pkh-text-primary)' }}>
-                            {habit.title}
-                          </strong>
-                          <div style={{ fontSize: '11px', color: 'var(--pkh-text-muted)' }}>
-                            {habit.currentCount ?? 0}/{habit.dailyTarget ?? 1} {habit.unit} · 🔥 ต่อเนื่อง {habit.streakDays ?? 0} วัน
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* 7-day mini matrix dots */}
-                      {habitRow && (
-                        <div style={{ display: 'flex', gap: '3px' }}>
-                          {habitRow.days.slice(-7).map((d) => (
-                            <span
-                              key={d.date}
-                              title={`${d.date}: ${d.count ?? 0} ครั้ง`}
-                              style={{
-                                width: '8px',
-                                height: '8px',
-                                borderRadius: '2px',
-                                background: d.metTarget ? '#10b981' : d.count ? '#f59e0b' : 'var(--pkh-border-subtle, #e2e8f0)',
-                              }}
-                            />
-                          ))}
-                        </div>
-                      )}
-
-                      <Button
-                        variant="danger-quiet"
-                        size="sm"
-                        style={{ padding: '2px 6px', height: '22px', fontSize: '11px' }}
-                        onClick={() => void onRemoveHabit(habit)}
-                      >
-                        ✕
-                      </Button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Bottom Section: Timeblocks & Reminders in 2 Columns */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '20px' }}>
-          
-          {/* Column 1: Timeblocks with Real-Time Active Highlighting */}
-          <div className="life-quick-card" style={{ padding: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '16px', color: 'var(--pkh-text-primary)' }}>
-                  ⏱️ ตารางชีวิตวันนี้ (Timeblocks)
-                </h3>
-                <span style={{ fontSize: '12px', color: 'var(--pkh-text-muted)' }}>
-                  {timeblocks.filter((b) => b.isDone === 1).length}/{timeblocks.length} กิจกรรมเสร็จแล้ว
-                </span>
-              </div>
-            </div>
-
-            {/* Quick Add Timeblock Form */}
-            <form onSubmit={onAddTimeblock} style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <input
-                  required
-                  placeholder="06:30 - 07:30"
-                  value={blockDraft.timeRange}
-                  onChange={(e) => setBlockDraft({ ...blockDraft, timeRange: e.target.value })}
-                  maxLength={40}
-                  style={{
-                    width: '120px',
-                    padding: '6px 10px',
-                    borderRadius: 'var(--pkh-radius-md)',
-                    border: '1px solid var(--pkh-border-default)',
-                    background: 'var(--pkh-bg-surface)',
-                    fontSize: '12px',
-                  }}
-                />
-                <input
-                  required
-                  placeholder="ชื่อกิจกรรม / ช่วงเวลาโฟกัส..."
-                  value={blockDraft.title}
-                  onChange={(e) => setBlockDraft({ ...blockDraft, title: e.target.value })}
-                  maxLength={200}
-                  style={{
-                    flex: 1,
-                    padding: '6px 10px',
-                    borderRadius: 'var(--pkh-radius-md)',
-                    border: '1px solid var(--pkh-border-default)',
-                    background: 'var(--pkh-bg-surface)',
-                    fontSize: '12px',
-                  }}
-                />
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <select
-                  value={blockDraft.lifeArea}
-                  onChange={(e) => setBlockDraft({ ...blockDraft, lifeArea: e.target.value as LifeArea })}
-                  style={{
-                    padding: '4px 8px',
-                    borderRadius: 'var(--pkh-radius-md)',
-                    border: '1px solid var(--pkh-border-default)',
-                    background: 'var(--pkh-bg-surface)',
-                    fontSize: '12px',
-                  }}
+            {/* Tier filter */}
+            <div className="life-reminder-tiers" role="group" aria-label="กรองตามช่วงเวลา">
+              {REMINDER_TIERS.map((tier) => (
+                <button
+                  key={tier.key}
+                  type="button"
+                  className={`button ${reminderTier === tier.key ? 'button-primary' : 'button-quiet'}`}
+                  style={{ flex: 1, padding: '4px 8px', fontSize: '12px', height: '28px', borderRadius: '6px' }}
+                  aria-pressed={reminderTier === tier.key}
+                  onClick={() => setReminderTier(tier.key)}
                 >
-                  <option value="health">สุขภาพ</option>
-                  <option value="focus_work">งานโฟกัส</option>
-                  <option value="family">ครอบครัว/แฟน</option>
-                  <option value="growth">พัฒนาตัวเอง</option>
-                  <option value="other">อื่น ๆ</option>
-                </select>
-                <Button variant="primary" size="sm" type="submit" disabled={scheduleBusy}>
-                  ＋ เพิ่มช่วงเวลา
-                </Button>
-              </div>
-            </form>
-
-            {/* Timeblocks List */}
-            {timeblocks.length === 0 ? (
-              <EmptyState
-                icon="⏱️"
-                title="ยังไม่มีตารางเวลาวันนี้"
-                description="แบ่งช่วงเวลาของวันเพื่อจัดสรรพลังงานให้งานสำคัญ"
-              />
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {timeblocks.map((block) => {
-                  const status = checkTimeRangeStatus(block.timeRange, currentMinutes);
-                  const isCurrent = status === 'current';
-                  const isPast = status === 'past';
-
-                  return (
-                    <div
-                      key={block.id}
-                      className={`task-row-card ${block.isDone ? 'is-done' : ''}`}
-                      style={{
-                        padding: '10px 12px',
-                        borderRadius: '10px',
-                        border: isCurrent
-                          ? '2px solid #10b981'
-                          : '1px solid var(--pkh-border-subtle, #e2e8f0)',
-                        background: isCurrent
-                          ? 'rgba(16, 185, 129, 0.08)'
-                          : block.isDone
-                          ? 'var(--pkh-bg-subtle, #f8fafc)'
-                          : 'var(--pkh-bg-surface)',
-                        boxShadow: isCurrent ? '0 0 10px rgba(16, 185, 129, 0.2)' : 'none',
-                        transition: 'all 0.2s ease',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <input
-                            type="checkbox"
-                            className="task-checkbox"
-                            checked={block.isDone === 1}
-                            onChange={() => void onToggleTimeblock(block)}
-                          />
-                          <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <strong style={{ fontSize: '13px', color: 'var(--pkh-text-primary)' }}>
-                                {block.timeRange} · {block.title}
-                              </strong>
-                              {isCurrent && (
-                                <span style={{
-                                  fontSize: '10px',
-                                  fontWeight: 700,
-                                  color: '#065f46',
-                                  background: '#a7f3d0',
-                                  padding: '1px 6px',
-                                  borderRadius: '10px',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '3px',
-                                }}>
-                                  🟢 กำลังดำเนินการตอนนี้
-                                </span>
-                              )}
-                              {isPast && !block.isDone && (
-                                <span style={{ fontSize: '10px', color: 'var(--pkh-text-muted)' }}>
-                                  ⏳ ผ่านช่วงเวลานี้แล้ว
-                                </span>
-                              )}
-                            </div>
-                            <div style={{ fontSize: '11px', color: 'var(--pkh-text-muted)', marginTop: '2px' }}>
-                              {lifeAreaLabel(block.lifeArea)}
-                            </div>
-                          </div>
-                        </div>
-
-                        <Button
-                          variant="danger-quiet"
-                          size="sm"
-                          style={{ padding: '2px 6px', height: '22px', fontSize: '11px' }}
-                          onClick={() => void onRemoveTimeblock(block)}
-                        >
-                          ลบ
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Column 2: Reminders with 3-tier Tabs */}
-          <div className="life-quick-card" style={{ padding: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '16px', color: 'var(--pkh-text-primary)' }}>
-                  🔔 แจ้งเตือนวันสำคัญ (Reminders)
-                </h3>
-                <span style={{ fontSize: '12px', color: 'var(--pkh-text-muted)' }}>
-                  {reminders.filter((r) => r.isCompleted === 0).length} รายการที่กำลังติดตาม
-                </span>
-              </div>
+                  {tier.label}
+                </button>
+              ))}
             </div>
 
-            {/* 3-Tier Navigation Tabs */}
-            <div style={{ display: 'flex', gap: '4px', background: 'var(--pkh-bg-subtle, #f1f5f9)', padding: '3px', borderRadius: '8px', marginBottom: '12px' }}>
-              <button
-                type="button"
-                className={`button ${reminderTier === 'today' ? 'button-primary' : 'button-quiet'}`}
-                style={{ flex: 1, padding: '4px 8px', fontSize: '12px', height: '28px', borderRadius: '6px' }}
-                onClick={() => setReminderTier('today')}
-              >
-                วันนี้
-              </button>
-              <button
-                type="button"
-                className={`button ${reminderTier === 'month' ? 'button-primary' : 'button-quiet'}`}
-                style={{ flex: 1, padding: '4px 8px', fontSize: '12px', height: '28px', borderRadius: '6px' }}
-                onClick={() => setReminderTier('month')}
-              >
-                เดือนนี้
-              </button>
-              <button
-                type="button"
-                className={`button ${reminderTier === 'yearly' ? 'button-primary' : 'button-quiet'}`}
-                style={{ flex: 1, padding: '4px 8px', fontSize: '12px', height: '28px', borderRadius: '6px' }}
-                onClick={() => setReminderTier('yearly')}
-              >
-                ประจำปี / ทั้งหมด
-              </button>
-            </div>
-
-            {/* Quick Add Reminder Form */}
-            <form onSubmit={onAddReminder} style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
-              <div style={{ display: 'flex', gap: '8px' }}>
+            {/* Quick Add Reminder Form (collapsed by default) */}
+            {reminderFormOpen && (
+              <form onSubmit={onAddReminder} className="life-reminder-form">
                 <input
                   required
                   placeholder="ชื่อแจ้งเตือน..."
@@ -1271,179 +1083,151 @@ export const HabitsView: React.FC<HabitsViewProps> = ({
                   onChange={(e) => setReminderDraft({ ...reminderDraft, title: e.target.value })}
                   maxLength={160}
                   style={{
-                    flex: 1,
+                    width: '100%',
                     padding: '6px 10px',
                     borderRadius: 'var(--pkh-radius-md)',
                     border: '1px solid var(--pkh-border-default)',
                     background: 'var(--pkh-bg-surface)',
                     fontSize: '12px',
+                    boxSizing: 'border-box',
                   }}
                 />
                 <input
                   type="date"
                   required
+                  aria-label="วันที่"
                   value={reminderDraft.targetDate}
                   onChange={(e) => setReminderDraft({ ...reminderDraft, targetDate: e.target.value })}
                   style={{
-                    width: '130px',
+                    width: '100%',
                     padding: '6px 8px',
                     borderRadius: 'var(--pkh-radius-md)',
                     border: '1px solid var(--pkh-border-default)',
                     background: 'var(--pkh-bg-surface)',
                     fontSize: '12px',
+                    boxSizing: 'border-box',
                   }}
                 />
-              </div>
 
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'space-between', alignItems: 'center' }}>
-                <select
-                  value={reminderDraft.recurrence}
-                  onChange={(e) => setReminderDraft({ ...reminderDraft, recurrence: e.target.value as NonNullable<Reminder['recurrence']> })}
-                  style={{
-                    padding: '4px 8px',
-                    borderRadius: 'var(--pkh-radius-md)',
-                    border: '1px solid var(--pkh-border-default)',
-                    background: 'var(--pkh-bg-surface)',
-                    fontSize: '12px',
-                  }}
-                >
-                  <option value="none">ไม่ทำซ้ำ</option>
-                  <option value="daily">ทุกวัน</option>
-                  <option value="weekly">ทุกสัปดาห์</option>
-                  <option value="monthly">ทุกเดือน</option>
-                  <option value="yearly">ทุกปี</option>
-                </select>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                  <select
+                    aria-label="การทำซ้ำ"
+                    value={reminderDraft.recurrence}
+                    onChange={(e) => setReminderDraft({ ...reminderDraft, recurrence: e.target.value as NonNullable<Reminder['recurrence']> })}
+                    style={{
+                      padding: '4px 8px',
+                      borderRadius: 'var(--pkh-radius-md)',
+                      border: '1px solid var(--pkh-border-default)',
+                      background: 'var(--pkh-bg-surface)',
+                      fontSize: '12px',
+                      minWidth: 0,
+                    }}
+                  >
+                    <option value="none">ไม่ทำซ้ำ</option>
+                    <option value="daily">ทุกวัน</option>
+                    <option value="weekly">ทุกสัปดาห์</option>
+                    <option value="monthly">ทุกเดือน</option>
+                    <option value="yearly">ทุกปี</option>
+                  </select>
 
-                <select
-                  value={reminderDraft.category}
-                  onChange={(e) => setReminderDraft({
-                    ...reminderDraft,
-                    category: e.target.value as ReminderCategory,
-                  })}
-                  style={{
-                    padding: '4px 8px',
-                    borderRadius: 'var(--pkh-radius-md)',
-                    border: '1px solid var(--pkh-border-default)',
-                    background: 'var(--pkh-bg-surface)',
-                    fontSize: '12px',
-                  }}
-                >
-                  <option value="birthday">วันเกิด</option>
-                  <option value="anniversary">วันครบรอบ</option>
-                  <option value="health">สุขภาพ</option>
-                  <option value="backup">แผนสำรอง</option>
-                  <option value="other">อื่น ๆ</option>
-                </select>
+                  <select
+                    aria-label="หมวดหมู่"
+                    value={reminderDraft.category}
+                    onChange={(e) => setReminderDraft({
+                      ...reminderDraft,
+                      category: e.target.value as ReminderCategory,
+                    })}
+                    style={{
+                      padding: '4px 8px',
+                      borderRadius: 'var(--pkh-radius-md)',
+                      border: '1px solid var(--pkh-border-default)',
+                      background: 'var(--pkh-bg-surface)',
+                      fontSize: '12px',
+                      minWidth: 0,
+                    }}
+                  >
+                    <option value="birthday">วันเกิด</option>
+                    <option value="anniversary">วันครบรอบ</option>
+                    <option value="health">สุขภาพ</option>
+                    <option value="backup">แผนสำรอง</option>
+                    <option value="other">อื่น ๆ</option>
+                  </select>
+                </div>
 
-                <select
-                  value={reminderDraft.linkedPersonId}
-                  onChange={(e) => setReminderDraft({ ...reminderDraft, linkedPersonId: e.target.value })}
-                  style={{
-                    padding: '4px 8px',
-                    borderRadius: 'var(--pkh-radius-md)',
-                    border: '1px solid var(--pkh-border-default)',
-                    background: 'var(--pkh-bg-surface)',
-                    fontSize: '12px',
-                  }}
-                >
-                  <option value="">-- ไม่ผูกกับบุคคล --</option>
-                  {people.map((p) => (
-                    <option value={p.id} key={p.id}>{p.name}</option>
-                  ))}
-                </select>
+                {people.length > 0 && (
+                  <select
+                    aria-label="เชื่อมโยงบุคคล"
+                    value={reminderDraft.linkedPersonId}
+                    onChange={(e) => setReminderDraft({ ...reminderDraft, linkedPersonId: e.target.value })}
+                    style={{
+                      padding: '4px 8px',
+                      borderRadius: 'var(--pkh-radius-md)',
+                      border: '1px solid var(--pkh-border-default)',
+                      background: 'var(--pkh-bg-surface)',
+                      fontSize: '12px',
+                      width: '100%',
+                    }}
+                  >
+                    <option value="">-- ไม่ผูกกับบุคคล --</option>
+                    {people.map((p) => (
+                      <option value={p.id} key={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                )}
 
                 <Button variant="primary" size="sm" type="submit" disabled={scheduleBusy}>
                   ＋ เพิ่ม
                 </Button>
-              </div>
 
-              {(reminderDraft.recurrence === 'monthly' || reminderDraft.recurrence === 'yearly') && (
-                <div style={{
-                  padding: '6px 10px',
-                  borderRadius: 'var(--pkh-radius-md)',
-                  background: 'rgba(56, 189, 248, 0.12)',
-                  border: '1px solid rgba(56, 189, 248, 0.3)',
-                  color: 'var(--pkh-text-primary)',
-                  fontSize: '12px',
-                  fontWeight: 500,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  marginTop: '6px',
-                }}>
-                  {reminderDraft.recurrence === 'monthly'
-                    ? '📌 แจ้งเตือนประจำทุกเดือน: ระบบจะแจ้งเตือนตรงวันที่กำหนดของทุกเดือนอย่างแม่นยำ (วันคงที่ • ไม่มีการเลื่อนวัน)'
-                    : '📌 แจ้งเตือนประจำทุกปี: ระบบจะแจ้งเตือนตรงวันที่และเดือนที่กำหนดของทุกปีอย่างแม่นยำ (วันคงที่ • ไม่มีการเลื่อนวัน)'}
-                </div>
-              )}
-            </form>
+                {(reminderDraft.recurrence === 'monthly' || reminderDraft.recurrence === 'yearly') && (
+                  <div className="life-reminder-hint">
+                    {reminderDraft.recurrence === 'monthly'
+                      ? '📌 ทุกเดือน: แจ้งตรงวันที่กำหนดของทุกเดือน (วันคงที่)'
+                      : '📌 ทุกปี: แจ้งตรงวันที่และเดือนที่กำหนดของทุกปี (วันคงที่)'}
+                  </div>
+                )}
+              </form>
+            )}
 
-            {/* Reminders List */}
-            {filteredReminders.length === 0 ? (
+            {/* Reminders List with countdown badges */}
+            {reminderRows.length === 0 ? (
               <EmptyState
                 icon="🔔"
-                title={reminderTier === 'today' ? 'ไม่มีแจ้งเตือนสำหรับวันนี้' : reminderTier === 'month' ? 'ไม่มีแจ้งเตือนในเดือนนี้' : 'ยังไม่มีการแจ้งเตือน'}
+                title={(REMINDER_TIERS.find((t) => t.key === reminderTier) ?? REMINDER_TIERS[0]).emptyTitle}
                 description="บันทึกวันเกิด วันครบรอบ หรือวันหมดอายุสำคัญไว้ที่นี่"
               />
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {filteredReminders.map((reminder) => (
-                  <div
-                    key={reminder.id}
-                    className={`task-row-card ${reminder.isCompleted ? 'is-done' : ''}`}
-                    style={{ padding: '8px 12px' }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div className="life-reminder-list">
+                {reminderRows.map(({ reminder, dateStr, tone, label }) => (
+                  <div key={reminder.id} className={`rem-card is-${tone}`}>
+                    <div className="rem-card-main">
                       <input
                         type="checkbox"
                         className="task-checkbox"
                         checked={reminder.isCompleted === 1}
+                        aria-label={`ทำเครื่องหมาย ${reminder.title} ว่าเสร็จแล้ว`}
                         onChange={() => void onToggleReminder(reminder)}
                       />
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                          <strong style={{ fontSize: '13px', color: 'var(--pkh-text-primary)' }}>
-                            {reminder.title}
-                          </strong>
-                          {reminder.recurrence === 'monthly' && (
-                            <span style={{
-                              fontSize: '11px',
-                              padding: '1px 6px',
-                              borderRadius: '4px',
-                              background: 'rgba(56, 189, 248, 0.15)',
-                              color: 'var(--pkh-accent-primary, #0284c7)',
-                              fontWeight: 600,
-                              border: '1px solid rgba(56, 189, 248, 0.3)',
-                            }}>
-                              🔒 ประจำทุกเดือน (วันคงที่ • ไม่มีการเลื่อนวัน)
-                            </span>
-                          )}
-                          {reminder.recurrence === 'yearly' && (
-                            <span style={{
-                              fontSize: '11px',
-                              padding: '1px 6px',
-                              borderRadius: '4px',
-                              background: 'rgba(168, 85, 247, 0.15)',
-                              color: '#a855f7',
-                              fontWeight: 600,
-                              border: '1px solid rgba(168, 85, 247, 0.3)',
-                            }}>
-                              🔒 ประจำทุกปี (วันคงที่ • ไม่มีการเลื่อนวัน)
-                            </span>
-                          )}
+                      <div className="rem-card-body">
+                        <div className="rem-card-title-row">
+                          <span className="rem-card-title">{reminder.title}</span>
+                          <span className={`rem-countdown is-${tone}`}>{label}</span>
                         </div>
-                        <div style={{ fontSize: '11px', color: 'var(--pkh-text-muted)', marginTop: '2px' }}>
-                          {reminder.snoozedUntil
-                            ? `เลื่อนไป ${reminder.snoozedUntil} (เดิม ${reminder.targetDate})`
-                            : reminder.targetDate}
+                        <div className="rem-card-meta">
+                          {dateStr}
                           {' · '}{reminderCategoryLabel(reminder.category)}
-                          {reminder.recurrence && reminder.recurrence !== 'none' && reminder.recurrence !== 'monthly' && reminder.recurrence !== 'yearly' ? ` · 🔁 ${reminder.recurrence}` : ''}
+                          {reminder.snoozedUntil ? ` · เลื่อนจาก ${reminder.targetDate}` : ''}
+                          {reminder.notifyDaysBefore > 0 ? ` · 🔔 ล่วงหน้า ${reminder.notifyDaysBefore} วัน` : ''}
                           {reminder.linkedPersonName ? ` · 👤 ${reminder.linkedPersonName}` : ''}
+                          {reminder.recurrence === 'monthly' ? ' · 🔁 ทุกเดือน' : ''}
+                          {reminder.recurrence === 'yearly' ? ' · 🔁 ทุกปี' : ''}
+                          {reminder.recurrence === 'weekly' ? ' · 🔁 ทุกสัปดาห์' : ''}
+                          {reminder.recurrence === 'daily' ? ' · 🔁 ทุกวัน' : ''}
                         </div>
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                    <div className="rem-card-actions">
                       {reminder.isCompleted !== 1 && reminder.recurrence !== 'monthly' && reminder.recurrence !== 'yearly' && (
                         <Button
                           variant="quiet"
@@ -1468,9 +1252,183 @@ export const HabitsView: React.FC<HabitsViewProps> = ({
                 ))}
               </div>
             )}
-          </div>
+          </aside>
         </div>
-      </div>
+      )}
+
+      {/* ── TAB 2: Daily timeline ─────────────────────────────────── */}
+      {mainTab === 'timeblocks' && (
+        <div
+          className="life-quick-card life-timeblocks-panel"
+          role="tabpanel"
+          id="life-panel-timeblocks"
+          aria-labelledby="life-tab-timeblocks"
+        >
+          <div className="life-timeblocks-head">
+            <div>
+              <h3 className="life-timeblocks-title">
+                <span aria-hidden="true">⏱️</span> ตารางชีวิตวันนี้
+              </h3>
+              <span className="life-timeblocks-sub">
+                {doneBlocks}/{timeblocks.length} กิจกรรมเสร็จแล้ว
+                {activeBlock ? ` · กำลังทำ: ${activeBlock.title}` : ''}
+              </span>
+            </div>
+            <span className="life-timeblocks-progress" aria-hidden="true">
+              {timeblocks.length > 0 ? `${Math.round((doneBlocks / timeblocks.length) * 100)}%` : '0%'}
+            </span>
+          </div>
+
+          {/* Quick Add Timeblock Form */}
+          <form onSubmit={onAddTimeblock} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <input
+                required
+                placeholder="06:30 - 07:30"
+                aria-label="ช่วงเวลา"
+                value={blockDraft.timeRange}
+                onChange={(e) => setBlockDraft({ ...blockDraft, timeRange: e.target.value })}
+                maxLength={40}
+                style={{
+                  width: '130px',
+                  padding: '6px 10px',
+                  borderRadius: 'var(--pkh-radius-md)',
+                  border: '1px solid var(--pkh-border-default)',
+                  background: 'var(--pkh-bg-surface)',
+                  fontSize: '12px',
+                }}
+              />
+              <input
+                required
+                placeholder="ชื่อกิจกรรม / ช่วงเวลาโฟกัส..."
+                aria-label="ชื่อกิจกรรม"
+                value={blockDraft.title}
+                onChange={(e) => setBlockDraft({ ...blockDraft, title: e.target.value })}
+                maxLength={200}
+                style={{
+                  flex: 1,
+                  minWidth: '180px',
+                  padding: '6px 10px',
+                  borderRadius: 'var(--pkh-radius-md)',
+                  border: '1px solid var(--pkh-border-default)',
+                  background: 'var(--pkh-bg-surface)',
+                  fontSize: '12px',
+                }}
+              />
+              <select
+                aria-label="หมวดชีวิต"
+                value={blockDraft.lifeArea}
+                onChange={(e) => setBlockDraft({ ...blockDraft, lifeArea: e.target.value as LifeArea })}
+                style={{
+                  padding: '4px 8px',
+                  borderRadius: 'var(--pkh-radius-md)',
+                  border: '1px solid var(--pkh-border-default)',
+                  background: 'var(--pkh-bg-surface)',
+                  fontSize: '12px',
+                }}
+              >
+                <option value="health">สุขภาพ</option>
+                <option value="focus_work">งานโฟกัส</option>
+                <option value="family">ครอบครัว/แฟน</option>
+                <option value="growth">พัฒนาตัวเอง</option>
+                <option value="other">อื่น ๆ</option>
+              </select>
+              <Button variant="primary" size="sm" type="submit" disabled={scheduleBusy}>
+                ＋ เพิ่มช่วงเวลา
+              </Button>
+            </div>
+          </form>
+
+          {/* Timeblocks List */}
+          {timeblocks.length === 0 ? (
+            <EmptyState
+              icon="⏱️"
+              title="ยังไม่มีตารางเวลาวันนี้"
+              description="แบ่งช่วงเวลาของวันเพื่อจัดสรรพลังงานให้งานสำคัญ"
+            />
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {timeblocks.map((block) => {
+                const status = checkTimeRangeStatus(block.timeRange, currentMinutes);
+                const isCurrent = status === 'current';
+                const isPast = status === 'past';
+
+                return (
+                  <div
+                    key={block.id}
+                    className={`task-row-card ${block.isDone ? 'is-done' : ''}`}
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: '10px',
+                      border: isCurrent
+                        ? '2px solid #10b981'
+                        : '1px solid var(--pkh-border-subtle, #e2e8f0)',
+                      background: isCurrent
+                        ? 'rgba(16, 185, 129, 0.08)'
+                        : block.isDone
+                        ? 'var(--pkh-bg-subtle, #f8fafc)'
+                        : 'var(--pkh-bg-surface)',
+                      boxShadow: isCurrent ? '0 0 10px rgba(16, 185, 129, 0.2)' : 'none',
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <input
+                          type="checkbox"
+                          className="task-checkbox"
+                          checked={block.isDone === 1}
+                          aria-label={`ทำเครื่องหมาย ${block.title} ว่าเสร็จแล้ว`}
+                          onChange={() => void onToggleTimeblock(block)}
+                        />
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                            <strong style={{ fontSize: '13px', color: 'var(--pkh-text-primary)' }}>
+                              {block.timeRange} · {block.title}
+                            </strong>
+                            {isCurrent && (
+                              <span style={{
+                                fontSize: '10px',
+                                fontWeight: 700,
+                                color: '#065f46',
+                                background: '#a7f3d0',
+                                padding: '1px 6px',
+                                borderRadius: '10px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                              }}>
+                                🟢 กำลังดำเนินการตอนนี้
+                              </span>
+                            )}
+                            {isPast && !block.isDone && (
+                              <span style={{ fontSize: '10px', color: 'var(--pkh-text-muted)' }}>
+                                ⏳ ผ่านช่วงเวลานี้แล้ว
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: '11px', color: 'var(--pkh-text-muted)', marginTop: '2px' }}>
+                            {lifeAreaLabel(block.lifeArea)}
+                          </div>
+                        </div>
+                      </div>
+
+                      <Button
+                        variant="danger-quiet"
+                        size="sm"
+                        style={{ padding: '2px 6px', height: '22px', fontSize: '11px' }}
+                        onClick={() => void onRemoveTimeblock(block)}
+                      >
+                        ลบ
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Quick Event / Reminder Creation Modal */}
       {quickEventModalOpen && (

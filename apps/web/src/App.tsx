@@ -8,7 +8,6 @@ import {
   checkHabit,
   convertInboxItem,
   createGoal,
-  createHabit,
   createInboxItem,
   createPerson,
   createProject,
@@ -17,7 +16,6 @@ import {
   createTimeblock,
   deleteBookmark,
   deleteGoal,
-  deleteHabit,
   deleteInboxItem,
   deleteNote,
   deleteProject,
@@ -29,13 +27,11 @@ import {
   getCurrentUser,
   getDashboard,
   getFavoriteStatus,
-  getHabitsHistory,
   getNote,
   getNoteTaxonomy,
   getPersonNotes,
   listCategories,
   listGoals,
-  listHabits,
   listInbox,
   listBookmarks,
   listFavorites,
@@ -58,7 +54,6 @@ import {
   saveNoteTaxonomy,
   saveTaxonomyItem,
   searchAll,
-  setHabitLog,
   snoozeReminder,
   searchNotes,
   updateGoal,
@@ -84,7 +79,6 @@ import {
   type FavoriteItemType,
   type Goal,
   type Habit,
-  type HabitsHistory,
   type InboxItem,
   type LibraryCategory,
   type LibraryItem,
@@ -317,8 +311,6 @@ function App() {
   const [upcomingReminders, setUpcomingReminders] = useState<Reminder[]>([]);
   const [timeblocks, setTimeblocks] = useState<Timeblock[]>([]);
   const [todayBlocks, setTodayBlocks] = useState<Timeblock[]>([]);
-  const [habits, setHabits] = useState<Habit[]>([]);
-  const [habitWeek, setHabitWeek] = useState<HabitsHistory | null>(null);
   const [scheduleDate, setScheduleDate] = useState(localToday());
   const [scheduleBusy, setScheduleBusy] = useState(false);
   const [scheduleError, setScheduleError] = useState('');
@@ -403,7 +395,6 @@ function App() {
     title: '',
     lifeArea: 'health' as LifeArea,
   });
-  const [habitDraft, setHabitDraft] = useState({ title: '', dailyTarget: '8', unit: 'ครั้ง' });
   // One config object replaces the old theme/effect state soup.
   const [themeConfig, setThemeConfig] = useState<ThemeConfig>(() => loadThemeConfig());
   const themeRef = useRef<ThemeConfig>(themeConfig);
@@ -1069,11 +1060,9 @@ function App() {
         listPeople(1, 100),
         listReminders(),
         listUpcomingReminders(60),
-        listHabits(),
         listTimeblocks(localToday()),
-        getHabitsHistory(7),
         listFiles(1, 100),
-      ]).then(([peoplePage, reminderList, upcoming, habitList, blocks, week, filePage]) => {
+      ]).then(([peoplePage, reminderList, upcoming, blocks, filePage]) => {
         if (!active) return;
         setPeople(peoplePage.people);
         setReminders(reminderList);
@@ -1083,9 +1072,7 @@ function App() {
           setNotificationsList(res.notifications);
           setNotificationsUnreadCount(res.unreadCount);
         }).catch(() => undefined);
-        setHabits(habitList);
         setTodayBlocks(blocks);
-        setHabitWeek(week);
         setFiles(filePage.files);
         setFilesTotal(filePage.total);
       }).catch((error: unknown) => {
@@ -2385,44 +2372,10 @@ function App() {
     }
   }
 
-  async function addHabit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setScheduleBusy(true);
-    setScheduleError('');
-    setScheduleNotice('');
-    try {
-      await createHabit({
-        title: habitDraft.title.trim(),
-        dailyTarget: Number(habitDraft.dailyTarget) || 1,
-        unit: habitDraft.unit.trim() || 'ครั้ง',
-      });
-      setHabitDraft({ title: '', dailyTarget: '8', unit: 'ครั้ง' });
-      setScheduleNotice('เพิ่มกิจวัตรแล้ว');
-      pushToast('success', 'เพิ่มกิจวัตรเรียบร้อยแล้ว');
-      refreshAllData();
-    } catch (error) {
-      setScheduleError(errorMessage(error));
-    } finally {
-      setScheduleBusy(false);
-    }
-  }
-
   async function checkHabitToday(habit: Habit) {
     try {
       await checkHabit(habit.id, localToday());
       pushToast('success', `เช็กอิน “${habit.title}” สำเร็จ! 🔥`);
-      refreshAllData();
-    } catch (error) {
-      setScheduleError(errorMessage(error));
-    }
-  }
-
-  async function removeHabit(habit: Habit) {
-    if (!window.confirm(`ลบกิจวัตร “${habit.title}” หรือไม่?`)) return;
-    try {
-      await deleteHabit(habit.id);
-      setScheduleNotice('ลบกิจวัตรแล้ว');
-      pushToast('success', 'ลบกิจวัตรเรียบร้อยแล้ว');
       refreshAllData();
     } catch (error) {
       setScheduleError(errorMessage(error));
@@ -2513,22 +2466,6 @@ function App() {
       } else {
         setScheduleError(errorMessage(error));
       }
-    } finally {
-      setScheduleBusy(false);
-    }
-  }
-
-  async function correctHabitDay(habit: Habit, date: string, current: number | null) {
-    setScheduleBusy(true);
-    setScheduleError('');
-    try {
-      // Tapping a day toggles it between "done" and "cleared" so a wrong entry can be fixed.
-      const next = current && current > 0 ? 0 : habit.dailyTarget;
-      await setHabitLog(habit.id, date, next);
-      setScheduleNotice('บันทึกประวัติแล้ว');
-      refreshAllData();
-    } catch (error) {
-      setScheduleError(errorMessage(error));
     } finally {
       setScheduleBusy(false);
     }
@@ -4406,14 +4343,6 @@ function App() {
             onAddTimeblock={addTimeblock}
             onToggleTimeblock={toggleTimeblock}
             onRemoveTimeblock={removeTimeblock}
-            habits={habits}
-            habitWeek={habitWeek}
-            habitDraft={habitDraft}
-            setHabitDraft={setHabitDraft}
-            onAddHabit={addHabit}
-            onCheckHabitToday={checkHabitToday}
-            onCorrectHabitDay={correctHabitDay}
-            onRemoveHabit={removeHabit}
             onSwitchView={switchView}
           />
         ) : viewMode === 'notes' ? (

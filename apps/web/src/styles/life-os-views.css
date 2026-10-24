@@ -378,3 +378,453 @@
   border-color: var(--pkh-brand-primary);
   box-shadow: var(--pkh-shadow-xs);
 }
+
+/* ============================================================
+   Calendar & Timeblocks view — primary tabs, two-column layout
+   and the amber "important dates" column.
+   ============================================================ */
+
+/* ── Primary tabs (Calendar vs Timeblocks) ─────────────────── */
+.life-main-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 5px;
+  border-radius: var(--pkh-radius-lg);
+  background: var(--pkh-bg-subtle);
+  border: 1px solid var(--pkh-border-subtle);
+}
+
+.life-main-tab {
+  flex: 1 1 0;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  border-radius: var(--pkh-radius-md);
+  background: transparent;
+  color: var(--pkh-text-secondary);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  cursor: pointer;
+  transition: var(--pkh-transition-colors);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.life-main-tab:hover {
+  background: var(--pkh-bg-surface);
+  color: var(--pkh-text-primary);
+}
+
+.life-main-tab:focus-visible {
+  outline: 2px solid var(--pkh-primary);
+  outline-offset: 2px;
+}
+
+.life-main-tab.is-active {
+  background: var(--pkh-bg-surface);
+  border-color: var(--pkh-border-default);
+  color: var(--pkh-text-primary);
+  box-shadow: var(--pkh-shadow-xs);
+}
+
+.life-main-tab-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* ── Calendar + reminders columns ──────────────────────────── */
+.life-calendar-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.85fr) minmax(300px, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+/* Calendar view-mode buttons need to wrap instead of squashing. */
+.life-cal-view-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  border-bottom: 1px solid var(--pkh-border-subtle);
+  padding-bottom: 8px;
+}
+
+/* ── Important-dates column (amber highlight) ──────────────── */
+.life-reminders-panel {
+  border: 2px solid var(--pkh-warning-border, #fde68a);
+  background:
+    linear-gradient(180deg, var(--pkh-warning-light, #fffbeb) 0%, transparent 150px),
+    var(--pkh-bg-surface);
+  box-shadow: 0 8px 24px -14px var(--pkh-warning, #b45309);
+}
+
+.life-reminders-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.life-reminders-title {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.3;
+  color: var(--pkh-warning-text, #b45309);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.life-reminders-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--pkh-text-muted);
+}
+
+.life-reminder-tiers {
+  display: flex;
+  gap: 4px;
+  background: var(--pkh-bg-subtle);
+  padding: 3px;
+  border-radius: 8px;
+}
+
+.life-reminder-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border-radius: var(--pkh-radius-md);
+  background: var(--pkh-bg-surface);
+  border: 1px dashed var(--pkh-warning-border, #fde68a);
+}
+
+.life-reminder-hint {
+  padding: 6px 10px;
+  border-radius: var(--pkh-radius-md);
+  background: var(--pkh-bg-subtle);
+  color: var(--pkh-text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.life-reminder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 520px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* ── Countdown badge ───────────────────────────────────────── */
+.rem-countdown {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  padding: 2px 9px;
+  border-radius: var(--pkh-radius-full, 9999px);
+  border: 1px solid transparent;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.6;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.rem-countdown.is-today {
+  background: #f59e0b;
+  border-color: #d97706;
+  color: #ffffff;
+}
+
+.rem-countdown.is-soon {
+  background: var(--pkh-warning-light, #fffbeb);
+  border-color: var(--pkh-warning-border, #fde68a);
+  color: var(--pkh-warning-text, #b45309);
+}
+
+.rem-countdown.is-later {
+  background: var(--pkh-bg-subtle);
+  border-color: var(--pkh-border-subtle);
+  color: var(--pkh-text-secondary);
+}
+
+.rem-countdown.is-overdue {
+  background: var(--pkh-danger-light, #fef2f2);
+  border-color: var(--pkh-danger-border, #fecaca);
+  color: var(--pkh-danger-text, #dc2626);
+}
+
+.rem-countdown.is-done {
+  background: var(--pkh-bg-subtle);
+  border-color: var(--pkh-border-subtle);
+  color: var(--pkh-text-muted);
+}
+
+/* ── Reminder row ──────────────────────────────────────────── */
+.rem-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--pkh-radius-md);
+  border: 1px solid var(--pkh-border-subtle);
+  border-left: 3px solid var(--pkh-border-strong);
+  background: var(--pkh-bg-surface);
+}
+
+.rem-card.is-today {
+  border-left-color: #f59e0b;
+  background: var(--pkh-warning-light, #fffbeb);
+}
+
+.rem-card.is-soon {
+  border-left-color: var(--pkh-warning, #b45309);
+}
+
+.rem-card.is-later {
+  border-left-color: var(--pkh-border-strong);
+}
+
+.rem-card.is-overdue {
+  border-left-color: var(--pkh-danger, #dc2626);
+}
+
+.rem-card.is-done {
+  opacity: 0.65;
+}
+
+.rem-card-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.rem-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.rem-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.rem-card-title {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--pkh-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.rem-card-meta {
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--pkh-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.rem-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* ── Timeblocks panel ──────────────────────────────────────── */
+.life-timeblocks-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.life-timeblocks-title {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.3;
+  color: var(--pkh-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.life-timeblocks-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--pkh-text-muted);
+}
+
+.life-timeblocks-progress {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border-radius: var(--pkh-radius-full, 9999px);
+  background: var(--pkh-primary-soft, rgba(16, 185, 129, 0.12));
+  color: var(--pkh-primary, #10b981);
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Responsive ────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .life-calendar-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Stacked layout: keep the countdowns above the fold instead of
+     burying them under a full month grid. */
+  .life-calendar-layout > .life-reminders-panel {
+    order: -1;
+  }
+
+  .life-reminder-list {
+    max-height: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .life-main-tabs {
+    flex-direction: column;
+  }
+
+  .life-main-tab {
+    justify-content: flex-start;
+    font-size: 13px;
+  }
+
+  .life-reminders-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rem-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rem-card-actions {
+    justify-content: flex-end;
+  }
+}
+
+/* ── Clock widget (replaces inline styles) ─────────────────── */
+.life-clock-widget {
+  background: var(--pkh-bg-surface, #ffffff);
+  border: 1px solid var(--pkh-border-default, #e2e8f0);
+  border-radius: 12px;
+  padding: 10px 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.life-clock-label {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--pkh-text-muted);
+}
+
+.life-clock-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  animation: pulse 2s infinite;
+}
+
+.life-clock-time {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: var(--pkh-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  color: var(--pkh-primary, #2563eb);
+  letter-spacing: 0.5px;
+  line-height: 1.2;
+}
+
+.life-clock-date {
+  font-size: 11px;
+  color: var(--pkh-text-secondary);
+  margin-top: 2px;
+}
+
+/* ── Desktop tab bar: compact segmented control ────────────── */
+.life-main-tabs {
+  display: inline-flex;
+  width: auto;
+  max-width: 100%;
+}
+
+.life-main-tab {
+  flex: 0 1 auto;
+}
+
+@media (max-width: 768px) {
+  .life-main-tabs {
+    display: flex;
+    width: 100%;
+  }
+
+  .life-main-tab {
+    flex: 1 1 auto;
+    justify-content: flex-start;
+    font-size: 13px;
+  }
+
+  /* Compact the view header on mobile so the amber reminders panel
+     stays above the fold (y≈330 on 390px screens). */
+  .life-view-container .module-header-banner {
+    padding: 12px !important;
+    gap: 10px !important;
+  }
+
+  .life-view-container .module-header-banner .banner-icon {
+    width: 40px !important;
+    height: 40px !important;
+    font-size: 18px !important;
+  }
+
+  .life-view-container .module-header-banner .eyebrow {
+    display: none !important;
+  }
+
+  .life-view-container .life-clock-widget {
+    padding: 6px 10px !important;
+    border-radius: 8px !important;
+  }
+
+  .life-view-container .life-clock-label,
+  .life-view-container .life-clock-date {
+    display: none !important;
+  }
+
+  .life-view-container .life-clock-time {
+    font-size: 16px !important;
+    line-height: 1.1 !important;
+  }
+}
