@@ -183,6 +183,44 @@
   gap: 10px !important;
 }
 
+/* Real-time Bangkok clock badge.
+   Kept in CSS (not inline) so the mobile block below can hide the date
+   without a `!important` war against an inline style attribute. */
+.topbar-clock-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: var(--pkh-bg-subtle, #f1f5f9);
+  border: 1px solid var(--pkh-border-subtle, #e2e8f0);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.topbar-clock-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.topbar-clock-date {
+  color: var(--pkh-text-secondary, #475569);
+}
+
+.topbar-clock-divider {
+  opacity: 0.3;
+}
+
+.topbar-clock-time {
+  font-family: var(--pkh-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-weight: 700;
+  color: var(--pkh-primary, #10b981);
+  font-variant-numeric: tabular-nums;
+}
+
 .topbar-icon {
   width: 36px !important;
   height: 36px !important;
@@ -662,6 +700,50 @@
 }
 
 @media (max-width: 768px) {
+  /* The token feeds every `calc(100vh - var(--pkh-topbar-height))` surface
+     (sidebar, detail panel, sticky offsets). Shrinking the bar without
+     shrinking the token leaves an 8px dead strip, so override it here too. */
+  :root {
+    --pkh-topbar-height: 56px;
+  }
+
+  /* Compact header: a 56px bar only fits brand + clock + icons.
+     Everything else is reachable from the drawer / bottom nav. */
+  .topbar {
+    height: 56px !important;
+    padding: 0 12px !important;
+  }
+
+  .brand-text small {
+    display: none !important;
+  }
+
+  .brand-text strong {
+    font-size: 14px !important;
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Short clock: the date is unreadable at this width, keep the time only. */
+  .topbar-clock-date,
+  .topbar-clock-divider {
+    display: none !important;
+  }
+
+  .topbar-center {
+    display: none; /* search moved to mobile or drawer */
+  }
+
+  .topbar-username {
+    display: none;
+  }
+
+  .topbar-admin-btn {
+    display: none !important;
+  }
+
   .workspace {
     grid-template-columns: 1fr !important;
     /* space for bottom nav + the iOS home indicator */
@@ -678,14 +760,6 @@
     padding: 16px 14px calc(72px + env(safe-area-inset-bottom, 0px)) !important;
   }
 
-  .topbar-center {
-    display: none; /* search moved to mobile or drawer */
-  }
-
-  .topbar-username {
-    display: none;
-  }
-
   /* Mobile Bottom Navigation Bar */
   .mobile-bottom-nav {
     display: grid !important;
@@ -696,7 +770,7 @@
     right: 0;
     height: auto;
     min-height: 64px;
-    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px)) !important;
     padding-left: env(safe-area-inset-left, 0px);
     padding-right: env(safe-area-inset-right, 0px);
     z-index: 80;
@@ -764,7 +838,7 @@
   .mobile-fab-container {
     display: block !important;
     position: fixed;
-    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(68px + env(safe-area-inset-bottom, 0px)) !important;
     right: max(18px, env(safe-area-inset-right, 0px));
     z-index: 85;
   }

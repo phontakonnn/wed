@@ -9,8 +9,6 @@ import {
   getLoginHistory,
   exportUserData,
   importUserData,
-  requestForgotOtp,
-  resetPasswordWithOtp,
   type UserSessionDevice,
   type LoginHistoryItem,
 } from '../../api';
@@ -158,13 +156,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   };
 
   // Forgot password via OTP within Security tab
-  const [forgotOtpType, setForgotOtpType] = useState<'email' | 'phone'>('email');
-  const [forgotOtpSent, setForgotOtpSent] = useState(false);
-  const [forgotOtpInput, setForgotOtpInput] = useState('');
-  const [forgotSimulatedOtp, setForgotSimulatedOtp] = useState<string | null>(null);
-  const [forgotNewPass, setForgotNewPass] = useState('');
-  const [forgotConfirmPass, setForgotConfirmPass] = useState('');
-  const [forgotBusy, setForgotBusy] = useState(false);
 
   // Password change state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -323,63 +314,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       }
     }
     showNotice('🔊 ทดสอบส่งแจ้งเตือนเรียบร้อยแล้ว (เล่นเสียง ' + notificationConfig.soundType + ' + ส่ง Push)');
-  };
-
-  const handleRequestSecurityForgotOtp = async () => {
-    setForgotBusy(true);
-    setForgotSimulatedOtp(null);
-    try {
-      const res = await requestForgotOtp(user?.username || undefined, {
-        email: forgotOtpType === 'email' ? profile.email : undefined,
-        phone: forgotOtpType === 'phone' ? profile.phone : undefined,
-        recoveryType: forgotOtpType,
-      });
-      setForgotOtpSent(true);
-      showNotice(res.message);
-      if (res.simulatedOtp || res.debugOtp) {
-        const code = res.simulatedOtp || res.debugOtp;
-        setForgotSimulatedOtp(code || null);
-        setForgotOtpInput(code || '');
-        showNotice(`ขอ OTP สำเร็จ! (รหัสจำลอง: ${code})`);
-      }
-    } catch (err) {
-      showError(errorMessage(err) || 'ขอรหัส OTP กู้คืนล้มเหลว');
-    } finally {
-      setForgotBusy(false);
-    }
-  };
-
-  const handleResetSecurityPassword = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!forgotOtpInput.trim()) {
-      showError('กรุณากรอกรหัส OTP');
-      return;
-    }
-    if (forgotNewPass.length < 8) {
-      showError('รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 8 ตัวอักษร');
-      return;
-    }
-    if (forgotNewPass !== forgotConfirmPass) {
-      showError('รหัสผ่านใหม่ทั้งสองช่องไม่ตรงกัน');
-      return;
-    }
-    setForgotBusy(true);
-    try {
-      const res = await resetPasswordWithOtp(user?.username, forgotOtpInput.trim(), forgotNewPass, {
-        email: forgotOtpType === 'email' ? profile.email : undefined,
-        phone: forgotOtpType === 'phone' ? profile.phone : undefined,
-      });
-      showNotice(res.message || 'ตั้งรหัสผ่านใหม่สำเร็จเรียบร้อยแล้ว!');
-      setForgotOtpSent(false);
-      setForgotOtpInput('');
-      setForgotSimulatedOtp(null);
-      setForgotNewPass('');
-      setForgotConfirmPass('');
-    } catch (err) {
-      showError(errorMessage(err) || 'ตั้งรหัสผ่านใหม่ล้มเหลว');
-    } finally {
-      setForgotBusy(false);
-    }
   };
 
   return (
@@ -943,167 +877,25 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px' }}>
                 <Button variant="primary" type="submit" disabled={passwordBusy}>
-                  {passwordBusy ? 'กำลังเปลี่ยนรหัสผ่าน…' : '🔑 เปลี่ยนรหัสผ่าน'}
+                  {passwordBusy ? 'กำลังบันทึก…' : '🔑 บันทึกรหัสผ่านใหม่'}
                 </Button>
               </div>
             </form>
 
-            {/* Section: Forgot password via OTP within Security tab */}
-            <div style={{
-              marginTop: '8px',
-              padding: '16px',
-              borderRadius: '10px',
-              background: 'var(--pkh-bg-subtle, #f8fafc)',
-              border: '1px solid var(--pkh-border-subtle, #e2e8f0)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px',
-            }}>
-              <div>
-                <strong style={{ fontSize: '13.5px', color: 'var(--pkh-text-primary)', display: 'block' }}>
-                  🔄 ลืมรหัสผ่านเดิม? กู้คืน/ตั้งรหัสผ่านใหม่ด้วย OTP (ผ่านอีเมล หรือ เบอร์โทรศัพท์)
-                </strong>
-                <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--pkh-text-secondary)' }}>
-                  ไม่ต้องกรอกรหัสผ่านเดิม ระบบจะส่งรหัส OTP 6 หลักไปยังช่องทางที่คุณเลือกเพื่อยืนยันตัวตน
-                </p>
-              </div>
-
-              {!forgotOtpSent ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer' }}>
-                      <input
-                        type="radio"
-                        name="forgotOtpType"
-                        checked={forgotOtpType === 'email'}
-                        onChange={() => setForgotOtpType('email')}
-                      />
-                      <span>อีเมล ({profile.email || 'ยังไม่ได้ระบุ'})</span>
-                    </label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer' }}>
-                      <input
-                        type="radio"
-                        name="forgotOtpType"
-                        checked={forgotOtpType === 'phone'}
-                        onChange={() => setForgotOtpType('phone')}
-                      />
-                      <span>เบอร์โทรศัพท์ ({profile.phone || 'ยังไม่ได้ระบุ'})</span>
-                    </label>
-                  </div>
-
-                  <div>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      disabled={forgotBusy || (forgotOtpType === 'email' ? !profile.email?.trim() : !profile.phone?.trim())}
-                      onClick={handleRequestSecurityForgotOtp}
-                      style={{ fontSize: '12px', padding: '6px 14px' }}
-                    >
-                      {forgotBusy ? 'กำลังส่งรหัส OTP…' : '📲 ขอรหัส OTP เพื่อตั้งรหัสผ่านใหม่'}
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <form onSubmit={handleResetSecurityPassword} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {forgotSimulatedOtp && (
-                    <div style={{
-                      padding: '8px 12px',
-                      borderRadius: '8px',
-                      backgroundColor: 'rgba(56, 189, 248, 0.12)',
-                      border: '1px solid rgba(56, 189, 248, 0.3)',
-                      fontSize: '12px',
-                      color: '#0284c7',
-                      fontWeight: 600,
-                    }}>
-                      ⚡ รหัส OTP จำลองสำหรับทดสอบ: <strong>{forgotSimulatedOtp}</strong>
-                    </div>
-                  )}
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--pkh-text-secondary)' }}>
-                      รหัส OTP 6 หลัก
-                    </label>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <input
-                        type="text"
-                        maxLength={6}
-                        required
-                        placeholder="000000"
-                        value={forgotOtpInput}
-                        onChange={(e) => setForgotOtpInput(e.target.value.replace(/\D/g, ''))}
-                        style={{ width: '120px', textAlign: 'center', letterSpacing: '2px', fontWeight: 700 }}
-                      />
-                      {forgotSimulatedOtp && (
-                        <Button
-                          type="button"
-                          variant="quiet"
-                          size="sm"
-                          onClick={() => setForgotOtpInput(forgotSimulatedOtp)}
-                          style={{ fontSize: '11px' }}
-                        >
-                          ⚡ กรอก OTP อัตโนมัติ
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--pkh-text-secondary)' }}>
-                        รหัสผ่านใหม่ (อย่างน้อย 8 ตัวอักษร)
-                      </label>
-                      <input
-                        type="password"
-                        required
-                        minLength={8}
-                        placeholder="รหัสผ่านใหม่อย่างน้อย 8 ตัว..."
-                        value={forgotNewPass}
-                        onChange={(e) => setForgotNewPass(e.target.value)}
-                        style={{ width: '100%', boxSizing: 'border-box' }}
-                      />
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--pkh-text-secondary)' }}>
-                        ยืนยันรหัสผ่านใหม่
-                      </label>
-                      <input
-                        type="password"
-                        required
-                        minLength={8}
-                        placeholder="ยืนยันรหัสผ่านใหม่อีกครั้ง..."
-                        value={forgotConfirmPass}
-                        onChange={(e) => setForgotConfirmPass(e.target.value)}
-                        style={{ width: '100%', boxSizing: 'border-box' }}
-                      />
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '4px' }}>
-                    <Button
-                      type="button"
-                      variant="quiet"
-                      size="sm"
-                      onClick={() => {
-                        setForgotOtpSent(false);
-                        setForgotOtpInput('');
-                        setForgotSimulatedOtp(null);
-                      }}
-                    >
-                      ยกเลิก
-                    </Button>
-                    <Button
-                      type="submit"
-                      variant="primary"
-                      size="sm"
-                      disabled={forgotBusy || forgotOtpInput.length !== 6 || forgotNewPass.length < 8}
-                    >
-                      {forgotBusy ? 'กำลังบันทึก…' : '🔐 ยืนยันตั้งรหัสผ่านใหม่'}
-                    </Button>
-                  </div>
-                </form>
-              )}
-            </div>
+            <p
+              style={{
+                fontSize: '12.5px',
+                color: 'var(--pkh-text-secondary)',
+                margin: 0,
+                padding: '10px 12px',
+                borderRadius: '8px',
+                background: 'var(--pkh-bg-subtle, #f8fafc)',
+                border: '1px solid var(--pkh-border-subtle, #e2e8f0)',
+              }}
+            >
+              ลืมรหัสผ่านเดิม? ให้ผู้ดูแลระบบรีเซ็ตให้ผ่าน Admin Console หรือ Firebase Console
+              → Authentication → เลือกผู้ใช้ → Reset password
+            </p>
           </div>
         )}
 

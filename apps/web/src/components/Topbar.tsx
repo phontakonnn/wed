@@ -184,32 +184,11 @@ export const Topbar: React.FC<TopbarProps> = ({
 
       <div className="topbar-actions">
         {/* Real-time Bangkok Clock Badge */}
-        <div
-          className="topbar-clock-badge"
-          title={clockFormatter.fullTitle}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '4px 10px',
-            borderRadius: '20px',
-            background: 'var(--pkh-bg-subtle, rgba(0, 0, 0, 0.04))',
-            border: '1px solid var(--pkh-border-subtle, rgba(0, 0, 0, 0.08))',
-            fontSize: '12px',
-            fontWeight: 500,
-            color: 'var(--pkh-text-primary, #0f172a)',
-            whiteSpace: 'nowrap',
-            userSelect: 'none',
-          }}
-        >
-          <span style={{ fontSize: '13px' }} aria-hidden="true">🕒</span>
-          <span className="topbar-clock-date" style={{ color: 'var(--pkh-text-secondary)' }}>
-            {clockFormatter.dateText}
-          </span>
-          <span style={{ opacity: 0.3 }} aria-hidden="true">|</span>
-          <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--pkh-primary, #3b82f6)' }}>
-            {clockFormatter.timeText}
-          </span>
+        <div className="topbar-clock-badge" title={clockFormatter.fullTitle}>
+          <span className="topbar-clock-icon" aria-hidden="true">🕒</span>
+          <span className="topbar-clock-date">{clockFormatter.dateText}</span>
+          <span className="topbar-clock-divider" aria-hidden="true">|</span>
+          <span className="topbar-clock-time">{clockFormatter.timeText}</span>
         </div>
 
         {/* Quick Dark/Light mode toggle */}

@@ -1559,15 +1559,6 @@ export interface SystemSettings {
   default_theme: 'system' | 'dark' | 'light';
   modules_config?: string;
   registration_mode?: 'open' | 'invite_only';
-  smtp_host?: string;
-  smtp_port?: number;
-  smtp_user?: string;
-  smtp_pass?: string;
-  smtp_from?: string;
-  smtp_secure?: number;
-  sms_api_url?: string;
-  sms_api_key?: string;
-  sms_sender_name?: string;
 }
 
 export interface AdminUser {
