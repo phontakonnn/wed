@@ -43,38 +43,40 @@ export const CustomCategoryView: React.FC<CustomCategoryViewProps> = ({
 }) => {
   return (
     <section className="life-view-container" aria-label="หมวดหมู่ของฉัน">
-      {customCategoryDataBusy ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '24px 0' }}>
-          <Skeleton height={100} borderRadius="16px" />
-          <Skeleton height={200} borderRadius="16px" />
-        </div>
-      ) : !customCategoryData ? (
-        <EmptyState
-          icon="📁"
-          title="ไม่พบหมวดหมู่ที่เลือก"
-          description="หมวดหมู่นี้อาจถูกลบไปแล้ว หรือยังไม่ได้เลือกหมวดหมู่จากแถบด้านซ้าย"
-        />
+      {!customCategoryData || !customCategoryData.category ? (
+        customCategoryDataBusy ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '24px 0' }}>
+            <Skeleton height={100} borderRadius="16px" />
+            <Skeleton height={200} borderRadius="16px" />
+          </div>
+        ) : (
+          <EmptyState
+            icon="📁"
+            title="ไม่พบหมวดหมู่ที่เลือก"
+            description="หมวดหมู่นี้อาจถูกลบไปแล้ว หรือยังไม่ได้เลือกหมวดหมู่จากแถบด้านซ้าย"
+          />
+        )
       ) : (
         <div>
           {/* Header Banner */}
           <div className="module-header-banner">
-            <div className="banner-icon">{customCategoryData.category.icon}</div>
+            <div className="banner-icon">{customCategoryData?.category?.icon || '📁'}</div>
             <div className="banner-info">
               <span className="eyebrow">Custom Folder &amp; Tag</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <h2 className="banner-title">{customCategoryData.category.name}</h2>
+                <h2 className="banner-title">{customCategoryData?.category?.name || 'หมวดหมู่'}</h2>
                 <span
                   style={{
                     display: 'inline-block',
                     width: '12px',
                     height: '12px',
                     borderRadius: '50%',
-                    backgroundColor: customCategoryData.category.color,
+                    backgroundColor: customCategoryData?.category?.color || '#3b82f6',
                   }}
                 />
               </div>
               <p className="banner-subtitle">
-                สร้างเมื่อ {formatDate(customCategoryData.category.createdAt)} · รวม {
+                สร้างเมื่อ {formatDate(customCategoryData?.category?.createdAt ?? 0)} · รวม {
                   customCategoryData.notes.length +
                   customCategoryData.tasks.length +
                   customCategoryData.bookmarks.length +
@@ -90,19 +92,19 @@ export const CustomCategoryView: React.FC<CustomCategoryViewProps> = ({
               </Button>
               <Button
                 variant="quiet"
-                onClick={() => onOpenCreateCategoryModal(customCategoryData.category.id)}
+                onClick={() => onOpenCreateCategoryModal(customCategoryData?.category?.id || null)}
               >
                 ＋ หมวดย่อย
               </Button>
               <Button
                 variant="quiet"
-                onClick={() => onOpenEditCategoryModal(customCategoryData.category)}
+                onClick={() => onOpenEditCategoryModal(customCategoryData?.category)}
               >
                 ✎ แก้ไข
               </Button>
               <Button
                 variant="danger-quiet"
-                onClick={() => onDeleteCategory(customCategoryData.category)}
+                onClick={() => onDeleteCategory(customCategoryData?.category)}
               >
                 🗑 ลบ
               </Button>
@@ -187,7 +189,7 @@ export const CustomCategoryView: React.FC<CustomCategoryViewProps> = ({
             customCategoryData.vault.length === 0 &&
             customCategoryData.library.length === 0 ? (
               <EmptyState
-                icon={customCategoryData.category.icon}
+                icon={customCategoryData?.category?.icon || '📁'}
                 title="ยังไม่มีข้อมูลในหมวดหมู่นี้"
                 description="กดปุ่ม “＋ เพิ่มข้อมูลในหมวดนี้” เพื่อสร้างโน้ต งาน ลิงก์ หรือไฟล์ใหม่ผูกเข้าหมวดนี้ได้ทันที"
                 action={

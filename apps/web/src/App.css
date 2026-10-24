@@ -1747,28 +1747,26 @@ a.button {
   }
 
   .detail-panel {
-    display: none;
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: calc(100dvh - 120px) !important;
   }
 
   .detail-panel.is-open {
-    position: fixed;
-    z-index: 90;
-    display: block;
-    height: 100vh;
-    height: 100dvh;
-    overflow-y: auto;
-    background: var(--paper);
-    inset: 0;
+    position: static !important;
+    z-index: auto !important;
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: calc(100dvh - 120px) !important;
+    overflow-y: auto !important;
+    background: var(--paper) !important;
+    inset: auto !important;
   }
 
   .detail-mobile-bar {
-    position: sticky;
-    top: 0;
-    z-index: 5;
-    display: flex;
-    padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 10px;
-    border-bottom: 1px solid var(--line);
-    background: var(--pkh-bg-surface);
+    display: none !important;
   }
 
   .detail-panel .editor-panel {

@@ -1122,16 +1122,35 @@ export async function handleFirebaseRequest<T>(path: string, options: RequestIni
     }
     if (pathname === '/api/admin/users') {
       if (method === 'POST') {
-        // Creating a Firebase Auth account requires the Admin SDK. The client
-        // SDK can only do it via `createUserWithEmailAndPassword`, which would
-        // sign the current admin *out* and hand the session to the new user —
-        // a privilege inversion, not a feature. Until a Cloud Function exists,
-        // fail loudly instead of writing a profile doc nobody can sign in to.
-        throw new ApiError(
-          'การสร้างบัญชีผู้ใช้ต้องทำใน Firebase Console (Authentication → Add user) หรือผ่าน Cloud Function — เว็บเบราว์เซอร์สร้างบัญชี Auth ให้ไม่ได้',
-          501,
-          { code: 'not-implemented', retryable: false },
-        );
+        const username = (body?.username || '').trim();
+        const password = body?.password || '';
+        const displayName = (body?.displayName || username).trim();
+        const role = body?.role || 'user';
+        if (!username || !password) throw new ApiError('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน', 400);
+        if (password.length < 8) throw new ApiError('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร', 400);
+
+        const email = toValidAuthEmail(username);
+
+        const existing = await getDocs(query(collection(db, 'users'), where('username', '==', username), limit(1)));
+        if (!existing.empty) throw new ApiError('ชื่อผู้ใช้นี้มีอยู่แล้วในระบบ', 409);
+
+        const cred = await createUserWithEmailAndPassword(auth, email, password);
+        const uid = cred.user.uid;
+
+        const newUser = {
+          id: uid,
+          username,
+          displayName,
+          role,
+          isActive: true,
+          email,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+
+        await setDoc(doc(db, 'users', uid), newUser);
+
+        return { ok: true, user: newUser } as T;
       }
       const snap = await getDocs(collection(db, 'users'));
       const users = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
