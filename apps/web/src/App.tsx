@@ -2727,8 +2727,6 @@ function App() {
       displayName: profile.name,
       bio: profile.bio,
       dailyStatus: profile.status,
-      email: profile.email,
-      phone: profile.phone,
       avatarDataUrl: profile.avatarDataUrl,
     };
     try {

@@ -57,8 +57,6 @@ export interface ProfileState {
   avatarPreset: string;
   avatarFileId: string | null;
   avatarDataUrl?: string | null;
-  email?: string;
-  phone?: string;
   bio?: string;
 }
 

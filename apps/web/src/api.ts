@@ -1963,14 +1963,9 @@ interface UserProfile {
   username: string;
   role: 'admin' | 'user';
   displayName?: string | null;
-  email?: string | null;
-  phone?: string | null;
   bio?: string | null;
   dailyStatus?: string | null;
   avatarDataUrl?: string | null;
-  twoFactorEnabled?: boolean;
-  emailVerified?: boolean;
-  phoneVerified?: boolean;
 }
 
 export async function getUserProfile(): Promise<{ profile: UserProfile }> {

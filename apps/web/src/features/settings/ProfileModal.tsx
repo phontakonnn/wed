@@ -224,8 +224,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           name: p.displayName || prev.name || p.username,
           status: p.dailyStatus || prev.status,
           avatarDataUrl: p.avatarDataUrl || prev.avatarDataUrl || null,
-          email: p.email || prev.email || '',
-          phone: p.phone || prev.phone || '',
           bio: p.bio || prev.bio || '',
         }));
       })
@@ -486,38 +484,6 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                   value={`@${user?.username || ''}`}
                   disabled
                   style={{ width: '100%', boxSizing: 'border-box', background: 'var(--pkh-bg-subtle)', color: 'var(--pkh-text-muted)' }}
-                />
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px', marginBottom: '14px' }}>
-              {/* Email Section */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--pkh-text-secondary)' }}>
-                  อีเมล (สำหรับติดต่อและกู้คืนบัญชี)
-                </label>
-                <input
-                  type="email"
-                  style={{ width: '100%', boxSizing: 'border-box' }}
-                  value={profile.email || ''}
-                  onChange={(event) => setProfile({ ...profile, email: event.target.value })}
-                  placeholder="name@example.com"
-                  maxLength={120}
-                />
-              </div>
-
-              {/* Phone Section */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--pkh-text-secondary)' }}>
-                  เบอร์โทรศัพท์ (ถ้ามี)
-                </label>
-                <input
-                  type="tel"
-                  style={{ width: '100%', boxSizing: 'border-box' }}
-                  value={profile.phone || ''}
-                  onChange={(event) => setProfile({ ...profile, phone: event.target.value })}
-                  placeholder="081-234-5678"
-                  maxLength={30}
                 />
               </div>
             </div>

@@ -35,8 +35,6 @@ import {
   MAX_BIO,
   MAX_DAILY_STATUS,
   MAX_DISPLAY_NAME,
-  MAX_EMAIL,
-  MAX_PHONE,
   validateAvatarDataUrl,
 } from './profileValidation';
 import { logger } from './logger';
@@ -392,15 +390,9 @@ export async function handleFirebaseRequest<T>(path: string, options: RequestIni
       const displayName = clampProfileText(body?.displayName, MAX_DISPLAY_NAME);
       const bio = clampProfileText(body?.bio, MAX_BIO);
       const dailyStatus = clampProfileText(body?.dailyStatus, MAX_DAILY_STATUS);
-      // Contact details are stored as profile data only. Changing the *login*
-      // address needs `verifyBeforeUpdateEmail`, which is a separate feature.
-      const email = clampProfileText(body?.email, MAX_EMAIL);
-      const phone = clampProfileText(body?.phone, MAX_PHONE);
       if (displayName !== null) patch.displayName = displayName;
       if (bio !== null) patch.bio = bio;
       if (dailyStatus !== null) patch.dailyStatus = dailyStatus;
-      if (email !== null) patch.email = email;
-      if (phone !== null) patch.phone = phone;
       if (typeof body?.avatarDataUrl === 'string') {
         const avatarError = validateAvatarDataUrl(body.avatarDataUrl);
         if (avatarError) throw new ApiError(avatarError, 400);
@@ -422,8 +414,6 @@ export async function handleFirebaseRequest<T>(path: string, options: RequestIni
       username,
       role: isSuperAdmin ? 'admin' : ((d.role as string) || 'user'),
       displayName: (d.displayName as string) ?? fbUser?.displayName ?? username,
-      email: (d.email as string) ?? fbUser?.email ?? null,
-      phone: (d.phone as string) ?? null,
       bio: (d.bio as string) ?? null,
       dailyStatus: (d.dailyStatus as string) ?? null,
       avatarDataUrl: (d.avatarDataUrl as string) ?? null,

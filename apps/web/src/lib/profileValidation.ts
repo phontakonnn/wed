@@ -11,8 +11,6 @@ export const MAX_AVATAR_CHARS = 500_000;
 export const MAX_DISPLAY_NAME = 80;
 export const MAX_BIO = 500;
 export const MAX_DAILY_STATUS = 160;
-export const MAX_EMAIL = 200;
-export const MAX_PHONE = 40;
 
 const AVATAR_DATA_URL = /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\s]+$/i;
 
